@@ -13,6 +13,7 @@ local NativeMenu = require("modules/menu/app_launcher/native_menu")
 local PluginScan = require("modules/menu/app_launcher/plugin_scan")
 local DispatcherMenu = require("common/dispatcher_menu")
 local icon_utils = require("common/utils")
+local plugin_root = require("common/plugin_root")
 local Destination = require("common/library_destination")
 local Bluetooth = require("modules/menu/bluetooth/bluetooth")
 
@@ -719,11 +720,12 @@ function M.build(ctx)
                     keep_menu_open = true,
                     callback = addPluginButton,
                 }, icons.plugin),
-                IconItem.decorate({
+                {
                     text = _("KOReader menu"),
+                    icon_file = plugin_root .. "/icons/koreader.png",
                     keep_menu_open = true,
                     callback = addKoreaderMenuButton,
-                }, icons.koreader_menu),
+                },
             },
             callback = function()
                 -- Replace the table to avoid leaving stale trailing entries
@@ -874,7 +876,7 @@ function M.build(ctx)
             -- Action picker via Dispatcher submenu
             local dispatch_items = {}
             local caller = {}
-            Dispatcher:addSubMenu(caller, dispatch_items, cb, "action")
+            DispatcherMenu.addSubMenu(Dispatcher, caller, dispatch_items, cb, "action")
             wrap_dispatch_callbacks(dispatch_items, caller, function(touch_menu)
                 sync_cb_action_label(cb)
                 if is_draft_button(cb) then
@@ -884,7 +886,7 @@ function M.build(ctx)
                     save_and_apply_quick_settings()
                 end
                 if touch_menu and touch_menu.updateItems then
-                    touch_menu:updateItems(1)
+                    touch_menu:updateItems()
                 end
             end)
             table.insert(items, IconItem.decorate({

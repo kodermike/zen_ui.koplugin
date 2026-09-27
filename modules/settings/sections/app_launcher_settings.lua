@@ -4,6 +4,7 @@ local UIManager = require("ui/uimanager")
 local icons = require("common/inline_icon_map")
 local IconItem = require("common/ui/icon_menu_item")
 local icon_utils = require("common/utils")
+local plugin_root = require("common/plugin_root")
 
 local Model = require("modules/menu/app_launcher/model")
 local ActionFilter = require("modules/menu/app_launcher/action_filter")
@@ -531,13 +532,14 @@ function M.build(ctx)
                     add_plugin(folder, touch_menu)
                 end,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("Add KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = function(touch_menu)
                     add_koreader_menu(folder, touch_menu)
                 end,
-            }, icons.open_menu),
+            },
             IconItem.decorate({
                 text = _("Open folder"),
                 keep_menu_open = true,
@@ -578,13 +580,14 @@ function M.build(ctx)
                     add_plugin(folder, touch_menu)
                 end,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = function(touch_menu)
                     add_koreader_menu(folder, touch_menu)
                 end,
-            }, icons.koreader_menu),
+            },
         }
         if not folder then
             items[#items + 1] = IconItem.decorate({
@@ -626,7 +629,7 @@ function M.build(ctx)
         if not ok_disp then return nil end
         local dispatch_items = {}
         local caller = {}
-        Dispatcher:addSubMenu(caller, dispatch_items, entry, "action")
+        DispatcherMenu.addSubMenu(Dispatcher, caller, dispatch_items, entry, "action")
         wrap_dispatch_callbacks(dispatch_items, caller, function(touch_menu)
             sync_action_label(entry)
             if is_draft_entry(entry) then
@@ -635,7 +638,7 @@ function M.build(ctx)
                 save_app_launcher()
             end
             if touch_menu and touch_menu.updateItems then
-                touch_menu:updateItems(1)
+                touch_menu:updateItems()
             end
         end)
         return IconItem.decorate({

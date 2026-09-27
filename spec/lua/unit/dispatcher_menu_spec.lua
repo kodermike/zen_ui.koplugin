@@ -1,6 +1,52 @@
 local DispatcherMenu = require("common/dispatcher_menu")
 
 describe("dispatcher menu persistence", function()
+    it("keeps unavailable actions visible and updates their enabled state", function()
+        local settingsList = {
+            available = {},
+            unavailable = { condition = false },
+            reader = { reader = true },
+        }
+        local in_reader = false
+        local dispatcher = {
+            init = function() end,
+            registerAction = function(_self, key) return settingsList[key] end,
+            isActionEnabled = function(_self, spec)
+                return spec.condition ~= false and (not spec.reader or in_reader)
+            end,
+            addSubMenu = function(_self, _caller, items, location, settings)
+                local actions = {}
+                for k, spec in pairs(settingsList) do
+                    if spec.condition ~= false then
+                        actions[#actions + 1] = {
+                            text = k,
+                            checked_func = function() return location[settings][k] end,
+                        }
+                    end
+                end
+                items[1] = { text = "Actions", sub_item_table = actions }
+            end,
+        }
+        local items = {}
+        DispatcherMenu.addSubMenu(dispatcher, {}, items, { action = {} }, "action")
+
+        local actions = {}
+        for _i, item in ipairs(items[1].sub_item_table) do actions[item.text] = item end
+        assert.are.equal(3, #items[1].sub_item_table)
+        assert.is_false(settingsList.unavailable.condition)
+        assert.is_true(actions.available.enabled_func())
+        assert.is_false(actions.unavailable.enabled_func())
+        assert.is_false(actions.reader.enabled_func())
+        in_reader = true
+        assert.is_true(actions.reader.enabled_func())
+
+        dispatcher.addSubMenu = function() error("menu failed") end
+        assert.has_error(function()
+            DispatcherMenu.addSubMenu(dispatcher, {}, {}, { action = {} }, "action")
+        end, "menu failed")
+        assert.is_false(settingsList.unavailable.condition)
+    end)
+
     local function menu()
         return {
             refreshes = 0,

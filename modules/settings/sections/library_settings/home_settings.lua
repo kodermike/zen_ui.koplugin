@@ -10,6 +10,7 @@ local Registry = require("modules/filebrowser/patches/home/components/registry")
 local library_font = require("modules/filebrowser/patches/library_font")
 local ReadingGoals = require("common/reading_goals")
 local icons = require("common/inline_icon_map")
+local plugin_root = require("common/plugin_root")
 local IconItem = require("common/ui/icon_menu_item")
 local ButtonModel = require("common/nav_button_model")
 local Destination = require("common/library_destination")
@@ -1400,7 +1401,7 @@ function M.build(ctx)
         if not ok_dispatcher or not Dispatcher then return end
         local entry = { type = "action", action = {} }
         local items, caller = {}, {}
-        Dispatcher:addSubMenu(caller, items, entry, "action")
+        DispatcherMenu.addSubMenu(Dispatcher, caller, items, entry, "action")
         DispatcherMenu.wrap(items, caller, function()
             if entry.action and next(entry.action) then
                 local label = Dispatcher:menuTextFunc(entry.action)
@@ -1461,11 +1462,12 @@ function M.build(ctx)
                 keep_menu_open = true,
                 callback = function() add_strip_plugin(controls) end,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = function() add_strip_menu(controls) end,
-            }, icons.open_menu),
+            },
         }
         return items
     end

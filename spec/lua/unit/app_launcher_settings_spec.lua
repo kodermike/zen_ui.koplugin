@@ -96,6 +96,9 @@ describe("app launcher settings", function()
             scan = function() return {} end,
         })
         ZenSpec.replace("common/dispatcher_menu", {
+            addSubMenu = function(dispatcher, ...)
+                return dispatcher:addSubMenu(...)
+            end,
             wrap = function(_items, _caller, on_update)
                 dispatcher_update = on_update
             end,
