@@ -2206,10 +2206,10 @@ msgid "Featured book"
 msgstr "Представена книга"
 
 #. Type: menu
-#. Context: local ROOT_TITLES = { filemanager_settings = _("File browser settings"), main = _("Main menu"),
+#. Context: local ROOT_TITLES = { filemanager_settings = _("File browser"), main = _("Main menu"),
 #: native_menu.lua:6
-msgid "File browser settings"
-msgstr "Настройки на файловия браузър"
+msgid "File browser"
+msgstr "Управление на файлове"
 
 #. Type: setting
 #. Context: { key = "usb", text = _("USB") }, { key = "search", text = _("File search") }, { key = "restart", text = _("Restart") },
@@ -2740,6 +2740,12 @@ msgid "Interactive"
 msgstr "Интерактивно"
 
 #. Type: setting
+#. Context: IconItem.decorate({ text = _("Interface"), sub_item_table = interface_items,
+#: zen_settings.lua:201
+msgid "Interface"
+msgstr "Интерфейс"
+
+#. Type: setting
 #. Context: text_func = function() return T(_("IP address: %1"), utils.get_device_ip_address() or "—") end,
 #: about_settings.lua:50
 msgid "IP address: %1"
@@ -3082,7 +3088,7 @@ msgid "Magnify UI"
 msgstr "Увеличаване на интерфейса"
 
 #. Type: menu
-#. Context: filemanager_settings = _("File browser settings"), main = _("Main menu"), navi = _("Navigation"),
+#. Context: filemanager_settings = _("File browser"), main = _("Main menu"), navi = _("Navigation"),
 #: native_menu.lua:7
 msgid "Main menu"
 msgstr "Главно меню"
@@ -6460,3 +6466,23 @@ msgstr "Общи"
 #: modules/settings/sections/global_settings.lua
 msgid "Zen Search"
 msgstr "Търсене Zen"
+
+#: modules/settings/zen_settings.lua
+msgid "KOReader"
+msgstr "KOReader"
+
+#: modules/settings/koreader_settings.lua
+msgid "Value"
+msgstr "Стойност"
+
+#: modules/settings/koreader_settings.lua
+msgid "Decrease"
+msgstr "Намаляване"
+
+#: modules/settings/koreader_settings.lua
+msgid "Increase"
+msgstr "Увеличаване"
+
+#: modules/settings/sections/app_launcher_settings.lua
+msgid "Reader action"
+msgstr "Действие за четене"

@@ -1,5 +1,5 @@
 describe("settings menu organization", function()
-    it("groups device settings below Reader with and without Bluetooth", function()
+    it("groups interface and device settings with and without Bluetooth", function()
         local originals = {}
         local function replace(name, value)
             originals[name] = { value = package.loaded[name] }
@@ -24,7 +24,9 @@ describe("settings menu organization", function()
             init_banner = function() end,
             build_update_available_action = function() end,
         })
-        replace("common/inline_icon_map", { settings = "gear" })
+        local interface_icon = require("common/inline_icon_map").settings_global
+        assert.are.equal("\u{F0574}", interface_icon)
+        replace("common/inline_icon_map", { settings = "gear", settings_global = interface_icon })
         replace("common/ui/icon_menu_item", {
             installMenuPatch = function() end,
             decorate = function(item, glyph)
@@ -40,7 +42,18 @@ describe("settings menu organization", function()
         }) do
             replace("modules/settings/sections/" .. section, { build = function() return {} end })
         end
-        for _i, section in ipairs({ "library_settings", "reader_settings", "updates_settings" }) do
+        local font_item
+        replace("modules/settings/sections/library_settings", {
+            build = function()
+                font_item = {
+                    text = "Font",
+                    text_func = function() return "Font: Hyperreadable, 24" end,
+                    sub_item_table = items({ "Font size", "Font", "Reset font" }),
+                }
+                return { { text = "Original control" }, font_item }
+            end,
+        })
+        for _i, section in ipairs({ "reader_settings", "updates_settings" }) do
             replace("modules/settings/sections/" .. section, {
                 build = function() return items({ "Original control" }) end,
             })
@@ -73,9 +86,20 @@ describe("settings menu organization", function()
         for _i, available in ipairs({ false, true }) do
             has_bluetooth = available
             local root = builder.build({ config = { features = {} } }).sub_item_table
-            assert.are.same({ "Controls", "Launcher", "Home", "Library", "Navbar", "Reader", "General", "Extras" }, labels(root))
-            assert.are.equal("gear", root[7].icon_glyph)
-            local general = root[7].sub_item_table
+            assert.are.same({ "Home", "Library", "Reader", "Interface", "General", "Extras", "KOReader" }, labels(root))
+            assert.is_function(root[7].sub_item_table_func)
+            assert.are.equal("koreader.png", root[7].icon_file:match("([^/]+)$"))
+            assert.is_nil(root[7].icon_glyph)
+            local interface = root[4].sub_item_table
+            assert.are.equal("interface", root[4]._zen_settings_root)
+            assert.are.equal(interface_icon, root[4].icon_glyph)
+            assert.are.same({ "Controls", "Launcher", "Navbar", "Font", "Zen Keyboard", "Zen Search", "Custom icons" }, labels(interface))
+            assert.are.equal("launcher", interface[2]._zen_settings_root)
+            assert.are.equal(font_item, interface[4])
+            assert.are.equal("Font: Hyperreadable, 24", interface[4].text_func())
+            assert.are.same({ "Font size", "Font", "Reset font" }, labels(interface[4].sub_item_table))
+            assert.are.equal("gear", root[5].icon_glyph)
+            local general = root[5].sub_item_table
             local expected = { "Wi-Fi", "Schedules", "Sleep", "Language", "Time and date", "Advanced", "Updates", "About" }
             if available then table.insert(expected, 2, "Bluetooth") end
             assert.are.same(expected, labels(general))
@@ -85,10 +109,10 @@ describe("settings menu organization", function()
             if available then assert.are.equal(bluetooth_item, general[2]) end
             assert.are.same({ "Original control" }, labels(general[#general - 2].sub_item_table))
             assert.are.same({ "Original control" }, labels(general[#general - 1].sub_item_table))
-            assert.are.same({ "Original control", "Double tap to open books" }, labels(root[4].sub_item_table))
-            assert.are.equal(double_tap_item, root[4].sub_item_table[#root[4].sub_item_table])
+            assert.are.same({ "Original control", "Double tap to open books" }, labels(root[2].sub_item_table))
+            assert.are.equal(double_tap_item, root[2].sub_item_table[#root[2].sub_item_table])
             assert.are.same({ "Version", "Device", "Setup Guide", "Report a Bug", "Quit KOReader" }, labels(general[#general].sub_item_table))
-            assert.are.same({ "Install ZenPM", "Zen OPDS", "Zen Search", "Zen Keyboard", "Stats", "Rakuyomi", "Lockdown mode", "Custom icons" }, labels(root[8].sub_item_table))
+            assert.are.same({ "Install ZenPM", "Zen OPDS", "Stats", "Rakuyomi", "Lockdown mode" }, labels(root[6].sub_item_table))
         end
         package.loaded["modules/settings/zen_settings"] = original_builder
         for name, original in pairs(originals) do package.loaded[name] = original.value end

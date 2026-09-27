@@ -1594,6 +1594,10 @@ class CaptureWorkflow:
                 lambda value: value.get("settings", {}).get("title") == "Settings",
                 "settings root",
             )
+            _require_ok(
+                driver.command("settings_page_select", label="Interface"),
+                "Interface",
+            )
             if action.startswith("launcher_add_"):
                 root_label = "Launcher"
             elif action == "controls_buttons_settings":

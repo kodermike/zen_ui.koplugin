@@ -64,6 +64,7 @@ return {
     edit         = "\u{F090C}",  -- mdi-pencil
     label        = "\u{F04F9}",
     icon         = "\u{F02F5}",
+    custom_icons = "\u{EFA8}",
     plugin       = "\u{F06A5}",
     action       = "\u{F140B}",
     more         = "\u{F01D8}",  -- mdi-dots-horizontal
@@ -98,7 +99,7 @@ return {
     vocabulary        = "\u{F1349}",
     settings_about    = "\u{F02FD}",
     widgets           = "\u{F072C}",
-    settings_global   = "\u{F484}",
+    settings_global   = "\u{F0574}",
     settings_status   = "\u{F12F0}",
     reader_themes     = "\u{F03D8}",
     settings_folders  = "\u{F0256}",
@@ -148,5 +149,6 @@ return {
     open_menu    = "\u{F073D}",  -- mdi-menu-open
     double_tap   = "\u{F073C}",
     koreader_menu = "\u{F035C}",  -- mdi-menu
+    koreader_file_browser = "\u{F0AB6}",
     bullet       = "\u{2022}",   -- bullet point
 }

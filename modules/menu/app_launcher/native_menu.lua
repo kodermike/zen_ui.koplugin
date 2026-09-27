@@ -3,7 +3,7 @@ local _ = require("gettext")
 local M = {}
 
 local ROOT_TITLES = {
-    filemanager_settings = _("File browser settings"),
+    filemanager_settings = _("File browser"),
     main = _("Main menu"),
     navi = _("Navigation"),
     search = _("Search"),
@@ -94,7 +94,11 @@ local function menu_tree(menu)
     for _i, entry in ipairs(removed) do
         local item = type(entry) == "table" and entry.tab or nil
         if type(item) == "table" and not seen[item] then
-            out[#out + 1] = item
+            local position = #out + 1
+            for index, tab in ipairs(out) do
+                if tab == entry.before then position = index; break end
+            end
+            table.insert(out, position, item)
             seen[item] = true
         end
     end
@@ -200,6 +204,53 @@ end
 
 function M.exists(id, scope)
     return type(id) == "string" and resolve_item(id, scope or "active") ~= nil
+end
+
+function M.isSettingsOwner(menu)
+    return menu ~= nil and live_menu("active", false) == menu
+        and not (menu.ui and menu.ui.tearing_down)
+end
+
+function M.settingsItems(scope)
+    local menu = live_menu(scope or "active", false)
+    local items = menu_tree(menu)
+    if not items then return {} end
+    local Settings = require("modules/settings/koreader_settings")
+    Settings.install()
+    local roots = { _zen_native_owner = menu }
+    local icons = require("common/inline_icon_map")
+    local glyphs = {
+        filemanager_settings = icons.koreader_file_browser,
+        setting = icons.settings, tools = icons.settings_advanced,
+        search = icons.search, main = icons.koreader_menu,
+        navi = icons.settings_navbar, typeset = icons.settings_reader,
+    }
+    local injected = { zen_ui = true, zen_library_home = true, quicksettings = true,
+        app_launcher = true, filemanager = true }
+    for _i, tab in ipairs(items) do
+        if not injected[tab.id] then
+            local setting = tab.id == "setting" or tab.id == "typeset"
+                or tab.id == "filemanager_settings"
+            local root = {}
+            for key, value in pairs(tab) do
+                if type(key) ~= "number" then root[key] = value end
+            end
+            root.text = item_title(tab) or fallback_title(tab.id)
+            if tab.enabled_func then root.enabled = nil end
+            root.icon_glyph = glyphs[tab.id]
+            root._zen_native_owner, root._zen_native_setting = menu, setting
+            if #tab > 0 or ROOT_TITLES[tab.id] or tab.sub_item_table or tab.sub_item_table_func then
+                root.sub_item_table = nil
+                root.sub_item_table_func = function(page)
+                    local children = tab.sub_item_table_func and tab.sub_item_table_func(page)
+                        or tab.sub_item_table or tab
+                    return Settings.copyItems(children, menu, setting)
+                end
+            end
+            roots[#roots + 1] = root
+        end
+    end
+    return roots
 end
 
 function M.resolve(id, scope)

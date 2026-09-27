@@ -183,6 +183,7 @@ function M.build(ctx)
     table.insert(items, status_bar_section.build(ctx))
     table.insert(items, metadata_section.build(ctx))
     table.insert(items, {
+        text = _("Font"),
         text_func = function()
             local cfg = ensure_library_font_cfg(config)
             local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
@@ -201,7 +202,7 @@ function M.build(ctx)
                     local SpinWidget = require("ui/widget/spinwidget")
                     local cfg = ensure_library_font_cfg(config)
                     UIManager:show(SpinWidget:new{
-                        title_text = _("Library font size"),
+                        title_text = _("Font size"),
                         value = cfg.font_size,
                         value_min = 10,
                         value_max = 40,
@@ -242,7 +243,7 @@ function M.build(ctx)
                     end
                     if not display_face then return end
                     UIManager:show(FontChooser:new{
-                        title = _("Library font"),
+                        title = _("Font"),
                         font_file = display_face,
                         default_font_file = default_file,
                         callback = function(file)

@@ -42,6 +42,12 @@ function M.has_reader_action(Dispatcher, actions)
     return false
 end
 
+function M.is_reader_entry(Dispatcher, entry)
+    if type(entry) ~= "table" then return false end
+    if type(entry.reader_action) == "boolean" then return entry.reader_action end
+    return entry.type == "action" and M.has_reader_action(Dispatcher, entry.action)
+end
+
 function M.has_registered_action(Dispatcher, actions)
     if type(actions) ~= "table" then return false end
     local settings_list = dispatcher_settings_list(Dispatcher)

@@ -237,6 +237,7 @@
         end
         UIManager:nextTick(function()
             local path = {
+                { key = "_zen_settings_root", value = "interface" },
                 { key = "_zen_settings_root", value = "launcher" },
             }
             if open_buttons then
@@ -254,10 +255,9 @@
 
     local function entry_hidden_in_context(entry, touch_menu, cfg)
         return type(entry) == "table"
-            and entry.type == "action"
             and cfg.hide_reader_actions_in_library == true
             and is_library_launcher(touch_menu)
-            and ActionFilter.has_reader_action(Dispatcher, entry.action)
+            and ActionFilter.is_reader_entry(Dispatcher, entry)
     end
 
     local function activate_entry(touch_menu, entry)

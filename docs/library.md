@@ -20,10 +20,11 @@ order: 30
 
 Library settings control the KOReader library. Customize the top status bar, layout, folder display, background image, book details, and metadata tools. Tap and hold on any item in the Library or the Navbar and it will bring up the Context Menu. This is a detailed menu of actions for the currently selected item.
 
+The global ZenOS font family and base text size are configured under **Zen Settings > Interface > Font**. Reader fonts remain under **Reader**.
+
 ## Options
 
 - Configure the top status bar with left, center, and right item slots.
-- Set the library font face and font size.
 - Choose display mode, mosaic density, list density, item underlines, and list borders.
 - Configure folder covers, folder labels, hidden up-folder rows, and automatic series grouping.
 - Optionally flatten subfolders into one library view without changing files on disk.
@@ -53,8 +54,6 @@ Library settings control the KOReader library. Customize the top status bar, lay
 | Metadata > Open Library | Enables Open Library lookup without an API credential. |
 | Metadata > Match selection | Automatically picks the best result or always opens the match chooser. |
 | Metadata > Keep an EPUB metadata backup | Keeps one restorable copy before ZenOS writes metadata into an EPUB. |
-| Font > Font | Sets the global ZenOS font family, or restores the default font. Applies everywhere except the reader. |
-| Font > Font size | Sets the global base text size from 10 to 40. |
 | Layout > Display mode | Selects classic, mosaic with covers, mosaic with text, detailed list with covers and metadata, detailed list with metadata, or detailed list with covers and filenames. |
 | Layout > Items per page | Sets portrait mosaic columns and rows, landscape mosaic columns and rows, and list items per page. |
 | Layout > Show all files from subfolders | Shows books from nested folders in one flat view. It is unavailable at the device root to avoid scanning the entire filesystem. |

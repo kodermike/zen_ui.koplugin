@@ -6,6 +6,7 @@ local IconItem = require("common/ui/icon_menu_item")
 local icon_utils = require("common/utils")
 
 local Model = require("modules/menu/app_launcher/model")
+local ActionFilter = require("modules/menu/app_launcher/action_filter")
 local NativeMenu = require("modules/menu/app_launcher/native_menu")
 local PagePlan = require("modules/menu/app_launcher/page_plan")
 local BookSwitcherPage = require("modules/menu/app_launcher/book_switcher_page")
@@ -852,6 +853,19 @@ function M.build(ctx)
             }, icons.plugin)
             add_label_item()
             add_icon_item()
+        end
+        if entry.type ~= "break" then
+            items[#items + 1] = IconItem.decorate({
+                text = _("Reader action"),
+                checked_func = function()
+                    return ActionFilter.is_reader_entry(Dispatcher, entry)
+                end,
+                callback = function(touch_menu)
+                    entry.reader_action = not ActionFilter.is_reader_entry(Dispatcher, entry)
+                    if not is_draft_entry(entry) then save_app_launcher() end
+                    if touch_menu then touch_menu:updateItems(1) end
+                end,
+            }, icons.settings_reader)
         end
         if not is_draft_entry(entry) then
             local move_items = build_move_items(entry, parent)

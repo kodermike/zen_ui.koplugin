@@ -348,6 +348,7 @@ return {
         "Fix TBR applying Library filter hiding all TBR books"
      },
      ["3.4.0"] = {
+        "Add KOReader menus and document layout controls inside Zen Settings",
         "Add Bluetooth device manager for Kindle, Kobo, and PocketBook (hold Bluetooth in Controls or open from Device settings)",
         "Add unified brightness/warmth slider (Controls > Unified brightness/warmth slider)",
         "Add color pickers for Reader themes and highlights",

@@ -2066,8 +2066,10 @@ function Driver:handleCommand(command)
     end
     if kind == "open_settings_page" then
         local FileManager = require("apps/filemanager/filemanager")
-        local menu = FileManager.instance and FileManager.instance.menu
-        if not menu then return { ok = false, error = "file manager menu unavailable" } end
+        local ReaderUI = require("apps/reader/readerui")
+        local ui = ReaderUI.instance or FileManager.instance
+        local menu = ui and ui.menu
+        if not menu then return { ok = false, error = "active menu unavailable" } end
         local item = menu._zen_tab_item
         if not item and type(menu.setUpdateItemTable) == "function" then
             menu:setUpdateItemTable()
@@ -2094,6 +2096,17 @@ function Driver:handleCommand(command)
         end
         return { ok = true }
     end
+    if kind == "native_settings_state" then
+        local reader = require("apps/reader/readerui").instance
+        if not reader then return { ok = false, error = "reader unavailable" } end
+        local config = reader.config
+        local values, defaults = {}, {}
+        for _i, key in ipairs(params.keys or {}) do
+            values[key] = config.configurable[key]
+            defaults[key] = G_reader_settings:readSetting(config.options.prefix .. "_" .. key)
+        end
+        return { ok = true, prefix = config.options.prefix, values = values, defaults = defaults }
+    end
     if kind == "settings_page_state" then
         local page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
         if not page then return { ok = false, error = "settings page unavailable" } end
@@ -2107,6 +2120,16 @@ function Driver:handleCommand(command)
         local items = {}
         for _i, item in ipairs(page.item_table or {}) do
             local label = item._zen_display_text or item.text or ""
+            local icon, row_bounds
+            for _j, row in ipairs(page.item_group or {}) do
+                if row.entry == item then
+                    row_bounds = dimen_bounds(row._underline_container and row._underline_container.dimen)
+                    icon = find_descendant(row, function(widget)
+                        return widget.dimen and item.icon_file and widget.file == item.icon_file
+                    end)
+                    break
+                end
+            end
             local checked
             if type(item.checked_func) == "function" then
                 local ok_checked, value = pcall(item.checked_func)
@@ -2118,6 +2141,9 @@ function Driver:handleCommand(command)
                 breadcrumb = item._zen_settings_breadcrumb,
                 radio = item.radio == true,
                 checked = checked,
+                icon_file = item.icon_file,
+                icon_bounds = dimen_bounds(icon and icon.dimen),
+                row_bounds = row_bounds,
             }
         end
         return {
@@ -2169,6 +2195,7 @@ function Driver:handleCommand(command)
                 row_style = find_settings_row_style(page.item_group),
                 row_alignment = settings_row_alignment(page.item_group),
                 standard_style = settings_row_standard(),
+                icon_gap = require("common/ui/icon_menu_item").getSettingsIconGap(),
                 labels = labels,
                 items = items,
             },
@@ -2264,17 +2291,52 @@ function Driver:handleCommand(command)
             submitted = submitted,
         }
     end
-    if kind == "settings_page_select" and type(params.label) == "string" then
+    if kind == "settings_page_select" or kind == "settings_page_hold" then
         local page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
         if not page then return { ok = false, error = "settings page unavailable" } end
-        for _i, item in ipairs(page.item_table or {}) do
+        for index, item in ipairs(page.item_table or {}) do
             local label = item._zen_display_text or item.text or ""
-            if label == params.label then
-                local ok_select, err = pcall(page.onMenuSelect, page, item)
+            if label == params.label or index == params.index then
+                local callback = kind == "settings_page_hold" and page.onMenuHold or page.onMenuSelect
+                local ok_select, err = pcall(callback, page, item)
                 return { ok = ok_select, error = ok_select and nil or tostring(err) }
             end
         end
         return { ok = false, error = "settings item unavailable" }
+    end
+    if kind == "native_settings_confirm" then
+        local ConfirmBox = require("ui/widget/confirmbox")
+        for index = #UIManager._window_stack, 1, -1 do
+            local widget = UIManager._window_stack[index].widget
+            if getmetatable(widget) == ConfirmBox then
+                widget.ok_callback()
+                UIManager:close(widget)
+                return { ok = true }
+            end
+        end
+        return { ok = false, error = "confirmation unavailable" }
+    end
+    if kind == "native_settings_input" then
+        local InputDialog = require("ui/widget/inputdialog")
+        for index = #UIManager._window_stack, 1, -1 do
+            local widget = UIManager._window_stack[index].widget
+            if getmetatable(widget) == InputDialog then
+                if params.text then widget:setInputText(params.text) end
+                if params.button then
+                    for _i, row in ipairs(widget.buttons or {}) do
+                        for _j, button in ipairs(row) do
+                            if button.text == params.button then button.callback() end
+                        end
+                    end
+                end
+                local open = false
+                for _i, entry in ipairs(UIManager._window_stack) do
+                    if entry.widget == widget then open = true end
+                end
+                return { ok = true, open = open }
+            end
+        end
+        return { ok = false, error = "input unavailable" }
     end
     if kind == "settings_page_back" then
         local page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")

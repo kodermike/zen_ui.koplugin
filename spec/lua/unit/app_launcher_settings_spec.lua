@@ -105,7 +105,9 @@ describe("app launcher settings", function()
             chooseFolder = function(callback) choose_folder = callback end,
             chooseTag = function(callback) choose_tag = callback end,
         })
+        local settingsList = { reader_action = { reader = true } }
         ZenSpec.replace("dispatcher", {
+            registerAction = function() return settingsList end,
             addSubMenu = function(_self, _caller, _items, location, settings)
                 if dispatcher_action then location[settings] = dispatcher_action end
             end,
@@ -119,6 +121,7 @@ describe("app launcher settings", function()
             picker_options = options
         end)
         ZenSpec.unload("modules/settings/sections/app_launcher_settings")
+        ZenSpec.unload("modules/menu/app_launcher/action_filter")
     end)
 
     after_each(function()
@@ -144,6 +147,40 @@ describe("app launcher settings", function()
 
         assert.are.equal("Icon: ZenOS", icon_label)
         assert.are.equal("zen_ui", entry.icon)
+    end)
+
+    it("toggles reader action classification for every button type", function()
+        local section = require(
+            "modules/settings/sections/app_launcher_settings").build({
+                config = { features = { app_launcher = true } },
+                save_and_apply = function() end,
+        })
+        local refreshes = 0
+        local touch_menu = { updateItems = function() refreshes = refreshes + 1 end }
+        for _i, entry_type in ipairs({
+            "plugin", "quick_setting", "koreader_menu", "folder_shortcut", "tag", "folder", "action",
+        }) do
+            entry.type = entry_type
+            entry.reader_action = nil
+            entry.folder = "/library"
+            entry.action = { reader_action = true }
+            assert.is_true(section._zen_search_items_func()[1]._zen_search_open())
+            local reader_item
+            for _j, item in ipairs(shown_options.item_table) do
+                if item.text == "Reader action" then reader_item = item end
+            end
+            assert.is_table(reader_item)
+            local default = entry_type == "action"
+            assert.are.equal(default, reader_item.checked_func())
+            reader_item.callback(touch_menu)
+            assert.are.equal(not default, entry.reader_action)
+            assert.are.equal(not default, reader_item.checked_func())
+            reader_item.callback(touch_menu)
+            assert.are.equal(default, entry.reader_action)
+            assert.are.equal(default, reader_item.checked_func())
+        end
+        assert.are.equal(14, saves)
+        assert.are.equal(14, refreshes)
     end)
 
     it("offers page visibility options and arranges their launcher order", function()
@@ -428,6 +465,9 @@ describe("app launcher settings", function()
         })
 
         assert.is_true(section._zen_search_items_func()[1]._zen_search_open())
+        for _i, item in ipairs(shown_options.item_table) do
+            assert.are_not.equal("Reader action", item.text)
+        end
         local title_item = shown_options.item_table[1]
         assert.are.equal("Title: Reading", title_item.text_func())
         title_item.callback()

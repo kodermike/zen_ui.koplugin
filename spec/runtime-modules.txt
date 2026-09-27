@@ -239,6 +239,8 @@ modules/settings/sections/stats_settings.lua|integration
 modules/settings/sections/updates_settings.lua|integration
 modules/settings/zen_bugreporter.lua|integration
 modules/settings/zen_settings.lua|integration
+modules/settings/koreader_settings.lua|unit
+modules/settings/koreader_layout.lua|unit
 modules/settings/zen_settings_page.lua|integration
 modules/settings/zen_settings_apply.lua|integration
 modules/settings/zen_settings_utils.lua|integration

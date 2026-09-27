@@ -2,7 +2,7 @@
 title: Controls
 category: Controls
 summary: All your controls in one place
-settingsPath: Zen Settings > Controls
+settingsPath: Zen Settings > Interface > Controls
 order: 20
 ---
 

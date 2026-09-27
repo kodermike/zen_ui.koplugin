@@ -106,6 +106,8 @@ function M.build(ctx)
         end
         table.insert(items, {
             text = _("Rakuyomi"),
+            icon_file = require("common/utils").resolveLocalIcon(
+                require("common/plugin_root") .. "/icons/", "tab_manga"),
             sub_item_table = {
                 {
                     text = _("Exclude from Home"),
@@ -135,7 +137,6 @@ function M.build(ctx)
                 },
             },
         })
-        IconItem.decorate(items[#items], icons.reading)
     end
 
     local global_items = global_settings.build_extras_items(ctx)
@@ -143,8 +144,8 @@ function M.build(ctx)
         table.insert(items, item)
     end
 
-    local custom_icons_enabled_item = IconItem.decorate({
-        text = _("Enable custom icons"),
+    local custom_icons_item = IconItem.decorate({
+        text = _("Custom icons"),
         help_text = _("When enabled, loose icons or a selected ZenOS icon pack override supported icons. Missing icons fall back to ZenOS, then KOReader."),
         checked_func = function()
             return config.features.custom_icons_enabled == true
@@ -155,7 +156,8 @@ function M.build(ctx)
             if touchmenu_instance then touchmenu_instance:updateItems() end
             settings_apply.prompt_restart()
         end,
-    }, icons.enable)
+    }, icons.custom_icons)
+    custom_icons_item.checkmark_callback = custom_icons_item.callback
 
     if type(config.custom_icons) ~= "table" then config.custom_icons = { active_pack = "" } end
     local function active_pack_id()
@@ -241,15 +243,10 @@ function M.build(ctx)
             return config.features.custom_icons_enabled == true
         end,
         sub_item_table_func = build_pack_items,
-    }, icons.icon)
+    }, icons.custom_icons)
 
-    table.insert(items, IconItem.decorate({
-        text = _("Custom icons"),
-        sub_item_table = {
-            custom_icons_enabled_item,
-            custom_icon_pack_item,
-        },
-    }, icons.icon))
+    custom_icons_item.sub_item_table = { custom_icon_pack_item }
+    table.insert(items, custom_icons_item)
 
     return items
 end

@@ -231,6 +231,25 @@ describe("Zen settings page", function()
         assert.is_true(settings.title_bar.search_visible)
     end)
 
+    it("honors disabled controls and resolves callback factories on each action", function()
+        local active, taps, holds = false, 0, 0
+        local item = {
+            text = "Control", keep_menu_open = true,
+            enabled_func = function() return active end,
+            callback_func = function() return function() taps = taps + 1 end end,
+            hold_callback_func = function() return function() holds = holds + 1 end end,
+        }
+        local settings = make_page({ item })
+        settings:onMenuSelect(item)
+        settings:onMenuHold(item)
+        assert.are.equal(0, taps + holds)
+        active = true
+        settings:onMenuSelect(item)
+        settings:onMenuHold(item)
+        assert.are.equal(1, taps)
+        assert.are.equal(1, holds)
+    end)
+
     it("shows a header action only at the settings root", function()
         local action = { text = "Update available" }
         local child = { text = "Child" }
@@ -739,6 +758,34 @@ describe("Zen settings page", function()
         assert.are.equal(1, deferred_apply_flushes)
     end)
 
+    it("preserves submenu titles when filtering an already filtered table", function()
+        local settings = make_page({})
+        local item = { text = "Controls", sub_item_table = {
+            { text = "Visible" },
+            { text = "Hidden", show_func = function() return false end },
+        } }
+        settings:onMenuSelect(item)
+        local filtered = settings:_resolveSubItems({ sub_item_table = settings.item_table })
+        assert.are.equal("Controls", filtered._zen_title)
+        assert.are.equal(1, #filtered)
+    end)
+
+    it("releases native selector views when navigating away during search", function()
+        for _i, action in ipairs({ "root", "close", "result" }) do
+            local released = 0
+            local settings = make_page({{ text = "Other", sub_item_table = {{ text = "Option" }} }})
+            settings:_openSubmenu({ text = "Selector" }, {
+                { text = "Value" },
+                _zen_on_leave = function() released = released + 1 end,
+            })
+            settings:_onSearchChanged("Other")
+            if action == "root" then settings:backToRootMenu()
+            elseif action == "close" then settings:closeMenu()
+            else settings:onMenuSelect(settings.item_table[1]) end
+            assert.are.equal(1, released)
+        end
+    end)
+
     it("collapses an empty search pill to an icon when opening a submenu", function()
         local controls = { text = "Controls", sub_item_table = {{ text = "Screen timeout" }} }
         local settings = make_page({ controls })
@@ -750,6 +797,23 @@ describe("Zen settings page", function()
         assert.are.equal("Controls", settings.title_bar.title)
         assert.is_true(settings.title_bar.search_visible)
         assert.is_true(settings.title_bar.search_collapsed)
+    end)
+
+    it("dispatches tap and hold input definitions and honors selected submenu IDs", function()
+        local settings = Page:new{ item_table = {}, title = "Settings" }
+        local inputs = {}
+        function settings:onInput(input) inputs[#inputs + 1] = input end
+        settings:onMenuSelect({ tap_input_func = function() return { title = "Tap input" } end, keep_menu_open = true })
+        settings:onMenuHold({ hold_input = { title = "Hold input" } })
+        assert.are.equal("Tap input", inputs[1].title)
+        assert.are.equal("Hold input", inputs[2].title)
+        local children = {
+            { text = "First", menu_item_id = "first" },
+            { text = "Selected", menu_item_id = "selected" },
+            open_on_menu_item_id_func = function() return "selected" end,
+        }
+        settings:onMenuSelect({ text = "Choices", sub_item_table = children })
+        assert.are.equal(2, settings.itemnumber)
     end)
 
     it("opens the KOReader menu from the physical Menu key", function()

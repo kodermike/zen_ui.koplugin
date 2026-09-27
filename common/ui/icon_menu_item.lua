@@ -222,20 +222,22 @@ local function rebuild_touch_menu_item(row)
 end
 
 local function settings_control_widget(item, enabled)
-    if type(item.checked_func) == "function" then
+    if type(item.checked_func) == "function" or item.checked ~= nil then
+        local function checked()
+            if type(item.checked_func) == "function" then return not not item.checked_func() end
+            return not not item.checked
+        end
         if item.radio == true then
             return RadioMark:new{
                 checkable = true,
-                checked = item.checked_func() == true,
+                checked = checked(),
                 enabled = enabled,
             }
         end
         return ZenToggle:new{
             width = M.SETTINGS_TOGGLE_WIDTH,
             height = M.SETTINGS_TOGGLE_HEIGHT,
-            value_func = function()
-                return item.checked_func() == true
-            end,
+            value_func = checked,
         }
     end
 end
@@ -244,6 +246,12 @@ local function settings_icon_widget(item, height, face)
     if item.icon_glyph then
         return M.makeState(item.icon_glyph, M.SETTINGS_ICON_WIDTH, height,
             M.getSettingsIconFace(face))
+    elseif item.icon_file then
+        local size = M.getSettingsIconFace(face).size
+        return CenterContainer:new{
+            dimen = Geom:new{ w = M.SETTINGS_ICON_WIDTH, h = height },
+            IconWidget:new{ file = item.icon_file, width = size, height = size },
+        }
     end
 end
 

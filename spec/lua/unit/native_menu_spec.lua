@@ -124,4 +124,51 @@ describe("native KOReader menu shortcuts", function()
         assert.is_false(NativeMenu.exists("style_tweaks", "filemanager"))
         assert.is_nil(NativeMenu.resolve("plugin_orphan", "reader"))
     end)
+
+    it("exposes native roots and plugin descendants while excluding injected tabs", function()
+        local original = package.loaded["modules/settings/koreader_settings"]
+        ZenSpec.replace("modules/settings/koreader_settings", {
+            install = function() end,
+            copyItems = function(items) return items end,
+        })
+        local NativeMenu = require("modules/menu/app_launcher/native_menu")
+        local roots = NativeMenu.settingsItems("active")
+        assert.are.equal("typeset", roots[1].id)
+        assert.are.equal("tools", roots[2].id)
+        assert.are.equal(2, #roots)
+        assert.are.equal("plugin_orphan", roots[2].sub_item_table_func()[1].id)
+        assert.is_true(NativeMenu.isSettingsOwner(reader_menu))
+        reader_menu.tab_item_table[#reader_menu.tab_item_table + 1] = {
+            id = "plugin_tab", text = "Plugin tab", { text = "Plugin option" },
+        }
+        roots = NativeMenu.settingsItems("active")
+        assert.are.equal("Plugin tab", roots[3].text)
+        assert.are.equal("Plugin option", roots[3].sub_item_table_func()[1].text)
+        package.loaded["apps/reader/readerui"].instance = nil
+        roots = NativeMenu.settingsItems("active")
+        assert.are.equal("setting", roots[1].id)
+        assert.is_true(NativeMenu.isSettingsOwner(filemanager_menu))
+        assert.is_false(NativeMenu.isSettingsOwner(reader_menu))
+        package.loaded["modules/settings/koreader_settings"] = original
+    end)
+
+    it("initializes a missing menu once and restores hidden tabs in their original position", function()
+        local original = package.loaded["modules/settings/koreader_settings"]
+        ZenSpec.replace("modules/settings/koreader_settings", { install = function() end })
+        package.loaded["apps/reader/readerui"].instance = nil
+        local initialized = 0
+        filemanager_menu.tab_item_table = nil
+        function filemanager_menu:setUpdateItemTable()
+            initialized = initialized + 1
+            local tools = { id = "tools" }
+            self.tab_item_table = { tools }
+            self._zen_mode_removed_tabs = { { tab = { id = "setting" }, before = tools } }
+        end
+        local NativeMenu = require("modules/menu/app_launcher/native_menu")
+        assert.are.equal("setting", NativeMenu.settingsItems()[1].id)
+        assert.are.equal("tools", NativeMenu.settingsItems()[2].id)
+        assert.are.equal(1, initialized)
+        assert.are.equal(1, #filemanager_menu.tab_item_table)
+        package.loaded["modules/settings/koreader_settings"] = original
+    end)
 end)

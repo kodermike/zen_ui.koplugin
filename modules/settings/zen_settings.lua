@@ -4,6 +4,7 @@ local UIManager = require("ui/uimanager")
 local settings_apply = require("modules/settings/zen_settings_apply")
 local updater        = require("modules/settings/zen_updater")
 local icons          = require("common/inline_icon_map")
+local plugin_root    = require("common/plugin_root")
 local IconItem       = require("common/ui/icon_menu_item")
 local utils          = require("modules/settings/zen_settings_utils")
 
@@ -163,8 +164,6 @@ function M.build(plugin)
     extras_items = utils.order_items_by_text(extras_items, {
         _("Install ZenPM"),
         _("Zen OPDS"),
-        _("Zen Search"),
-        _("Zen Keyboard"),
         _("Stats"),
         _("Rakuyomi"),
     })
@@ -178,6 +177,16 @@ function M.build(plugin)
     IconItem.decorate(home_item, icons.settings_home)
     navbar_item.text = _("Navbar")
 
+    local interface_items = {
+        quick_settings_item,
+        app_launcher_item,
+        IconItem.decorate(navbar_item, icons.settings_navbar),
+    }
+    move_item(filebrowser_items, _("Font"), interface_items)
+    move_item(extras_items, _("Zen Keyboard"), interface_items)
+    move_item(extras_items, _("Zen Search"), interface_items)
+    move_item(extras_items, _("Custom icons"), interface_items)
+
     local library_item = IconItem.decorate({
         text = _("Library"),
         sub_item_table = filebrowser_items,
@@ -185,14 +194,24 @@ function M.build(plugin)
     }, icons.settings_library)
 
     local root_items = {
-        quick_settings_item,
-        app_launcher_item,
         home_item,
         library_item,
-        IconItem.decorate(navbar_item, icons.settings_navbar),
         IconItem.decorate({ text = _("Reader"), sub_item_table = reader_items }, icons.settings_reader),
+        IconItem.decorate({
+            text = _("Interface"),
+            sub_item_table = interface_items,
+            _zen_settings_root = "interface",
+        }, icons.settings_global),
         IconItem.decorate({ text = _("General"), sub_item_table = general_items }, icons.settings),
         IconItem.decorate({ text = _("Extras"), sub_item_table = extras_items }, icons.fav_add),
+        {
+            text = _("KOReader"),
+            icon_file = plugin_root .. "/icons/koreader.png",
+            _zen_settings_root = "koreader",
+            sub_item_table_func = function()
+                return require("modules/menu/app_launcher/native_menu").settingsItems("active")
+            end,
+        },
     }
 
     root_items._zen_header_action_func = function()

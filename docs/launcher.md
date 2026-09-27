@@ -2,7 +2,7 @@
 title: Launcher
 category: Launcher
 summary: Customizable app launcher with action buttons, plugin buttons, and folders.
-settingsPath: Zen Settings > Launcher
+settingsPath: Zen Settings > Interface > Launcher
 order: 40
 ---
 
@@ -36,6 +36,7 @@ Launcher adds a configurable tab to the ZenOS menu. It can create shortcut butto
 - Add folders and arrange buttons inside each folder.
 - Insert a row break to start later buttons on a new row, with an optional centered title.
 - Configure each button or folder label and icon.
+- Mark any button or folder as a reader action for the library filter.
 - Move Control, action, plugin-menu, and KOReader-menu buttons into folders or back to the root launcher.
 
 ## Setting reference
@@ -50,7 +51,8 @@ Launcher adds a configurable tab to the ZenOS menu. It can create shortcut butto
 | Order | Arranges the Book details, Book switcher, and Buttons pages. |
 | Open menu to Launcher | Opens the top menu on the Launcher tab. |
 | Show labels | Shows launcher button labels. Enabled by default; disabling it hides the labels. |
-| Hide reader actions in library | When enabled, action buttons bound to reader-only dispatcher actions are hidden (and inactive) while the launcher is opened from the library. Disabled by default. |
+| Hide reader actions in library | When enabled, buttons marked as reader actions are hidden (and inactive) while the launcher is opened from the library. Disabled by default. |
+| Button or folder > Reader action | Includes the button in the library filter. Defaults to enabled for reader-only dispatcher actions and disabled for all other buttons. Can be toggled for any button. |
 | Buttons > Add > Open folder | Adds an independently configured folder destination button. This is separate from a Launcher folder used to group buttons. |
 | Buttons > Add > Specific tag | Adds a button that opens one selected tag. |
 | Buttons > Add > Control | Adds a launcher button that runs a selected Controls control. |
