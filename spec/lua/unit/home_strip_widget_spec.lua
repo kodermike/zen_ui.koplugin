@@ -1573,7 +1573,7 @@ describe("home strip widget", function()
         assert.are.equal(3, settings_opened)
     end)
 
-    it("keeps a group cover at book size, drills into it, and resets it", function()
+    it("keeps a group cover at book size, drills into it, and returns to its source", function()
         rawset(_G, "__ZEN_UI_PLUGIN", {
             config = {
                 browser_folder_cover = {
@@ -1682,7 +1682,84 @@ describe("home strip widget", function()
             { active_id = "tags" },
         }, remembered)
         assert.are.equal(2, rebuilt)
-        assert.are.equal(2, resets)
+        assert.are.equal(0, resets)
+    end)
+
+    it("restores the parent strip page when tapping a group name to go back", function()
+        local Strip = require("modules/filebrowser/patches/home/widgets/strip")
+        for _i, case in ipairs({
+            { id = "tags", source = { kind = "tags" },
+                group = { group_label = "Science" } },
+            { id = "folder", source = { kind = "folder", value = "/library" },
+                group = { group_label = "Subfolder", is_folder = true,
+                    folder_path = "/library/Subfolder" } },
+            { id = "tags", source = { kind = "tags", drill = { label = "Science" } },
+                group = { group_label = "Saga", group_kind = "series" } },
+            { id = "tag", source = { kind = "tag", value = "Science" },
+                group = { group_label = "Saga", group_kind = "series" } },
+        }) do
+            local function page_key(source)
+                return source.drill and (source.drill.path or source.drill.label)
+                    or source.value or source.kind
+            end
+            local parent_key = page_key(case.source)
+            local pages = { [parent_key] = 3 }
+            local targets
+            local menu = {
+                _zen_home_strip_runtime = { source = case.source, active_id = case.id },
+            }
+            local ctx = {
+                width = 600,
+                height = 300,
+                menu = menu,
+                component_id = "strip",
+                module_cfg = {
+                    controls = {
+                        enabled = true,
+                        order = { case.id, "page_right" },
+                        show_buttons = { [case.id] = true, page_right = true },
+                        labels = {},
+                        custom_buttons = {
+                            { id = "folder", type = "folder", folder = "/library" },
+                            { id = "tag", type = "tag", tag = "Science" },
+                        },
+                    },
+                },
+                data = {
+                    getStripItemsForPage = function(_self, source)
+                        local key = page_key(source)
+                        return {{ path = key .. "-page-" .. (pages[key] or 1) .. ".epub" }}
+                    end,
+                    resetStripPages = function() pages = {} end,
+                },
+                shiftStrip = function(source, _count, _order, _direction,
+                        _component_id, _two_rows, refresh)
+                    local key = page_key(source)
+                    pages[key] = (pages[key] or 1) + 1
+                    refresh()
+                    return true
+                end,
+                prepareHomeFocusTarget = function(_target, widget) return widget end,
+                activateStripFocusTargets = function(value)
+                    targets = {}
+                    for _j, target in ipairs(value) do targets[target.key] = target end
+                end,
+            }
+            menu._home_rebuild = function() Strip.build(ctx); return true end
+            Strip.build(ctx)
+            assert.are.equal(parent_key .. "-page-3.epub", cover_books[#cover_books].path)
+
+            case.group.is_group = true
+            assert.is_true(ctx.openStripGroup(case.group))
+            local child_key = page_key(menu._zen_home_strip_runtime.source)
+            assert.are.equal(child_key .. "-page-1.epub", cover_books[#cover_books].path)
+            assert.is_true(targets["strip-control:page_right"].activate())
+            assert.are.equal(child_key .. "-page-2.epub", cover_books[#cover_books].path)
+            assert.is_true(has_text(case.group.group_label))
+
+            assert.is_true(targets["strip-control:" .. case.id].activate())
+            assert.are.equal(parent_key .. "-page-3.epub", cover_books[#cover_books].path)
+        end
     end)
 
     it("returns from a Home tag series to its tag", function()

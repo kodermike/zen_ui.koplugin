@@ -5,6 +5,7 @@ describe("automatic series grouping patch", function()
     local original_select_calls
     local cached_rows
     local doc_props_lookups
+    local directory_prefetches
     local original_refresh_calls
     local statuses
 
@@ -36,6 +37,7 @@ describe("automatic series grouping patch", function()
         original_select_calls = 0
         cached_rows = {}
         doc_props_lookups = 0
+        directory_prefetches = 0
         original_refresh_calls = 0
         statuses = {}
         G_reader_settings = ZenSpec.memorySettings({
@@ -104,6 +106,7 @@ describe("automatic series grouping patch", function()
         })
         ZenSpec.replace("bookinfomanager", {
             openDbConnection = function(self)
+                directory_prefetches = directory_prefetches + 1
                 self.db_conn = {
                     prepare = function()
                         local position = 0
@@ -265,8 +268,10 @@ describe("automatic series grouping patch", function()
                 nil, nil, nil, nil, 104, "Loose", "Zen Author", nil, nil, "en", "" },
         }
         local fc = chooser()
+        alpha.doc_props = { title = "Alpha", series = "Series A", series_index = 1 }
 
-        FileChooser.switchItemTable(fc, nil, { finale, loose, alpha, no_cover })
+        local items = { alpha, finale, loose, no_cover }
+        FileChooser.switchItemTable(fc, nil, items)
 
         assert.are.equal(2, #fc.item_table)
         local group = fc.item_table[1]
@@ -274,6 +279,12 @@ describe("automatic series grouping patch", function()
         assert.are.same({ alpha, no_cover, finale }, group.series_items)
         assert.are.equal("Alpha", alpha.doc_props.title)
         assert.are.equal("Zen Author", finale.doc_props.authors)
+        assert.are.equal(0, doc_props_lookups)
+        assert.are.equal(1, directory_prefetches)
+
+        FileChooser.switchItemTable(fc, nil, items)
+        assert.are.same({ alpha, no_cover, finale }, fc.item_table[1].series_items)
+        assert.are.equal(1, directory_prefetches)
         assert.are.equal(0, doc_props_lookups)
     end)
 

@@ -707,7 +707,6 @@ function M.build_strip(ctx, source_key)
 
     ctx.openStripGroup = function(book)
         if type(book) ~= "table" or book.is_group ~= true then return false end
-        reset_strip_pages()
         local nested_series = book.group_kind == "series"
             and (source.kind == "tag" or source.kind == "tags" and source.drill ~= nil)
         local parent = nested_series and source.drill
@@ -746,7 +745,6 @@ function M.build_strip(ctx, source_key)
             on_source = function(entry)
                 if runtime.active_id == entry.id then
                     if source.drill then
-                        reset_strip_pages()
                         source.drill = source.drill.parent
                         runtime.source = source
                         remember_strip_state()
