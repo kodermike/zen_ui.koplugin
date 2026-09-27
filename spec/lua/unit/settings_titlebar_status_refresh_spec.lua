@@ -1,4 +1,4 @@
-describe("settings title bar status refresh", function()
+describe("settings title bar", function()
     local SettingsTitleBar
     local saved_modules
     local scheduled
@@ -34,6 +34,7 @@ describe("settings title bar status refresh", function()
         "common/ui/zen_title_style",
         "common/widget_resources",
         "common/utils",
+        "common/plugin_root",
         "gettext",
         "apps/filemanager/filemanager",
     }
@@ -66,6 +67,8 @@ describe("settings title bar status refresh", function()
         })
         ZenSpec.replace("common/clock_timer", { unbind = function() end })
         ZenSpec.replace("gettext", function(text) return text end)
+        ZenSpec.unload("ui/geometry")
+        ZenSpec.unload("ui/gesturerange")
         ZenSpec.unload("apps/filemanager/filemanager")
         ZenSpec.unload("common/ui/zen_settings_titlebar")
         SettingsTitleBar = require("common/ui/zen_settings_titlebar")
@@ -88,6 +91,92 @@ describe("settings title bar status refresh", function()
         package.loaded["ui/uimanager"]._window_stack = { { widget = owner } }
         return title_bar, function() return refreshes end, owner
     end
+
+    local function init_title_bar(options)
+        local function new_widget(_self, spec)
+            spec.getSize = function(self)
+                return self.dimen or { w = self.width or 40, h = self.height or 40 }
+            end
+            return spec
+        end
+        for _i, name in ipairs(dependency_names) do
+            if name:find("^ui/widget/") or name == "common/ui/zen_icon_button" then
+                package.loaded[name].new = new_widget
+            end
+        end
+        local screen = package.loaded["device"].screen
+        screen.getWidth = function() return 600 end
+        screen.scaleBySize = function(_self, size) return size end
+        local style = package.loaded["common/ui/zen_title_style"]
+        style.ICON_SIZE, style.BUTTON_PADDING, style.BUTTON_SIZE = 28, 8, 44
+        style.LEADING_WIDTH, style.TITLE_LEADING_PADDING = 44, 8
+        style.LEFT_PADDING, style.RIGHT_PADDING, style.TRAILING_GAP = 12, 12, 4
+        style.ROW_HEIGHT, style.VERTICAL_PADDING, style.DIVIDER_HEIGHT = 44, 6, 2
+        style.getTitleFace = function() return {} end
+        package.loaded["common/utils"].resolveLocalIcon = function() return "/zen/icon.svg" end
+        package.loaded["common/plugin_root"] = "/zen"
+        options.ges_events = {}
+        local title_bar = setmetatable(options, SettingsTitleBar)
+        title_bar:init()
+        return title_bar
+    end
+
+    it("omits hidden close controls and their space, and shows them by default", function()
+        local closed = false
+        local title_bar = init_title_bar({
+            title = "Wi-Fi networks", title_full_width = true,
+            back_visible = true, search_visible = false, close_visible = false,
+            action = { file = "/zen/refresh.svg" },
+            close_callback = function() closed = true end,
+        })
+
+        local title_width = title_bar._title_max_width
+        assert.is_nil(title_bar.close_button)
+        assert.are.same({ title_bar.back_button, title_bar.action_button },
+            title_bar:generateHorizontalLayout()[1])
+
+        title_bar.close_visible = nil
+        title_bar:init()
+        assert.is_truthy(title_bar.close_button)
+        assert.are.equal(title_width - 48, title_bar._title_max_width)
+        assert.are.same({ title_bar.back_button, title_bar.action_button, title_bar.close_button },
+            title_bar:generateHorizontalLayout()[1])
+        title_bar.close_button.callback()
+        assert.is_true(closed)
+    end)
+
+    it("uses one back hitbox across the chevron, gap, and title", function()
+        local taps, holds = 0, 0
+        local title_bar = init_title_bar({
+            title = "Library", back_visible = true, search_visible = false,
+            back_callback = function() taps = taps + 1 end,
+            back_hold_callback = function() holds = holds + 1 end,
+        })
+        local Geom = require("ui/geometry")
+        title_bar.back_button.dimen = Geom:new{ x = 20, y = 20, w = 44, h = 44 }
+        title_bar.title_container.dimen = Geom:new{ x = 72, y = 20, w = 150, h = 44 }
+        title_bar.title_widget.getSize = function() return { w = 100, h = 24 } end
+        local tap_range = title_bar.ges_events.TapBackTitle[1]
+        for _i, x in ipairs({ 24, 68, 110 }) do
+            assert.is_true(tap_range:match({ ges = "tap", pos = Geom:new{ x = x, y = 40 } }))
+            assert.is_true(title_bar:onTapBackTitle())
+        end
+        assert.are.equal(3, taps)
+        assert.is_false(tap_range:match({ ges = "tap", pos = Geom:new{ x = 173, y = 40 } }))
+        assert.is_false(tap_range:match({ ges = "tap", pos = Geom:new{ x = 68, y = 19 } }))
+        assert.is_true(title_bar.ges_events.HoldBackTitle[1]:match({
+            ges = "hold", pos = Geom:new{ x = 68, y = 40 },
+        }))
+        assert.is_true(title_bar:onHoldBackTitle())
+        assert.are.equal(1, holds)
+
+        title_bar.back_visible = false
+        assert.is_false(tap_range:match({ ges = "tap", pos = Geom:new{ x = 68, y = 40 } }))
+        assert.is_false(title_bar:onTapBackTitle())
+        assert.is_false(title_bar:onHoldBackTitle())
+        assert.are.equal(3, taps)
+        assert.are.equal(1, holds)
+    end)
 
     it("refreshes immediately when the network connects or disconnects", function()
         local title_bar, refreshes = make_title_bar()

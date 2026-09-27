@@ -127,15 +127,16 @@ describe("About settings", function()
         assert.are.equal(1, tour_starts)
     end)
 
-    it("puts language and KOReader's time and date menu at the bottom of Device", function()
-        local items = require("modules/settings/sections/about_settings").build({
+    it("provides native language and time settings separately from Device", function()
+        local items, language_item, time_item = require("modules/settings/sections/about_settings").build({
             config = {},
             plugin = {},
         })
 
         local device_items = items[3].sub_item_table
-        assert.are.equal("Language", device_items[#device_items - 1].text)
-        assert.are.equal(time_setting, device_items[#device_items])
+        assert.are.equal(4, #device_items)
+        assert.are.equal("Language", language_item.text)
+        assert.are.equal(time_setting, time_item)
     end)
 
     it("opens the network switcher", function()

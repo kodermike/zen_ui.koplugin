@@ -231,7 +231,7 @@ describe("updater repository redirects", function()
 
         local action = updater.build_update_available_action(plugin)
         assert.is_true(action.zen_button)
-        assert.are.equal("\u{F01B}  Update available", action.text)
+        assert.are.equal(require("common/inline_icon_map").upgrade .. "  Update available", action.text)
         local received
         updater.run_update = function(value) received = value end
         action.callback()

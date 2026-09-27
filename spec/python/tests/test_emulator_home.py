@@ -715,14 +715,6 @@ def test_home_edit_mode_reopens_widget_settings_after_close() -> None:
         ko_home.mkdir()
         build_library(root / "library")
         _seed_home_settings(ko_home)
-        settings_path = ko_home / "settings" / "ZenOS" / "home.lua"
-        settings_path.write_text(
-            settings_path.read_text(encoding="utf-8").replace(
-                "show_status_bar = false,",
-                "show_status_bar = false, edit_mode = true,",
-            ),
-            encoding="utf-8",
-        )
         socket_path = root / "driver.sock"
         process = launch(runtime, ko_home, socket_path, root / "library")
         try:

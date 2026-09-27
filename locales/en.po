@@ -4459,10 +4459,10 @@ msgid "Report a Bug"
 msgstr "Report a Bug"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Require double tap to open books"
+msgid "Double tap to open books"
+msgstr "Double tap to open books"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6169,7 +6169,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "When enabled, search matches whole words only. When disabled, substring matching is used (e.g., 'fish' matches 'fishing')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
@@ -6551,3 +6551,11 @@ msgstr "Forget Bluetooth device %1?"
 #. Type: menu
 msgid "Bluetooth device management is unavailable on this device."
 msgstr "Bluetooth device management is unavailable on this device."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "General"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Zen Search"

@@ -1610,7 +1610,7 @@ end
 function M.build_update_available_action(plugin)
     if not M._has_update then return nil end
     return {
-        text = icons.update .. "  " .. _("Update available"),
+        text = icons.upgrade .. "  " .. _("Update available"),
         zen_button = true,
         callback = function()
             M.run_update(plugin)

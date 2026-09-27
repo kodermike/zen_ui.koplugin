@@ -4459,10 +4459,10 @@ msgid "Report a Bug"
 msgstr "Signaler un bug"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Exiger un double appui pour ouvrir les livres"
+msgid "Double tap to open books"
+msgstr "Double appui pour ouvrir les livres"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6163,7 +6163,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Si activé, la recherche correspond uniquement aux mots entiers. Si désactivé, les correspondances partielles sont utilisées (par ex., 'fish' correspond à 'fishing')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Lorsque cette option est activée, appuyez rapidement deux fois sur le même livre pour l’ouvrir. Les commandes au clavier restent inchangées."
@@ -6545,3 +6545,11 @@ msgstr "Oublier l’appareil Bluetooth %1 ?"
 #. Type: menu
 msgid "Bluetooth device management is unavailable on this device."
 msgstr "La gestion des appareils Bluetooth n’est pas disponible sur cet appareil."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Général"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Recherche Zen"

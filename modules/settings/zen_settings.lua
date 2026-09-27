@@ -56,10 +56,10 @@ function M.build(plugin)
     local app_launcher_item = app_launcher_section.build(ctx)
     local reader_items         = reader_section.build(ctx)
     local extras_items      = extras_section.build(ctx)
-    local general_items     = about_section.build(ctx)
+    local about_items, language_item, time_item = about_section.build(ctx)
     local updates_items     = updates_section.build(ctx)
 
-    table.insert(general_items, IconItem.decorate({
+    table.insert(about_items, IconItem.decorate({
         text = _("Quit KOReader"),
         callback = function()
             UIManager:show(require("ui/widget/confirmbox"):new{
@@ -127,6 +127,48 @@ function M.build(plugin)
     -- Root menu assembly
     -- -------------------------------------------------------------------------
 
+    local general_items = {}
+    local function move_item(items, text, destination)
+        for i, item in ipairs(items) do
+            if item.text == text then
+                table.insert(destination, table.remove(items, i))
+                return
+            end
+        end
+    end
+
+    for _i, item in ipairs(about_items) do
+        if item.text == _("Advanced") then
+            move_item(item.sub_item_table, _("Double tap to open books"), filebrowser_items)
+            break
+        end
+    end
+
+    move_item(about_items, _("Wi-Fi"), general_items)
+    move_item(about_items, _("Bluetooth"), general_items)
+    move_item(extras_items, _("Schedules"), general_items)
+    move_item(extras_items, _("Sleep"), general_items)
+    table.insert(general_items, language_item)
+    table.insert(general_items, time_item)
+    move_item(about_items, _("Advanced"), general_items)
+    table.insert(general_items, IconItem.decorate({
+        text = _("Updates"),
+        sub_item_table = updates_items,
+    }, icons.upgrade))
+    table.insert(general_items, IconItem.decorate({
+        text = _("About"),
+        sub_item_table = about_items,
+    }, icons.settings_about))
+
+    extras_items = utils.order_items_by_text(extras_items, {
+        _("Install ZenPM"),
+        _("Zen OPDS"),
+        _("Zen Search"),
+        _("Zen Keyboard"),
+        _("Stats"),
+        _("Rakuyomi"),
+    })
+
     quick_settings_item.text = _("Controls")
     IconItem.decorate(quick_settings_item, icons.settings_quick)
     app_launcher_item.text = _("Launcher")
@@ -149,12 +191,8 @@ function M.build(plugin)
         library_item,
         IconItem.decorate(navbar_item, icons.settings_navbar),
         IconItem.decorate({ text = _("Reader"), sub_item_table = reader_items }, icons.settings_reader),
+        IconItem.decorate({ text = _("General"), sub_item_table = general_items }, icons.settings),
         IconItem.decorate({ text = _("Extras"), sub_item_table = extras_items }, icons.fav_add),
-        IconItem.decorate({ text = _("Updates"), sub_item_table = updates_items }, icons.upgrade),
-        IconItem.decorate({
-            text = _("About"),
-            sub_item_table = general_items,
-        }, icons.settings_about),
     }
 
     root_items._zen_header_action_func = function()

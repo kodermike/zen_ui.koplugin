@@ -377,24 +377,21 @@ function M.build(ctx)
     local items = {}
 
     -- Search section
-    table.insert(items, {
-        text = _("Search"),
+    local search_item = {
+        text = _("Zen Search"),
+        help_text = _("Use Zen Search in the file browser and reader. Disable to use KOReader's default search."),
+        checked_func = function()
+            return type(config.features) ~= "table"
+                or config.features.search ~= false
+        end,
+        callback = function(touchmenu_instance)
+            if type(config.features) ~= "table" then config.features = {} end
+            config.features.search = config.features.search == false
+            plugin:saveConfig()
+            if touchmenu_instance then touchmenu_instance:updateItems() end
+            settings_apply.prompt_restart()
+        end,
         sub_item_table = {
-            {
-                text = _("Enable Zen Search"),
-                help_text = _("Use Zen Search in the file browser and reader. Disable to use KOReader's default search."),
-                checked_func = function()
-                    return type(config.features) ~= "table"
-                        or config.features.search ~= false
-                end,
-                callback = function(touchmenu_instance)
-                    if type(config.features) ~= "table" then config.features = {} end
-                    config.features.search = config.features.search == false
-                    plugin:saveConfig()
-                    if touchmenu_instance then touchmenu_instance:updateItems() end
-                    settings_apply.prompt_restart()
-                end,
-            },
             {
                 text = _("Match whole words"),
                 help_text = _("When enabled, search matches whole words only. When disabled, substring matching is used (e.g., 'fish' matches 'fishing')."),
@@ -412,7 +409,9 @@ function M.build(ctx)
                 end,
             },
         },
-    })
+    }
+    search_item.checkmark_callback = search_item.callback
+    table.insert(items, search_item)
 
     -- Night mode schedule
     table.insert(items, {

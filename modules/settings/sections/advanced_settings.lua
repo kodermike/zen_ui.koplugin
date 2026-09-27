@@ -6,6 +6,8 @@ local _ = require("gettext")
 local UIManager = require("ui/uimanager")
 local utils = require("modules/settings/zen_settings_utils")
 local paths = require("common/paths")
+local icons = require("common/inline_icon_map")
+local IconItem = require("common/ui/icon_menu_item")
 
 local M = {}
 
@@ -48,7 +50,7 @@ function M.build(ctx)
     })
 
     local double_tap_item = {
-        text = _("Require double tap to open books"),
+        text = _("Double tap to open books"),
         help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
         checked_func = function()
             return type(config.developer) == "table"
@@ -81,7 +83,7 @@ function M.build(ctx)
         },
     }
     double_tap_item.checkmark_callback = double_tap_item.callback
-    table.insert(items, double_tap_item)
+    table.insert(items, IconItem.decorate(double_tap_item, icons.double_tap))
 
     table.insert(items, {
         text = _("Allow dragging reader modals"),

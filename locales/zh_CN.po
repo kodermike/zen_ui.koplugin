@@ -4459,10 +4459,10 @@ msgid "Report a Bug"
 msgstr "报告问题"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "需要双击才能打开书籍"
+msgid "Double tap to open books"
+msgstr "双击打开书籍"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6163,7 +6163,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "启用后，搜索仅匹配完整词。停用后，将使用子串匹配（例如“fish”会匹配“fishing”）。"
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "启用后，快速连续点击同一本书两次即可打开。键盘操作不受影响。"
@@ -6545,3 +6545,11 @@ msgstr "忘记蓝牙设备%1？"
 #. Type: menu
 msgid "Bluetooth device management is unavailable on this device."
 msgstr "此设备不支持蓝牙设备管理。"
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "通用"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Zen 搜索"

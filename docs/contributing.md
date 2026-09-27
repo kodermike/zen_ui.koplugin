@@ -27,7 +27,7 @@ Contributions that keep it clean, minimal, and performant are most welcome.
 Open an [Issue](https://github.com/xZenLabs/zen-os/issues) and include:
 
 - A clear description of what happened and what you expected.
-- Your KOReader version (**Zen Settings > About > Device > KOReader**).
+- Your KOReader version (**Zen Settings > General > About > Device > KOReader**).
 - Your device model (e.g. Kobo Libra 2, Kindle Paperwhite 5).
 - Steps to reproduce the problem, if you can.
 

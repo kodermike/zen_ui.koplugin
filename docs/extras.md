@@ -1,7 +1,7 @@
 ---
 title: Extras
 category: Extras
-summary: Additional Zen goodies like OPDS, lighting schedules, and sleep settings
+summary: Additional Zen tools, integrations, and custom icons
 settingsPath: Zen Settings > Extras
 order: 60
 ---
@@ -10,7 +10,7 @@ order: 60
 
 ## Overview
 
-Extras collects optional additions that fall outside of the Library/Reader. It includes Stats, ZenPM installation, Zen OPDS, TBR behavior, custom icons, Rakuyomi return behavior, lighting automation, whole-word search matching, sleep settings, and Lockdown Mode.
+Extras collects optional additions that fall outside of the Library/Reader. It includes Stats, ZenPM installation, Zen OPDS, TBR behavior, custom icons, Rakuyomi return behavior, whole-word search matching, and Lockdown Mode. Schedules and sleep settings live in General.
 
 ## ZenPM
 
@@ -18,13 +18,13 @@ On supported non-Android ARM32 and ARM64 devices, choose **Zen Settings > Extras
 
 ## Stats
 
-Open the **Stats** tab from the Navbar to view reading activity. Use **Zen Settings > Extras > Stats** to choose and arrange the dashboard widgets, enable Edit mode for on-page adjustments, set the default text size, and choose stat separators. Widgets can show activity for today, week, month, year, all time, personal records, your library, the current book, reading trends, goals, and the reading calendar.
+Open the **Stats** tab from the Navbar to view reading activity. Use **Zen Settings > Extras > Stats**, directly below Zen Keyboard, to choose and arrange the dashboard widgets, enable Edit mode for on-page adjustments, set the default text size, and choose stat separators. Widgets can show activity for today, week, month, year, all time, personal records, your library, the current book, reading trends, goals, and the reading calendar.
 
 ### Widgets and settings
 
 Choose from Today, This week, This month, This year, All time, Personal records, Library, Current book, Reading trend, Reading goals, and Reading calendar widgets. Enable the widgets you want and hold an item in **Zen Settings > Extras > Stats > Widgets** to arrange its position. The dashboard has six slots; the Reading calendar uses two.
 
-The Reading trend widget can show pages or time for the past 7, 14, 30, or 90 days. Page totals use stable pages when a book provides them. Text-based widgets can use the default Stats font size or an individual override. Enable **Edit mode** to open a widget's settings directly from the Stats page, use **Stat separators** to choose dividers, outlines, or no separation, and set **Week reset day** to Sunday or Monday.
+The Reading trend widget can show pages or time for the past 7, 14, 30, or 90 days. Page totals use stable pages when a book provides them. Text-based widgets can use the default Stats font size or an individual override. **Edit mode** is enabled by default to open a widget's settings directly from the Stats page. Use **Stat separators** to choose dividers, outlines, or no separation, and set **Week reset day** to Sunday or Monday.
 
 ## OPDS
 
@@ -32,7 +32,7 @@ The Reading trend widget can show pages or time for the past 7, 14, 30, or 90 da
 
 ![OPDS context menu](/images/zen_os/opds_context.webp)
 
-Enable **Zen Settings > Extras > Zen OPDS** to apply ZenOS styling to the OPDS catalog browser. The OPDS view inherits the same styling as your library: rounded corners, list and mosaic view, items per page, and other layout options all carry over. Each book in the catalog shows its cover.
+Use the switch on **Zen Settings > Extras > Zen OPDS** to apply ZenOS styling to the OPDS catalog browser. Open its submenu to choose the display mode. The OPDS view inherits the same styling as your library: rounded corners, list and mosaic view, items per page, and other layout options all carry over. Each book in the catalog shows its cover.
 
 Tap and hold any item to open the OPDS context menu for per-item actions.
 
@@ -65,15 +65,15 @@ Enable **Exclude from Home** to keep Rakuyomi chapters out of recent Home conten
 
 ## Schedules
 
-Use **Zen Settings > Extras > Schedules** for automatic brightness, night mode, and warmth changes. Brightness and warmth can follow either a clock schedule or KOReader's light/dark mode, with separate values for each state. These two methods are mutually exclusive for each setting: enabling a schedule turns off its light/dark values, and enabling light/dark values turns off its schedule.
+Use **Zen Settings > General > Schedules** for automatic brightness, night mode, and warmth changes. Brightness and warmth can follow either a clock schedule or KOReader's light/dark mode, with separate values for each state. These two methods are mutually exclusive for each setting: enabling a schedule turns off its light/dark values, and enabling light/dark values turns off its schedule.
 
 Lighting automation disables KOReader's Auto warmth and night mode plugin because it would compete for the same device controls. Warmth settings appear only on devices with natural-light support.
 
 ## Search, Sleep, And Lockdown
 
-Use **Zen Settings > Extras > Search** to switch library search between substring and whole-word matching.
+Use the switch on **Zen Settings > Extras > Zen Search** to enable or disable Zen Search. Open its submenu to switch library search between substring and whole-word matching. Zen Search, Zen Keyboard, and Stats appear directly before Rakuyomi.
 
-Use **Zen Settings > Extras > Sleep** for KOReader sleep screen controls, sleep presets, automatic dimmer, and automatic suspend integrations when available.
+Use **Zen Settings > General > Sleep** for KOReader sleep screen controls, sleep presets, automatic dimmer, and automatic suspend integrations when available.
 
 Use **Zen Settings > Extras > Lockdown mode** to configure library, Controls, and reader restrictions.
 
@@ -94,11 +94,12 @@ Use **Zen Settings > Extras > Lockdown mode** to configure library, Controls, an
 | Extras > Custom icon pack | Installs ZIPs from `/koreader/icons/zen` and selects an unpacked pack. |
 | Extras > Rakuyomi > Exclude from Home | Keeps Rakuyomi chapters out of recent Home content. |
 | Extras > Rakuyomi > Return to chapter list on exit | Returns Rakuyomi-owned books to their manga chapter list when exiting the reader. Disable this to return to Rakuyomi library view. |
-| Extras > Search > Match whole words | Uses whole-word search instead of substring search. |
-| Extras > Schedules > Brightness > Enable brightness schedule | Enables automatic frontlight brightness changes and sets day/night times and values. |
-| Extras > Schedules > Brightness > Light mode / Dark mode brightness | Applies separate brightness values as KOReader changes between light and dark mode, without requiring a clock schedule. |
-| Extras > Schedules > Night mode schedule > Enable night mode schedule | Enables automatic night mode changes and sets on/off times. |
-| Extras > Schedules > Warmth > Enable warmth schedule | Enables automatic warmth changes and sets day/night times and values on natural-light devices. |
-| Extras > Schedules > Warmth > Light mode / Dark mode warmth | Applies separate warmth values as KOReader changes between light and dark mode, without requiring a clock schedule. |
-| Extras > Sleep | Shows supported sleep screen controls, sleep presets, automatic dimmer, and automatic suspend integrations. |
+| Extras > Zen Search | Enables Zen Search in the file browser and reader; changes require a restart. |
+| Extras > Zen Search > Match whole words | Uses whole-word search instead of substring search. |
+| General > Schedules > Brightness > Enable brightness schedule | Enables automatic frontlight brightness changes and sets day/night times and values. |
+| General > Schedules > Brightness > Light mode / Dark mode brightness | Applies separate brightness values as KOReader changes between light and dark mode, without requiring a clock schedule. |
+| General > Schedules > Night mode schedule > Enable night mode schedule | Enables automatic night mode changes and sets on/off times. |
+| General > Schedules > Warmth > Enable warmth schedule | Enables automatic warmth changes and sets day/night times and values on natural-light devices. |
+| General > Schedules > Warmth > Light mode / Dark mode warmth | Applies separate warmth values as KOReader changes between light and dark mode, without requiring a clock schedule. |
+| General > Sleep | Shows supported sleep screen controls, sleep presets, automatic dimmer, and automatic suspend integrations. |
 | Extras > Lockdown mode | Configures library, Controls, and reader restrictions for Lockdown Mode. |

@@ -4459,10 +4459,10 @@ msgid "Report a Bug"
 msgstr "Reportar um erro"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Exigir toque duplo para abrir livros"
+msgid "Double tap to open books"
+msgstr "Toque duplo para abrir livros"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6163,7 +6163,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Quando ativado, a pesquisa corresponde apenas a palavras inteiras. Quando desativado, usa correspondência parcial (ex.: 'peixe' corresponde a 'peixaria')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Quando ativado, toque rapidamente duas vezes no mesmo livro para o abrir. Os controlos do teclado não são alterados."
@@ -6545,3 +6545,11 @@ msgstr "Esquecer o dispositivo Bluetooth %1?"
 #. Type: menu
 msgid "Bluetooth device management is unavailable on this device."
 msgstr "A gestão de dispositivos Bluetooth não está disponível neste dispositivo."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Geral"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Pesquisa Zen"

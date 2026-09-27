@@ -136,6 +136,7 @@ local DEFAULT_HOME_PAGE = {
         yearly_books_target = 12,
     },
     show_status_bar = false,
+    edit_mode = true,
     modules = {
         datetime = {
             automatic_font_size = true,

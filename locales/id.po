@@ -4453,10 +4453,10 @@ msgid "Report a Bug"
 msgstr "Laporkan Bug"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Perlu ketuk dua kali untuk membuka buku"
+msgid "Double tap to open books"
+msgstr "Ketuk dua kali untuk membuka buku"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6145,7 +6145,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Saat diaktifkan, pencarian hanya mencocokkan kata utuh. Saat dinonaktifkan, pencocokan substring digunakan (mis., 'fish' cocok dengan 'fishing')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Saat diaktifkan, ketuk buku yang sama dua kali berturut-turut untuk membukanya. Kontrol keyboard tidak berubah."
@@ -6443,3 +6443,11 @@ msgstr "ZenPM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "ZenPM telah dipasang. Mulai ulang KOReader untuk menggunakannya."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Umum"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Pencarian Zen"

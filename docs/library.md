@@ -91,6 +91,7 @@ Library settings control the KOReader library. Customize the top status bar, lay
 | Home folder > Additional home folders | Adds or removes extra library roots. |
 | Book details | Chooses and arranges the metadata, reading progress, and timing fields shown in full-screen Book details. Tags can optionally open their Library view. |
 | Include new books in TBR | Includes unread books and books modified since they were last opened in To Be Read views without changing their saved read status. |
+| Double tap to open books | Requires two rapid taps on the same book in Library, Home, or Book switcher before opening it. Keyboard controls are unchanged. Its submenu can make a single tap open the context menu. |
 | Library > Allow delete | Enables or disables delete actions in the library context menu. |
 
 ## Fonts

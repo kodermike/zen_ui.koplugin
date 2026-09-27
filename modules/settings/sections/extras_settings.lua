@@ -61,26 +61,22 @@ function M.build(ctx)
             sub_item_table = display_mode_items,
         }, icons.settings_layout)
 
-        table.insert(items, {
+        local opds_item = {
             text = _("Zen OPDS"),
             help_text = _("Enable ZenOS enhancements to the OPDS browser: cover art, list view, hold menu, and navigation improvements."),
-            sub_item_table = {
-                IconItem.decorate({
-                    text = _("Enable Zen OPDS"),
-                    checked_func = function()
-                        return config.features.zen_opds ~= false
-                    end,
-                    callback = function(touchmenu_instance)
-                        config.features.zen_opds = config.features.zen_opds == false
-                        plugin:saveConfig()
-                        if touchmenu_instance then touchmenu_instance:updateItems() end
-                        settings_apply.prompt_restart()
-                    end,
-                }, icons.enable),
-                opds_display_item,
-            },
-        })
-        IconItem.decorate(items[#items], icons.settings_opds)
+            checked_func = function()
+                return config.features.zen_opds ~= false
+            end,
+            callback = function(touchmenu_instance)
+                config.features.zen_opds = config.features.zen_opds == false
+                plugin:saveConfig()
+                if touchmenu_instance then touchmenu_instance:updateItems() end
+                settings_apply.prompt_restart()
+            end,
+            sub_item_table = { opds_display_item },
+        }
+        opds_item.checkmark_callback = opds_item.callback
+        table.insert(items, IconItem.decorate(opds_item, icons.settings_opds))
     end
 
     if Rakuyomi.is_available() then

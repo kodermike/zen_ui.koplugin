@@ -264,7 +264,7 @@ local function ensure_cfg(_config)
     dcfg.rows = Registry.normalizeRows(dcfg.rows, DEFAULT_ORDER, DEFAULT_ENABLED)
 
     if dcfg.show_status_bar == nil then dcfg.show_status_bar = true end
-    dcfg.edit_mode = dcfg.edit_mode == true
+    dcfg.edit_mode = dcfg.edit_mode ~= false
     dcfg.font_size = nil
     dcfg.font_size_override = nil
 

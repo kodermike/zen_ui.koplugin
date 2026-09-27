@@ -282,6 +282,18 @@ describe("Home widget content settings", function()
         })
     end)
 
+    it("enables Edit mode by default and preserves an explicit opt-out", function()
+        local settings = require("modules/settings/sections/library_settings/home_settings")
+        local section = settings.build({ config = {}, settings_apply = {} })
+        local edit_mode = find_item(section.sub_item_table, "Edit mode")
+        assert.is_true(edit_mode.checked_func())
+
+        edit_mode.callback()
+        assert.is_false(home_page.edit_mode)
+        section = settings.build({ config = {}, settings_apply = {} })
+        assert.is_false(find_item(section.sub_item_table, "Edit mode").checked_func())
+    end)
+
     it("shows Featured book settings only for custom content", function()
         local settings = require("modules/settings/sections/library_settings/home_settings")
         local plugin = { config = {} }

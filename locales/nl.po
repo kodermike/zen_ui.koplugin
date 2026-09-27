@@ -4459,10 +4459,10 @@ msgid "Report a Bug"
 msgstr "Een fout melden"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Dubbel tikken vereisen om boeken te openen"
+msgid "Double tap to open books"
+msgstr "Dubbel tikken om boeken te openen"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6163,7 +6163,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Wanneer ingeschakeld, zoekt de zoekfunctie alleen hele woorden. Wanneer uitgeschakeld, worden deelovereenkomsten gebruikt (bijv. 'fish' vindt 'fishing')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Indien ingeschakeld, tik je snel twee keer op hetzelfde boek om het te openen. De toetsenbordbediening blijft ongewijzigd."
@@ -6545,3 +6545,11 @@ msgstr "Bluetooth-apparaat %1 vergeten?"
 #. Type: menu
 msgid "Bluetooth device management is unavailable on this device."
 msgstr "Bluetooth-apparaatbeheer is niet beschikbaar op dit apparaat."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Algemeen"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Zen-zoeken"

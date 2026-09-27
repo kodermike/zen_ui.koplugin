@@ -100,6 +100,7 @@ function M.open(on_connected, settings_subpage, plugin)
         back_callback = close_menu,
         back_hold_callback = close_menu,
         back_visible = settings_subpage == true,
+        close_visible = settings_subpage ~= true,
         close_callback = close_menu,
         plugin = plugin,
         search_visible = false,

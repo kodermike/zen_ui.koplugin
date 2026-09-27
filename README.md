@@ -108,9 +108,9 @@ See the [Extras](docs/extras.md), [Custom Icon Packs](docs/icon-packs.md), and [
 
 ## Unified Settings 
 
-Zen Settings brings ZenOS and frequently used KOReader settings into one searchable, key-friendly interface. Sections are organized as Controls, Launcher, Home, Library, Navbar, Reader, Extras, and About. It remembers your previous location, most features remain independently configurable, and ZenOS can update itself without leaving KOReader.
+Zen Settings brings ZenOS and frequently used KOReader settings into one searchable, key-friendly interface. Sections are organized as Controls, Launcher, Home, Library, Navbar, Reader, General, and Extras. General groups Wi-Fi, Bluetooth, schedules, sleep, advanced settings, updates, and About. Stats is in Extras, directly below Zen Keyboard. It remembers your previous location, most features remain independently configurable, and ZenOS can update itself without leaving KOReader.
 
-New installations include a visual setup guide followed by short on-screen tours of Zen Mode, Zen Settings, and the Reader page browser. The guide remains available from **Zen Settings > About > Setup Guide**.
+New installations include a visual setup guide followed by short on-screen tours of Zen Mode, Zen Settings, and the Reader page browser. The guide remains available from **Zen Settings > General > About > Setup Guide**.
 
 <img src="./images/quickstart/onboarding/zen_ui_settings.png" width="500" alt="ZenOS Settings">
 

@@ -80,7 +80,6 @@ function M.build(ctx)
         keep_menu_open = true,
     })
     items[2], items[3] = items[3], items[2]
-    local device_items = items[3].sub_item_table
 
     local has_bluetooth = Bluetooth.isAvailable()
     if has_bluetooth then
@@ -148,13 +147,12 @@ function M.build(ctx)
     })
 
     local language_setting = require("ui/language"):getLangMenuTable()
-    table.insert(device_items, {
+    local language_item = {
         text = language_setting.text,
         sub_item_table = language_setting.sub_item_table,
-    })
+    }
 
     local time_setting = require("ui/elements/common_settings_menu_table").time
-    table.insert(device_items, time_setting)
 
     table.insert(items, {
         text      = _("Report a Bug"),
@@ -177,10 +175,10 @@ function M.build(ctx)
     IconItem.decorate(items[4 + offset], icons.settings_setup)
     IconItem.decorate(items[5 + offset], icons.settings_bug)
     IconItem.decorate(items[6 + offset], icons.settings_advanced)
-    IconItem.decorate(device_items[#device_items - 1], icons.language)
-    IconItem.decorate(device_items[#device_items], icons.tbr)
+    IconItem.decorate(language_item, icons.language)
+    IconItem.decorate(time_setting, icons.tbr)
 
-    return items
+    return items, language_item, time_setting
 end
 
 return M

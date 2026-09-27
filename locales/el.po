@@ -4454,9 +4454,9 @@ msgid "Report a Bug"
 msgstr "Αναφορά σφάλματος"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
+msgid "Double tap to open books"
 msgstr "Άνοιγμα βιβλίων με διπλό πάτημα"
 
 #. Type: setting
@@ -6146,7 +6146,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Αν ενεργοποιηθεί, η αναζήτηση βρίσκει μόνο ολόκληρες λέξεις. Αν απενεργοποιηθεί, γίνεται αναζήτηση τμήματος λέξης (π.χ. το «ψαρ» βρίσκει το «ψάρεμα»)."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Αν ενεργοποιηθεί, πατήστε δύο φορές γρήγορα το ίδιο βιβλίο για να ανοίξει. Τα πλήκτρα δεν αλλάζουν."
@@ -6444,3 +6444,11 @@ msgstr "ZenPM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "Το ZenPM εγκαταστάθηκε. Επανεκκινήστε το KOReader για να το χρησιμοποιήσετε."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Γενικά"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Αναζήτηση Zen"

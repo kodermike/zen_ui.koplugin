@@ -4453,10 +4453,10 @@ msgid "Report a Bug"
 msgstr "Ohlásit chybu"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "K otevření knih vyžadovat dvojité klepnutí"
+msgid "Double tap to open books"
+msgstr "Dvojité klepnutí pro otevření knih"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6145,7 +6145,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Je-li zapnuto, hledání porovnává pouze celá slova. Je-li vypnuto, porovnávají se podřetězce (např. 'ryba' vyhledá 'rybaření')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Je-li povoleno, klepněte na stejnou knihu dvakrát rychle za sebou a otevřete ji. Ovládání pomocí klávesnice se nezměnilo."
@@ -6443,3 +6443,11 @@ msgstr "ZenPM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "ZenPM byl nainstalován. Chcete-li jej používat, restartujte KOReader."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Obecné"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Vyhledávání Zen"

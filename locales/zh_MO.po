@@ -4453,10 +4453,10 @@ msgid "Report a Bug"
 msgstr "回報問題"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "需要雙擊才能打開書籍"
+msgid "Double tap to open books"
+msgstr "雙擊打開書籍"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6145,7 +6145,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "啟用後，搜尋只會比對完整字詞。停用後，會使用子字串比對（例如「fish」會比對到「fishing」）。"
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "啟用後，快速連續點擊同一本書兩次即可開啟。鍵盤控制不變。"
@@ -6443,3 +6443,11 @@ msgstr "禪PM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "ZenPM 已安裝。重新啟動 KOReader 使用。"
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "一般"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Zen 搜尋"

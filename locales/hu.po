@@ -4453,10 +4453,10 @@ msgid "Report a Bug"
 msgstr "Hiba jelentése"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Dupla koppintás szükséges a könyvek megnyitásához"
+msgid "Double tap to open books"
+msgstr "Dupla koppintás a könyvek megnyitásához"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6145,7 +6145,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Ha engedélyezve van, a keresés csak teljes szavakra illeszkedik. Ha ki van kapcsolva, részleges egyezés is elfogadott (pl. a „fish” illeszkedik a „fishing” szóra)."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Ha engedélyezve van, koppints kétszer gyorsan egymás után ugyanarra a könyvre a megnyitásához. A billentyűzetes vezérlés nem változik."
@@ -6443,3 +6443,11 @@ msgstr "ZenPM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "A ZenPM telepítve lett. Indítsd újra a KOReadert a használatához."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Általános"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Zen keresés"

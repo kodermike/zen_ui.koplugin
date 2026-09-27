@@ -101,6 +101,7 @@ describe("Bluetooth switcher", function()
         assert.is_true(Switcher.open(function() changed = changed + 1 end, true, {}))
         assert.are.equal("bluetooth_switcher", menu.name)
         assert.is_true(menu.custom_title_bar.back_visible)
+        assert.is_false(menu.custom_title_bar.close_visible)
         assert.are.equal(8, menu.items_per_page)
         assert.are.equal(1, adapter.scanned)
         assert.are.same({ "Speaker", "Page turner", "Headphones" },
@@ -126,6 +127,7 @@ describe("Bluetooth switcher", function()
 
     it("taps disconnected devices and holds for their actions", function()
         require("modules/menu/bluetooth_switcher").open()
+        assert.is_true(menu.custom_title_bar.close_visible)
         local paired_row = menu.item_table[2]
         assert.is_false(paired_row._zen_has_submenu)
         menu:onMenuSelect(paired_row, { x = 0.95 })

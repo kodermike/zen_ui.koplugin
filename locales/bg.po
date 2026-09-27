@@ -4462,10 +4462,10 @@ msgid "Report a Bug"
 msgstr "Докладвай грешка"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Изискване на двойно докосване за отваряне на книги"
+msgid "Double tap to open books"
+msgstr "Двойно докосване за отваряне на книги"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6154,7 +6154,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Когато е активирано, търсенето съвпада само с цели думи. Когато е деактивирано, се използва съвпадение на подниз (напр. 'риба' съвпада с 'риболов')."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Когато е активирано, докоснете същата книга два пъти в бърза последователност, за да я отворите. Контролите на клавиатурата са непроменени."
@@ -6452,3 +6452,11 @@ msgstr "ZenPM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "ZenPM е инсталиран. Рестартирайте KOReader, за да го използвате."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Общи"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Търсене Zen"

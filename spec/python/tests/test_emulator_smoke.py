@@ -383,8 +383,8 @@ def test_pt_br_settings_root_labels_are_localized() -> None:
             driver = ZenDriver(socket_path)
             assert driver.command("open_settings_page")["ok"] is True
             labels = driver.command("settings_page_state")["settings"]["labels"]
-            assert {"Biblioteca", "Barra de navegação", "Adicionais"}.issubset(labels)
-            assert {"Library", "Navbar", "Extras"}.isdisjoint(labels)
+            assert {"Biblioteca", "Barra de navegação", "Geral", "Adicionais"}.issubset(labels)
+            assert {"Library", "Navbar", "General", "Extras"}.isdisjoint(labels)
         finally:
             process.send_signal(signal.SIGTERM)
             try:
@@ -583,9 +583,22 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             assert settings.get("row_style") == settings.get("standard_style")
             assert settings.get("title_font_size") == settings["row_style"]["font_size"]
             assert settings.get("title_bold") is True
-            assert {"Controls", "Launcher", "Library", "Reader"}.issubset(
-                set(settings.get("labels", []))
-            )
+            assert settings.get("labels") == [
+                "Controls", "Launcher", "Home", "Library", "Navbar", "Reader", "General", "Extras",
+            ]
+            assert driver.command("settings_page_select", label="General")["ok"] is True
+            general_labels = driver.command("settings_page_state")["settings"]["labels"]
+            expected_general = [
+                "Wi-Fi", "Schedules", "Sleep", "Language", "Time and date", "Advanced", "Updates", "About",
+            ]
+            if "Bluetooth" in general_labels:
+                expected_general.insert(1, "Bluetooth")
+            assert general_labels == expected_general
+            assert driver.command("settings_page_select", label="Advanced")["ok"] is True
+            advanced_labels = driver.command("settings_page_state")["settings"]["labels"]
+            assert "Double tap to open books" not in advanced_labels
+            assert driver.command("settings_page_back")["ok"] is True
+            assert driver.command("settings_page_back")["ok"] is True
             assert driver.command(
                 "settings_page_titlebar_tap", button="search"
             )["ok"] is True
@@ -595,6 +608,7 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             settings = driver.command("settings_page_state")["settings"]
             assert settings.get("title") == "Library"
             assert settings.get("back_visible") is True
+            assert settings["labels"][-1] == "Double tap to open books"
             assert driver.command("settings_page_select", label="Folders")["ok"] is True
             settings = driver.command("settings_page_state")["settings"]
             assert settings.get("title") == "Folders"

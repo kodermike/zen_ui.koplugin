@@ -223,6 +223,7 @@ function M.open(on_changed, settings_subpage, plugin)
     local title_bar = SettingsTitleBar:new{
         back_callback = close_menu, back_hold_callback = close_menu,
         back_visible = settings_subpage == true,
+        close_visible = settings_subpage ~= true,
         close_callback = close_menu, plugin = plugin,
         search_visible = false, title = _("Bluetooth devices"), title_full_width = true,
         action = {

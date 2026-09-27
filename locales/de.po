@@ -4458,10 +4458,10 @@ msgid "Report a Bug"
 msgstr "Fehler melden"
 
 #. Type: setting
-#. Context: table.insert(items, { text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
+#. Context: table.insert(items, { text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
 #: advanced_settings.lua:50
-msgid "Require double tap to open books"
-msgstr "Zum Öffnen von Büchern ist ein Doppeltippen erforderlich"
+msgid "Double tap to open books"
+msgstr "Bücher durch Doppeltippen öffnen"
 
 #. Type: setting
 #. Context: { text = _("Require hold to toggle buttons"), checked_func = function()
@@ -6150,7 +6150,7 @@ msgid "When enabled, search matches whole words only. When disabled, substring m
 msgstr "Wenn aktiviert, findet die Suche nur ganze Wörter. Wenn deaktiviert, werden auch Teilzeichenfolgen gefunden (z. B. findet „fish“ auch „fishing“)."
 
 #. Type: message
-#. Context: text = _("Require double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
+#. Context: text = _("Double tap to open books"), help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."), checked_func = function()
 #: advanced_settings.lua:51
 msgid "When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."
 msgstr "Wenn diese Option aktiviert ist, tippen Sie zweimal schnell hintereinander auf dasselbe Buch, um es zu öffnen. Die Tastatursteuerung bleibt unverändert."
@@ -6448,3 +6448,11 @@ msgstr "ZenPM"
 #: zenpm_installer.lua:381
 msgid "ZenPM has been installed. Restart KOReader to use it."
 msgstr "ZenPM wurde installiert. Starten Sie KOReader neu, um es zu verwenden."
+
+#: modules/settings/zen_settings.lua
+msgid "General"
+msgstr "Allgemein"
+
+#: modules/settings/sections/global_settings.lua
+msgid "Zen Search"
+msgstr "Zen-Suche"

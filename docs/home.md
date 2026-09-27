@@ -38,7 +38,7 @@ Build a personal Home page from date and time, featured book, reading stats, rea
 | --- | --- |
 | Widgets | Opens the widget arranger. Widgets show their relative size and must fit the responsive Home capacity. |
 | Widgets > Built-in widgets | Includes Date and time, Featured book, Reading stats, Reading goals, Book strip, and Quotes. |
-| Edit mode | Lets supported widgets open their own settings directly from Home. |
+| Edit mode | Enabled by default; lets supported widgets open their own settings directly from Home. |
 | Presets > Built-in presets | Applies bundled home page layouts. Editing a built-in preset creates an editable user copy. |
 | Presets > Save current home page as preset | Saves the current home page configuration as a user preset. |
 | Presets > User presets | Applies, renames, or deletes saved home page presets. |

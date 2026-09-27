@@ -1,8 +1,8 @@
 ---
 title: Advanced
-category: About
+category: General
 summary: Access metadata extraction, refresh behavior, logs, gestures, and plugin tools.
-settingsPath: Zen Settings > About > Advanced
+settingsPath: Zen Settings > General > Advanced
 order: 81
 ---
 
@@ -12,7 +12,7 @@ order: 81
 
 ## Overview
 
-Advanced settings expose maintenance and lower-level behavior. They include metadata extraction, partial refresh, touch opening behavior, hidden file visibility, debug logging, gesture reset, plugin management, and patch management.
+Advanced settings expose maintenance and lower-level behavior. They include metadata extraction, partial refresh, hidden file visibility, debug logging, gesture reset, plugin management, and patch management.
 
 ## Options
 
@@ -28,11 +28,10 @@ Advanced settings expose maintenance and lower-level behavior. They include meta
 
 | Setting | Description |
 | --- | --- |
-| About > Advanced > Extract metadata | Extracts and caches book metadata and cover images for the current directory. |
-| About > Advanced > Partial pages refresh | Enables partial page repaint behavior. |
-| About > Advanced > Require double tap to open books | Requires two rapid taps on the same book in Library, Home, or Book switcher before opening it. Keyboard controls are unchanged. |
-| About > Advanced > Show hidden files | Shows hidden and unsupported files outside the home folder and hides them again when disabled. |
-| About > Advanced > Debug logging | Toggles KOReader debug and verbose debug settings. |
-| About > Advanced > Clear all gestures | Clears file manager and reader gestures, then sets reader top-right tap to toggle bookmark. |
-| About > Advanced > Plugin management | Opens KOReader plugin management. |
-| About > Advanced > Patch management | Opens KOReader patch management when available. |
+| General > Advanced > Extract metadata | Extracts and caches book metadata and cover images for the current directory. |
+| General > Advanced > Partial pages refresh | Enables partial page repaint behavior. |
+| General > Advanced > Show hidden files | Shows hidden and unsupported files outside the home folder and hides them again when disabled. |
+| General > Advanced > Debug logging | Toggles KOReader debug and verbose debug settings. |
+| General > Advanced > Clear all gestures | Clears file manager and reader gestures, then sets reader top-right tap to toggle bookmark. |
+| General > Advanced > Plugin management | Opens KOReader plugin management. |
+| General > Advanced > Patch management | Opens KOReader patch management when available. |

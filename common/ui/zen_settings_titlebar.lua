@@ -58,7 +58,7 @@ local function title_back_range(title_bar)
         y = dimen.y,
         w = math.min(dimen.w, title_bar.title_widget:getSize().w),
         h = dimen.h,
-    }
+    }:combine(title_bar.back_button.dimen)
 end
 
 local function default_status_factory(plugin)
@@ -199,6 +199,7 @@ function ZenSettingsTitleBar:init()
     local show_search = self.search_expanded == true and self.search_visible ~= false
     local show_search_button = self.search_visible ~= false and not show_search
     local show_action = self.action and not show_search
+    local show_close = self.close_visible ~= false
     local title_cap = math.min(Screen:scaleBySize(150), math.floor(self.width * 0.25))
     local title_width = title_cap
     self.action_button = nil
@@ -266,12 +267,12 @@ function ZenSettingsTitleBar:init()
         end
         action_width = self.action_button:getSize().w
     end
-    local trailing_controls = 1 + (show_action and 1 or 0)
+    local trailing_controls = (show_close and 1 or 0) + (show_action and 1 or 0)
         + (show_search_button and 1 or 0)
     local trailing_gap = TitleStyle.TRAILING_GAP or Screen:scaleBySize(4)
-    local trailing_width = button_size + action_width
+    local trailing_width = (show_close and button_size or 0) + action_width
         + (show_search_button and button_size or 0)
-        + (trailing_controls - 1) * trailing_gap
+        + math.max(0, trailing_controls - 1) * trailing_gap
     local max_title_width = math.max(1,
         self.width - left_padding - right_padding - back_width - title_leading_padding
             - trailing_width)
@@ -455,7 +456,7 @@ function ZenSettingsTitleBar:init()
         }
     end
 
-    self.close_button = IconButton:new{
+    self.close_button = show_close and IconButton:new{
         icon = "close",
         width = icon_size,
         height = icon_size,
@@ -478,15 +479,17 @@ function ZenSettingsTitleBar:init()
             if self.close_callback then return self.close_callback() end
             return true
         end,
-    }
+    } or nil
     local trailing_buttons = {}
     if self.action_button then table.insert(trailing_buttons, self.action_button) end
     if self.search_button then table.insert(trailing_buttons, self.search_button) end
-    table.insert(trailing_buttons, OverlapGroup:new{
-        dimen = Geom:new{ w = button_size, h = button_size },
-        allow_mirroring = false,
-        self.close_button,
-    })
+    if self.close_button then
+        table.insert(trailing_buttons, OverlapGroup:new{
+            dimen = Geom:new{ w = button_size, h = button_size },
+            allow_mirroring = false,
+            self.close_button,
+        })
+    end
     for index, button in ipairs(trailing_buttons) do
         if index > 1 then table.insert(row, HorizontalSpan:new{ width = trailing_gap }) end
         table.insert(row, button)
