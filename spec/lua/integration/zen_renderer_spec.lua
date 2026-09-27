@@ -239,6 +239,9 @@ describe("Zen renderer", function()
             set_dimmed_border = function(frame, dimmed)
                 frame._zen_cover_border_color = dimmed and 6 or nil
             end,
+            rounded_enabled = function()
+                return _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners == true
+            end,
         })
         ZenSpec.unload("modules/filebrowser/folder_cover")
         local shared_folder_overlay =
@@ -426,7 +429,7 @@ describe("Zen renderer", function()
 
     it("dims only the cover in list views", function()
         local ListMenuItem = {
-            update = function() end,
+            update = function(self) self.updated_dim = self.entry.dim end,
             paintTo = function() end,
         }
         local function stock_builder() return ListMenuItem end
@@ -454,6 +457,28 @@ describe("Zen renderer", function()
         }, 100, 200)
 
         assert.are.same({ 13, 24, 26, 36, 0.4 }, dimmed)
+
+        require("apps/filemanager/filemanager").instance = {
+            selected_files = { ["/book.epub"] = true },
+        }
+        local entry = { path = "/book.epub", is_file = true, dim = true }
+        local row = setmetatable({
+            entry = entry, do_cover_image = false, width = 320, height = 64,
+            _cover_frame = {},
+        }, { __index = ListMenuItem })
+        row:update()
+        assert.is_nil(row.updated_dim)
+        assert.is_true(entry.dim)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = true
+        local outline
+        row:paintTo({
+            paintBorder = function(_bb, ...) outline = { ... } end,
+        }, 5, 7)
+        assert.are.same({ 9, 11, 312, 56, 3, 0, 8 }, outline)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = false
+        row:paintTo({ paintBorder = function(_bb, ...) outline = { ... } end }, 5, 7)
+        assert.are.same({ 9, 11, 312, 56, 3, 0, 0 }, outline)
+        require("apps/filemanager/filemanager").instance = nil
     end)
 
     it("uses an exact shared real cover without requesting the decoded blob", function()
@@ -953,16 +978,18 @@ describe("Zen renderer", function()
         assert.are.equal(1, freed)
     end)
 
-    it("dims selected mosaic book covers", function()
-        ZenSpec.replace("bookinfomanager", {
-            getBookInfo = function()
-                return { cover_fetched = true, has_cover = false }
-            end,
-            isCachedCoverInvalid = function() return false end,
-        })
-        ZenSpec.unload("modules/filebrowser/patches/zen_renderer")
+    it("keeps selected mosaic book covers visible", function()
+        render_reusable = true
+        fresh_metadata = {
+            title = "Book", cover_fetched = "Y", has_cover = "Y",
+            cover_w = 600, cover_h = 900,
+        }
+        require("apps/filemanager/filemanager").instance = {
+            selected_files = { ["/book.epub"] = true },
+        }
         require("modules/filebrowser/patches/zen_renderer")()
         local menu = {
+            name = "filemanager",
             item_table = { { title = "Book", is_file = true, path = "/book.epub", dim = true } },
             item_group = {}, layout = {}, items_to_update = {}, page = 1,
             perpage = 1, nb_cols = 2, item_margin = 1, item_width = 100,
@@ -972,7 +999,24 @@ describe("Zen renderer", function()
 
         MosaicMenu._updateItemsBuildUI(menu)
 
-        assert.is_true(menu.layout[1][1]._zen_cover_frame.dim)
+        local item = menu.layout[1][1]
+        assert.is_nil(item._zen_cover_frame.dim)
+        assert.is_false(item.file_deleted)
+        assert.is_true(cover_books[1].has_real_cover)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = true
+        local outline
+        item:paintTo({
+            paintRect = function() end,
+            paintBorder = function(_bb, ...) outline = { ... } end,
+        }, 0, 0)
+        assert.are.same({ 0, 0, 100, 150, 3, 0, 8 }, outline)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = false
+        item:paintTo({
+            paintRect = function() end,
+            paintBorder = function(_bb, ...) outline = { ... } end,
+        }, 0, 0)
+        assert.are.same({ 0, 0, 100, 150, 3, 0, 0 }, outline)
+        require("apps/filemanager/filemanager").instance = nil
     end)
 
     it("paints status, page, and series badges at the configured scale", function()

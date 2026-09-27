@@ -26,6 +26,7 @@ describe("Zen settings page", function()
         "modules/settings/zen_settings_apply",
         "common/ui/zen_settings_titlebar",
         "apps/filemanager/filemanager",
+        "apps/reader/readerui",
     }
 
     local Menu = {}
@@ -500,6 +501,35 @@ describe("Zen settings page", function()
         settings:closeMenu()
 
         assert.are.equal(1, deferred_apply_flushes)
+    end)
+
+    it("refreshes the visible status bar after closing settings", function()
+        local UIManager = require("ui/uimanager")
+        local fm = require("apps/filemanager/filemanager").instance
+        local refreshes = 0
+        fm._updateStatusBar = function() refreshes = refreshes + 1 end
+
+        UIManager._window_stack = { { widget = fm } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(1, refreshes)
+
+        local group = { _zen_status_refresh = function()
+            refreshes = refreshes + 1
+        end }
+        UIManager._window_stack = { { widget = fm }, { widget = group } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(2, refreshes)
+
+        local reader = {}
+        ZenSpec.replace("apps/reader/readerui", { instance = reader })
+        UIManager.setDirty = function(_, widget, refresh)
+            assert.are.equal(reader, widget)
+            assert.are.equal("ui", refresh)
+            refreshes = refreshes + 1
+        end
+        UIManager._window_stack = { { widget = reader } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(3, refreshes)
     end)
 
     it("restores the last page for six seconds after closing", function()

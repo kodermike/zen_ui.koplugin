@@ -388,6 +388,8 @@ local function setup_display_mode(menu, is_group_view, tab_id, group_name)
     return display_mode_type
 end
 
+M.setupDisplayMode = setup_display_mode
+
 -- clean_nav: suppress back arrow, inject status bar row, set display mode
 -- back_callback: optional function for the status bar back chevron
 -------------------------------------------------------------------------------
@@ -1287,15 +1289,7 @@ showDetailView = function(group_item, injectNavbar, tab_id, navbar_tab_id)
             _G.__ZEN_UI_LIBRARY_STATE = nil
         end
         detail_menu:updateItems()
-        -- Re-inject status row after updateItems (it may reset title_group).
-        local createSR2   = _zen_shared and _zen_shared.createStatusRowCustomBack
-        local repaintTB2  = _zen_shared and _zen_shared.repaintTitleBar
-        local tb2 = detail_menu.title_bar
-        if tb2 and createSR2 and tb2.title_group and #tb2.title_group >= 2 then
-            tb2.title_group[2] = createSR2(back_to_group, group_name)
-            tb2.title_group:resetLayout()
-            if repaintTB2 then repaintTB2(tb2) end
-        end
+        if detail_menu._zen_status_refresh then detail_menu:_zen_status_refresh() end
     end)
     return detail_menu, true
 end
@@ -1527,16 +1521,7 @@ showGroupView = function(tab_id, injectNavbar, groups)
             _G.__ZEN_UI_LIBRARY_STATE = nil
         end
         menu:updateItems()
-        -- Re-inject status row after updateItems (it may reset title_group).
-        local createSR2 = _zen_shared and _zen_shared.createStatusRow
-        local repaintTB2 = _zen_shared and _zen_shared.repaintTitleBar
-        local tb2 = menu.title_bar
-        if tb2 and createSR2 and tb2.title_group and #tb2.title_group >= 2 then
-            local FileManager2 = require("apps/filemanager/filemanager")
-            tb2.title_group[2] = createSR2(nil, FileManager2.instance)
-            tb2.title_group:resetLayout()
-            if repaintTB2 then repaintTB2(tb2) end
-        end
+        if menu._zen_status_refresh then menu:_zen_status_refresh() end
         -- Re-open the specific group folder that was open before reader.
         -- Guard: showFiles post-hook may have already opened it synchronously.
         if restore_detail then
@@ -1827,15 +1812,7 @@ function M.showTBRView(injectNavbar)
             _G.__ZEN_UI_LIBRARY_STATE = nil
         end
         menu:updateItems()
-        local createSR2  = _zen_shared and _zen_shared.createStatusRow
-        local repaintTB2 = _zen_shared and _zen_shared.repaintTitleBar
-        local tb2 = menu.title_bar
-        if tb2 and createSR2 and tb2.title_group and #tb2.title_group >= 2 then
-            local FileManager2 = require("apps/filemanager/filemanager")
-            tb2.title_group[2] = createSR2(nil, FileManager2.instance)
-            tb2.title_group:resetLayout()
-            if repaintTB2 then repaintTB2(tb2) end
-        end
+        if menu._zen_status_refresh then menu:_zen_status_refresh() end
     end)
     return menu, true
 end

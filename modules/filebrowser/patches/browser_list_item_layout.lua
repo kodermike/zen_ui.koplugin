@@ -2,6 +2,7 @@ local function apply_browser_list_item_layout()
     -- Capture plugin reference while __ZEN_UI_PLUGIN is still set by run_feature.
     local _plugin_ref = rawget(_G, "__ZEN_UI_PLUGIN")
     local Cover = require("common/cover_utils")
+    local FileManager = require("apps/filemanager/filemanager")
     local RenderCache = require("common/cover_render_cache")
 
     local BD = require("ui/bidi")
@@ -38,6 +39,11 @@ local function apply_browser_list_item_layout()
             or rawget(_G, "__ZEN_UI_SUPPRESS_FILEMANAGER_COVERS") == true
     end
 
+    local function is_selected(entry)
+        local selected = FileManager.instance and FileManager.instance.selected_files
+        return entry and entry.path and selected and selected[entry.path] == true
+    end
+
     local function patchListMenu()
         local ListMenu = require("listmenu")
         local ListMenuItem = Cover.getUpvalue(ListMenu._updateItemsBuildUI, "ListMenuItem")
@@ -49,6 +55,15 @@ local function apply_browser_list_item_layout()
 
         local original_update = ListMenuItem.update
 
+        local function update_original(item)
+            if not is_selected(item.entry) then return original_update(item) end
+            item.entry.dim = nil
+            local ok, result = pcall(original_update, item)
+            item.entry.dim = true
+            if not ok then error(result) end
+            return result
+        end
+
         function ListMenuItem:update()
             local is_dir = not (self.entry.is_file or self.entry.file)
             -- Intercept list mode (no covers) to fix directory text wrapping
@@ -57,7 +72,7 @@ local function apply_browser_list_item_layout()
                 if is_dir and not self.entry.is_go_up then
                     self.text = FolderCover.title(self.entry, self.text, self.menu)
                 end
-                original_update(self)
+                update_original(self)
                 self.text = original_text
                 if is_dir then
                     -- Fix folder name widget (TextBoxWidget) overflowing to 3+ lines in list mode
@@ -264,7 +279,7 @@ local function apply_browser_list_item_layout()
             -- filepath set in ListMenuItem:init()
             local filepath = self.filepath
             if not filepath then
-                return original_update(self)
+                return update_original(self)
             end
 
             local underline_h = 1 -- matches self.underline_h in ListMenuItem:init()
@@ -293,7 +308,7 @@ local function apply_browser_list_item_layout()
             -- If not yet indexed fall back to the original renderer so the
             -- loading hint ("…") is shown and the item queues for extraction.
             if not bookinfo then
-                return original_update(self)
+                return update_original(self)
             end
 
             -- Set cover_specs early so that when we fall through to original_update
@@ -311,7 +326,7 @@ local function apply_browser_list_item_layout()
             -- Mirror stock CoverBrowser: if cover hasn't been fetched yet, defer so
             -- the item is added to items_to_update and extraction is queued.
             if self.do_cover_image and not bookinfo.cover_fetched then
-                return original_update(self)
+                return update_original(self)
             end
 
             -- Re-fetch with cover only when in cover-image mode and cover exists.
@@ -328,10 +343,10 @@ local function apply_browser_list_item_layout()
                and bookinfo.cover_bb
                and BookInfoManager.isCachedCoverInvalid(bookinfo, cover_specs) then
                 bookinfo.cover_bb:free()
-                return original_update(self)
+                return update_original(self)
             end
 
-            local file_deleted = self.entry.dim
+            local file_deleted = self.entry.dim and not is_selected(self.entry)
             local fgcolor = file_deleted and Blitbuffer.COLOR_DARK_GRAY or nil
 
             -- ── Cover image (left zone) ──────────────────────────────────────
@@ -797,6 +812,14 @@ local function apply_browser_list_item_layout()
                             width, height, 0.4)
                     end
                 end
+                if is_selected(entry) then
+                    local border = math.max(3, Screen:scaleBySize(3))
+                    local inset = math.max(border, Screen:scaleBySize(4))
+                    local radius = CoverWidget.rounded_enabled() and Screen:scaleBySize(8) or 0
+                    bb:paintBorder(x + inset, y + inset,
+                        self.width - 2 * inset, self.height - 2 * inset,
+                        border, Blitbuffer.COLOR_BLACK, radius)
+                end
             end
         end
         ListMenuItem._zen_bll_patched = true
@@ -864,7 +887,6 @@ local function apply_browser_list_item_layout()
 
     -- Hook FileManager:setupLayout as a safety-net fallback (e.g., listmenu loads later
     -- or we return from the reader and layout is re-run). patchListMenu() is idempotent.
-    local FileManager = require("apps/filemanager/filemanager")
     local orig_fm_setupLayout = FileManager.setupLayout
 
     FileManager.setupLayout = function(self)

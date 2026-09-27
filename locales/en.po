@@ -2737,6 +2737,11 @@ msgid "Interface"
 msgstr "Interface"
 
 #. Type: setting
+#: library_settings.lua
+msgid "Invert with dark mode"
+msgstr "Invert with dark mode"
+
+#. Type: setting
 #. Context: text_func = function() return T(_("IP address: %1"), utils.get_device_ip_address() or "—") end,
 #: about_settings.lua:50
 msgid "IP address: %1"
@@ -6121,6 +6126,11 @@ msgid "Vocabulary builder"
 msgstr "Vocabulary builder"
 
 #. Type: setting
+#: library_settings.lua
+msgid "Wallpaper"
+msgstr "Wallpaper"
+
+#. Type: setting
 #. Context: table.insert(items, { text = _("Warmth"), enabled_func = function() return Device:hasNaturalLight() end,
 #: warmth_slider.lua:47 global_settings.lua:645 global_settings.lua:665 global_settings.lua:712 global_settings.lua:725 global_settings.lua:768 global_settings.lua:781
 msgid "Warmth"
@@ -6585,3 +6595,11 @@ msgstr "Increase"
 #: modules/settings/sections/app_launcher_settings.lua
 msgid "Reader action"
 msgstr "Reader action"
+
+#: modules/filebrowser/patches/context_menu.lua
+msgid "1 file"
+msgstr "1 file"
+
+#: modules/filebrowser/patches/context_menu.lua
+msgid "%1 files"
+msgstr "%1 files"

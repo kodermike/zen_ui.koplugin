@@ -1218,7 +1218,7 @@ function M.build(ctx)
     end
 
     table.insert(items, {
-        text = _("Background"),
+        text = _("Wallpaper"),
         checked_func = function()
             return ensure_lib_bg().enabled == true
         end,
@@ -1255,8 +1255,7 @@ function M.build(ctx)
                 end,
                 keep_menu_open = true,
                 callback = function(touchmenu_instance)
-                    local PathChooser = require("ui/widget/pathchooser")
-                    UIManager:show(PathChooser:new{
+                    UIManager:show(zen_settings_utils.newImagePathChooser{
                         select_file = true,
                         select_directory = false,
                         show_files = true,
@@ -1299,13 +1298,25 @@ function M.build(ctx)
                 callback = function(touchmenu_instance)
                     local bg = ensure_lib_bg()
                     zen_settings_utils.show_value_picker(
-                        _("Background") .. " - " .. _("Opacity"), bg.opacity,
+                        _("Wallpaper") .. " - " .. _("Opacity"), bg.opacity,
                         function(value)
                             bg.opacity = math.max(0,
                                 math.min(100, math.floor(value + 0.5)))
                             save_lib_bg()
                             if touchmenu_instance then touchmenu_instance:updateItems() end
                         end, 0, 100)
+                end,
+            },
+            {
+                text = _("Invert with dark mode"),
+                checked_func = function()
+                    return ensure_lib_bg().invert_with_dark_mode ~= false
+                end,
+                checkmark_callback = function(touchmenu_instance)
+                    local bg = ensure_lib_bg()
+                    bg.invert_with_dark_mode = bg.invert_with_dark_mode == false
+                    save_lib_bg()
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             },
         },

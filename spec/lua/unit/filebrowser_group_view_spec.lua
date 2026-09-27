@@ -133,6 +133,9 @@ describe("file browser group views", function()
             suppress_page_info_tap = function() end,
             apply_status_row = function(menu, options)
                 menu._test_back_callback = options.back_callback
+                menu._zen_status_refresh = function(self)
+                    self._test_status_label = options.label
+                end
             end,
         })
         ZenSpec.replace("modules/filebrowser/patches/kindle_virtual_library", {
@@ -311,6 +314,10 @@ describe("file browser group views", function()
         assert.are.equal(1, authors.update_count)
         assert.are.equal(1, series.update_count)
         assert.are.equal(1, tags.update_count)
+        assert.are.equal("Authors", authors._test_status_label)
+        assert.are.equal("Series", series._test_status_label)
+        assert.are.equal("Languages", languages._test_status_label)
+        assert.are.equal("Tags", tags._test_status_label)
     end)
 
     it("uses the tag-group context menu for external group folders", function()

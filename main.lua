@@ -252,6 +252,15 @@ function ZenUI:init()
         end
     end
     require("ui/uimanager"):nextTick(function()
+        if _plugin_root and require("device"):isKindle() then
+            local ok, installed, err = pcall(function()
+                return require("common/kindle_launcher").install(
+                    _plugin_root, "/mnt/us/documents/ZenReader.sh")
+            end)
+            if not ok or not installed then
+                logger.warn("Kindle launcher install failed:", err or installed)
+            end
+        end
         local ok, added_or_error = pcall(function()
             return require("modules/menu/app_launcher/model").ensure_zenpm_plugin_entries()
         end)

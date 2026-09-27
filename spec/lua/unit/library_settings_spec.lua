@@ -46,6 +46,10 @@ describe("library settings", function()
         ZenSpec.replace("modules/settings/zen_settings_apply", {})
         ZenSpec.replace("modules/settings/zen_settings_utils", {
             buildColorSubMenu = function() return {} end,
+            newImagePathChooser = function(options)
+                options._image_layout = true
+                return options
+            end,
         })
         ZenSpec.unload("common/library_font_path")
         ZenSpec.unload("modules/settings/sections/library_settings")
@@ -587,7 +591,7 @@ describe("library settings", function()
         assert.are.equal(0, saves)
     end)
 
-    it("edits library background opacity and refreshes the cached surfaces", function()
+    it("edits wallpaper opacity and inversion and refreshes the cached surfaces", function()
         local picker
         local saves = 0
         local cache_clears = 0
@@ -631,20 +635,23 @@ describe("library settings", function()
         })
         local background
         for _i, item in ipairs(items) do
-            if item.text == "Background" then
+            if item.text == "Wallpaper" then
                 background = item
                 break
             end
         end
         local opacity = assert(background).sub_item_table[2]
+        local inversion = background.sub_item_table[3]
 
         assert.is_true(background.checked_func())
         assert.is_function(background.checkmark_callback)
+        assert.are.equal("Invert with dark mode", inversion.text)
+        assert.is_true(inversion.checked_func())
         assert.are.equal("Opacity: 100%", opacity.text_func())
         assert.is_true(opacity.enabled_func())
         opacity.callback({ updateItems = function() menu_updates = menu_updates + 1 end })
         assert.are.same({
-            title = "Background - Opacity",
+            title = "Wallpaper - Opacity",
             value = 100,
             min = 0,
             max = 100,
@@ -660,16 +667,23 @@ describe("library settings", function()
         assert.are.equal(1, menu_updates)
         assert.are.equal("Opacity: 38%", opacity.text_func())
 
-        background.checkmark_callback()
-        assert.is_false(config.library_background.enabled)
-        assert.is_false(background.checked_func())
+        inversion.checkmark_callback()
+        assert.is_false(config.library_background.invert_with_dark_mode)
+        assert.is_false(inversion.checked_func())
         assert.are.equal(2, saves)
         assert.are.equal(2, cache_clears)
         assert.are.equal(2, reinitializations)
+
+        background.checkmark_callback()
+        assert.is_false(config.library_background.enabled)
+        assert.is_false(background.checked_func())
+        assert.are.equal(3, saves)
+        assert.are.equal(3, cache_clears)
+        assert.are.equal(3, reinitializations)
         assert.are.equal(1, scheduled)
     end)
 
-    it("validates the image when enabling the library background parent switch", function()
+    it("validates the image when enabling the wallpaper parent switch", function()
         local shown
         local saves = 0
         local cache_clears = 0
@@ -711,14 +725,14 @@ describe("library settings", function()
         })
         local background
         for _i, item in ipairs(items) do
-            if item.text == "Background" then
+            if item.text == "Wallpaper" then
                 background = item
                 break
             end
         end
 
         assert.is_false(background.checked_func())
-        assert.are.equal(2, #background.sub_item_table)
+        assert.are.equal(3, #background.sub_item_table)
         background.checkmark_callback()
 
         assert.is_false(config.library_background.enabled)
@@ -737,7 +751,7 @@ describe("library settings", function()
         assert.are.equal(1, scheduled)
     end)
 
-    it("uses the wallpapers directory as the background picker default and Home", function()
+    it("uses the wallpapers directory as the wallpaper picker default and Home", function()
         local chooser
         local home_path
         package.loaded["ui/uimanager"].show = function(_, widget) chooser = widget end
@@ -756,11 +770,12 @@ describe("library settings", function()
         })
         local background
         for _i, item in ipairs(items) do
-            if item.text == "Background" then background = item; break end
+            if item.text == "Wallpaper" then background = item; break end
         end
 
         background.sub_item_table[1].callback()
         assert.are.equal("/koreader/resources/wallpapers", chooser.path)
+        assert.is_true(chooser._image_layout)
         assert.is_true(chooser.goHome({
             changeToPath = function(_, path) home_path = path end,
         }))

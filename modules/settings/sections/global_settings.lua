@@ -62,8 +62,7 @@ local function choose_sleep_screen_image()
         local current_dir = select(1, require("util").splitFilePathName(current_path))
         if current_dir ~= "" then path = current_dir end
     end
-    local PathChooser = require("ui/widget/pathchooser")
-    UIManager:show(PathChooser:new{
+    UIManager:show(utils.newImagePathChooser{
         select_directory = false,
         select_file = true,
         show_files = true,

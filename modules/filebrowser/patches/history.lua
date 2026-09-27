@@ -200,7 +200,7 @@ local function apply_history()
         if createStatusRow and tb.title_group and #tb.title_group >= 2 then
             local FileManager = require("apps/filemanager/filemanager")
 
-            tb.title_group[2] = createStatusRow(nil, FileManager.instance)
+            tb.title_group[2] = createStatusRow(nil, FileManager.instance, _("History"))
             tb.title_group:resetLayout()
 
             local function remove_from_overlap(group, widget)
@@ -221,7 +221,7 @@ local function apply_history()
             local repaintTitleBar = get_shared("repaintTitleBar")
             menu._zen_status_refresh = function()
                 if tb.title_group and #tb.title_group >= 2 then
-                    tb.title_group[2] = createStatusRow(nil, FileManager.instance)
+                    tb.title_group[2] = createStatusRow(nil, FileManager.instance, _("History"))
                     tb.title_group:resetLayout()
                     if repaintTitleBar then repaintTitleBar(tb) end
                 end

@@ -36,7 +36,12 @@ describe("global sleep settings", function()
         ZenSpec.replace("ui/widget/confirmbox", {})
         ZenSpec.replace("common/restart", {})
         ZenSpec.replace("config/preset_store", {})
-        ZenSpec.replace("modules/settings/zen_settings_utils", {})
+        ZenSpec.replace("modules/settings/zen_settings_utils", {
+            newImagePathChooser = function(options)
+                options._image_layout = true
+                return options
+            end,
+        })
         ZenSpec.replace("common/inline_icon_map", {})
         ZenSpec.replace("common/ui/icon_menu_item", {})
         ZenSpec.replace("common/plugin_root", "/missing")
@@ -89,6 +94,7 @@ describe("global sleep settings", function()
 
         custom_image.callback()
         assert.are.equal("/koreader/resources/screensavers", chooser.path)
+        assert.is_true(chooser._image_layout)
         assert.is_true(chooser.file_filter("cover.png"))
         assert.is_false(chooser.file_filter("cover.txt"))
         assert.is_true(chooser.goHome({

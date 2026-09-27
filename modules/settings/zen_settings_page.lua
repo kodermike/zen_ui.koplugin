@@ -702,6 +702,32 @@ function ZenSettingsPage:onCloseWidget()
         _G.__ZEN_UI_SETTINGS_PAGE = nil
     end
     self:_flushDeferredSettingsApplies()
+    UIManager:nextTick(function()
+        local stack = UIManager._window_stack or {}
+        local top
+        for i = #stack, 1, -1 do
+            local widget = stack[i] and stack[i].widget
+            if widget and not widget.toast then top = widget; break end
+        end
+        if not top then return end
+        if top._zen_status_refresh then
+            top:_zen_status_refresh()
+        elseif top._zen_home_refresh_clock_widgets then
+            top:_zen_home_refresh_clock_widgets()
+        else
+            local FileManager = package.loaded["apps/filemanager/filemanager"]
+            local fm = FileManager and FileManager.instance
+            if fm and (top == fm or top == fm.show_parent) and fm._updateStatusBar then
+                fm:_updateStatusBar()
+            else
+                local ReaderUI = package.loaded["apps/reader/readerui"]
+                local reader = ReaderUI and ReaderUI.instance
+                if reader and (top == reader or top == reader.show_parent) then
+                    UIManager:setDirty(reader, "ui")
+                end
+            end
+        end
+    end)
     return Menu.onCloseWidget(self)
 end
 

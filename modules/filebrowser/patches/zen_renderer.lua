@@ -124,9 +124,10 @@ local function apply_zen_renderer()
         end
     end
 
-    local function is_file_manager_select_mode()
+    local function is_file_manager_select_mode(path)
         local ok, FileManager = pcall(require, "apps/filemanager/filemanager")
-        return ok and FileManager.instance and FileManager.instance.selected_files ~= nil
+        local selected = ok and FileManager.instance and FileManager.instance.selected_files
+        return type(selected) == "table" and (not path or selected[path] == true)
     end
 
     local function filename(path)
@@ -262,7 +263,7 @@ local function apply_zen_renderer()
 
         item.is_directory = true
         item.bookinfo_found = true
-        item.file_deleted = item.entry.dim
+        item.file_deleted = item.entry.dim and not is_file_manager_select_mode(item.entry.path)
         item._zen_is_book = false
         item._zen_tile_kind = item.entry.is_series_group and "series_group"
             or (item.entry._zen_files and "metadata_group")
@@ -340,7 +341,7 @@ local function apply_zen_renderer()
             uniform = uniform,
         }
         self.menu.cover_specs = self.do_cover_image and specs or false
-        self.file_deleted = self.entry.dim
+        self.file_deleted = self.entry.dim and not is_file_manager_select_mode(self.filepath)
         self.is_directory = false
         self.bookinfo_found = false
         self._has_cover_image = false
@@ -513,7 +514,7 @@ local function apply_zen_renderer()
                     (build_measure.pending_fallback_ms or 0) + cover_widget_ms
             end
         end
-        frame.dim = self.file_deleted and true or nil
+        frame.dim = self.entry.dim and not is_file_manager_select_mode(self.filepath) or nil
         if metadata then metadata.cover_bb = nil end
         cover = CenterContainer:new{
             dimen = Geom:new{ w = self.width, h = content_h },
@@ -876,14 +877,20 @@ local function apply_zen_renderer()
         dim_finished_cover(self, bb, config)
         if not self._zen_is_book then
             FolderCover.paintDecorations(self, bb, config, x, y)
-            return
+        else
+            paint_favorite_badge(self, bb, config)
+            paint_native_progress(self, bb, config)
+            paint_progress_badge(self, bb, config)
+            if self._zen_page_label then paint_page_badge(self, bb, self._zen_page_label, config) end
+            if self._zen_series_label then paint_series_badge(self, bb, self._zen_series_label, config) end
+            paint_new_banner(self, bb, config)
         end
-        paint_favorite_badge(self, bb, config)
-        paint_native_progress(self, bb, config)
-        paint_progress_badge(self, bb, config)
-        if self._zen_page_label then paint_page_badge(self, bb, self._zen_page_label, config) end
-        if self._zen_series_label then paint_series_badge(self, bb, self._zen_series_label, config) end
-        paint_new_banner(self, bb, config)
+        if self.entry and is_file_manager_select_mode(self.entry.path) then
+            local border = math.max(3, Screen:scaleBySize(3))
+            local radius = CoverWidget.rounded_enabled() and Screen:scaleBySize(8) or 0
+            bb:paintBorder(x, y, self.width, self.height,
+                border, Blitbuffer.COLOR_BLACK, radius)
+        end
     end
 
     function MosaicMenu:_updateItemsBuildUI()

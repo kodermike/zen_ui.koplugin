@@ -30,7 +30,7 @@ The global ZenOS font family and base text size are configured under **Zen Setti
 - Optionally flatten subfolders into one library view without changing files on disk.
 - Configure cover badges, progress indicators, uniform cover ratios, rounded corners, title and author text, and finished-book dimming.
 - Configure the scroll bar as a bar, dots, or page number.
-- Set a custom Library background image.
+- Set a custom Library wallpaper image.
 - Set and lock the home folder, add extra home folders, and control delete access.
 - Edit book metadata and covers manually or fill them from online providers.
 - Choose and arrange the information shown on Book details pages.
@@ -83,8 +83,9 @@ The global ZenOS font family and base text size are configured under **Zen Setti
 | Scroll bar > Style | Selects bar, dots, or page number scrolling. |
 | Scroll bar > Page number format | Shows the current page only or page x / y when page-number style is active. |
 | Scroll bar > Hold to skip | Sets page-number long-press behavior to skip 10 pages, skip 20 pages, or jump to beginning/end. |
-| Background > Enable | Shows the selected background image behind Library surfaces. |
-| Background > Image | Opens a file chooser for a JPG, JPEG, or PNG background image. PNG transparency is rendered as white. Hold this row to clear the selected image. |
+| Wallpaper > Enable | Shows the selected wallpaper image behind Library surfaces. |
+| Wallpaper > Image | Opens a file chooser for a JPG, JPEG, or PNG wallpaper image. PNG transparency is rendered as white. Hold this row to clear the selected image. |
+| Wallpaper > Invert with dark mode | Inverts the wallpaper in dark mode by default. Turn off to keep its daytime appearance. |
 | Home folder > Set home folder | Opens a folder chooser for the primary library root. |
 | Home folder > Lock home folder | Selects Off, Only in Zen Mode, or Always for navigation outside the home folder. |
 | Home folder > Additional home folders | Adds or removes extra library roots. |
@@ -131,9 +132,9 @@ Long-press a folder and open **Edit > Set folder cover** to see a full-screen ve
 
 ZenOS stores only a reference to each chosen image: it does not copy the image into the folder or modify the source file, so the source must remain available at the selected location. Folder covers accept case-insensitive `.jpg` and `.jpeg` files. You can also manage them manually as `cover.jpg`, `cover.jpeg`, `cover1.jpg`, `cover1.jpeg`, and the equivalent names through `cover4`; these managed images stay hidden in the Library file list and override covers generated from the folder's contents. PNG, WebP, GIF, and other formats are not treated as folder covers and remain visible.
 
-## Library Background
+## Library Wallpaper
 
-Use **Zen Settings > Library > Background > Enable** and **Zen Settings > Library > Background > Image** to add a custom JPG/JPEG or PNG background to the Library. Transparent PNG pixels are rendered as white. Changing or clearing the background refreshes the Library, Home, and Navbar surfaces so the new image is applied without hunting through separate settings.
+Use **Zen Settings > Library > Wallpaper > Enable** and **Zen Settings > Library > Wallpaper > Image** to add a custom JPG/JPEG or PNG wallpaper to the Library. Transparent PNG pixels are rendered as white. Changing or clearing the wallpaper refreshes the Library, Home, and Navbar surfaces so the new image is applied without hunting through separate settings.
 
 ## Context menu
 

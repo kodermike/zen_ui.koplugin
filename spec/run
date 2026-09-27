@@ -334,6 +334,16 @@ package_check() {
         echo "Release ZIP is missing main.lua: $zip_path" >&2
         exit 1
       }
+      if [[ "${ZENOS_REQUIRE_KINDLE_LAUNCHER:-0}" == "1" ]]; then
+        [[ -f "$extract_dir/$expected_root/kindle-launcher/ZenReader.sh" ]] || {
+          echo "Release ZIP is missing ZenReader.sh: $zip_path" >&2
+          exit 1
+        }
+        [[ -f "$extract_dir/$expected_root/kindle-launcher/LICENSE" ]] || {
+          echo "Release ZIP is missing the launcher license: $zip_path" >&2
+          exit 1
+        }
+      fi
     }
 
     verify_archive \

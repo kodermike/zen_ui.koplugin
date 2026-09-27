@@ -225,6 +225,7 @@ local defaults = {
         enabled = false,
         path = "",  -- "" = none; absolute image path otherwise
         opacity = 100,
+        invert_with_dark_mode = true,
     },
     additional_home_dirs = {},
     browser_list_item_layout = {
