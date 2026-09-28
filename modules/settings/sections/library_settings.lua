@@ -215,6 +215,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local cfg = ensure_library_font_cfg(config)
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
@@ -223,9 +224,10 @@ function M.build(ctx)
                     return string.format("%s %s", _("Font:"), face_text)
                 end,
                 keep_menu_open = true,
-                callback = function(touchmenu_instance)
+                _zen_search_skip_children = true,
+                sub_item_table_func = function(touchmenu_instance)
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
-                    if not ok_fc then return end
+                    if not ok_fc then return {} end
                     local cfg = ensure_library_font_cfg(config)
                     local default_config, default_file = picker_default(FontChooser)
                     local display_face = cfg.font_face == "default"
@@ -241,19 +243,44 @@ function M.build(ctx)
                             save_library_font(config, plugin, touchmenu_instance)
                         end
                     end
-                    if not display_face then return end
-                    UIManager:show(FontChooser:new{
-                        title = _("Font"),
-                        font_file = display_face,
-                        default_font_file = default_file,
-                        callback = function(file)
-                            local portable_file = LibraryFontPath.toConfig(file)
-                            if cfg.font_face ~= portable_file then
-                                cfg.font_face = portable_file
-                                save_library_font(config, plugin, touchmenu_instance, true)
-                            end
-                        end,
-                    })
+                    if not display_face then return {} end
+                    local FontList = require("fontlist")
+                    local Font = require("ui/font")
+                    local font_items = {
+                        open_on_menu_item_id_func = function() return display_face end,
+                    }
+                    for file in pairs(FontList.fontinfo) do
+                        local name_text, name = FontChooser.getFontNameText(file)
+                        font_items[#font_items + 1] = {
+                            text = (name_text or file) .. (file == default_file and "  ★" or ""),
+                            font_name = name or name_text or file,
+                            menu_item_id = file,
+                            radio = true,
+                            checked_func = function() return display_face == file end,
+                            font_func = function(size) return Font:getFace(file, size) end,
+                            keep_menu_open = true,
+                            callback = function()
+                                local portable_file = LibraryFontPath.toConfig(file)
+                                if cfg.font_face ~= portable_file then
+                                    cfg.font_face = portable_file
+                                    display_face = file
+                                    save_library_font(config, plugin, touchmenu_instance, true)
+                                end
+                            end,
+                            hold_callback = function()
+                                local InfoMessage = require("ui/widget/infomessage")
+                                UIManager:show(InfoMessage:new{ text = file, show_icon = false })
+                            end,
+                        }
+                    end
+                    local ffiUtil = require("ffi/util")
+                    table.sort(font_items, function(a, b)
+                        if a.font_name ~= b.font_name then
+                            return ffiUtil.strcoll(a.font_name, b.font_name)
+                        end
+                        return ffiUtil.strcoll(a.text, b.text)
+                    end)
+                    return font_items
                 end,
                 hold_callback = function()
                     local cfg = ensure_library_font_cfg(config)
@@ -1564,6 +1591,7 @@ function M.build(ctx)
     local function build_book_detail_description_font_items()
         return {
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local style = ensure_book_detail_description_style()
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")

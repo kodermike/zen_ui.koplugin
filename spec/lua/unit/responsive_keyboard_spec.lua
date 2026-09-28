@@ -88,7 +88,11 @@ describe("responsive keyboard patch", function()
         local function addChar(self, key)
             self.inputbox:addChars(key)
         end
-        VirtualKeyboard = { addKeys = addKeys, addChar = addChar }
+        VirtualKeyboard = {
+            addKeys = addKeys,
+            addChar = addChar,
+            lang_to_keyboard_layout = { en = "en_keyboard", es = "es_keyboard" },
+        }
         ZenSpec.replace("ui/widget/virtualkeyboard", VirtualKeyboard)
         ZenSpec.unload("device/gesturedetector")
         ZenSpec.unload("modules/global/patches/responsive_keyboard")
@@ -158,7 +162,7 @@ describe("responsive keyboard patch", function()
         local keyboard = setmetatable({
             KEYS = { {}, {}, third_row, {}, bottom_row },
             keyboard_layer = 2,
-            getKeyboardLayout = function() return "en" end,
+            getKeyboardLayout = function() return "C" end,
         }, { __index = VirtualKeyboard })
 
         keyboard:addKeys()

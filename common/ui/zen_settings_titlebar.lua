@@ -392,9 +392,17 @@ function ZenSettingsTitleBar:init()
         }
         dismiss_keyboard_on_outside_tap(self.search_input)
         self.search_input.edit_callback = function(edited)
-            if edited and self.search_callback then
+            if edited and not self._setting_query and self.search_callback then
                 self.query = self.search_input:getText()
-                self.search_callback(self.query)
+                self:_cancelPendingSearch()
+                local query = self.query
+                self._pending_search = function()
+                    self._pending_search = nil
+                    if self.search_expanded and not (self.show_parent and self.show_parent._closed) then
+                        self.search_callback(query)
+                    end
+                end
+                UIManager:scheduleIn(0.15, self._pending_search)
             end
         end
         local orig_on_key_press = self.search_input.onKeyPress
@@ -579,6 +587,13 @@ function ZenSettingsTitleBar:closeSearchKeyboard()
     return keyboard_was_visible
 end
 
+function ZenSettingsTitleBar:_cancelPendingSearch()
+    if self._pending_search then
+        UIManager:unschedule(self._pending_search)
+        self._pending_search = nil
+    end
+end
+
 function ZenSettingsTitleBar:openSearch()
     if self.search_expanded or self.search_visible == false then return true end
     self.search_expanded = true
@@ -602,6 +617,7 @@ end
 
 function ZenSettingsTitleBar:collapseSearch()
     if not self.search_expanded then return false end
+    self:_cancelPendingSearch()
     self:closeSearchKeyboard()
     self.search_expanded = false
     self.query = ""
@@ -683,9 +699,12 @@ function ZenSettingsTitleBar:setTitle(title)
 end
 
 function ZenSettingsTitleBar:setQuery(query)
+    self:_cancelPendingSearch()
     self.query = query or ""
     if self.search_input and self.search_input:getText() ~= self.query then
+        self._setting_query = true
         self.search_input:setText(self.query)
+        self._setting_query = nil
     end
 end
 

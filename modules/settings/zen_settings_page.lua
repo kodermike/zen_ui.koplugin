@@ -84,10 +84,18 @@ local function item_text(item)
     return ArrangeState.stripSubmenuCaret(text)
 end
 
-local function resume_selector(items, item, text)
+local function search_item_text(item)
+    if type(item) ~= "table" then return "" end
+    local text = item._zen_search_text or item.text
+    return type(text) == "string" and text ~= ""
+        and ArrangeState.stripSubmenuCaret(text) or item_text(item)
+end
+
+local function resume_selector(items, item, text, text_for_item)
+    text_for_item = text_for_item or item_text
     local occurrence = 0
     for _i, sibling in ipairs(items or {}) do
-        if item_text(sibling) == text then occurrence = occurrence + 1 end
+        if text_for_item(sibling) == text then occurrence = occurrence + 1 end
         if sibling == item then break end
     end
     return {
@@ -413,7 +421,7 @@ function ZenSettingsPage:_findResumeItem(step)
     if type(step) ~= "table" or type(step.text) ~= "string" then return nil end
     local occurrence = 0
     for _i, item in ipairs(self.item_table or {}) do
-        if item_text(item) == step.text then
+        if search_item_text(item) == step.text or item_text(item) == step.text then
             occurrence = occurrence + 1
             if occurrence == (step.occurrence or 1) then return item end
         end
@@ -674,6 +682,9 @@ function ZenSettingsPage:closeMenu()
         self._deferred_arrange_parent = nil
         self.invisible = false
     end
+    if self.title_bar and self.title_bar._cancelPendingSearch then
+        self.title_bar:_cancelPendingSearch()
+    end
     if self.title_bar and self.title_bar.clearStatusRefresh then
         self.title_bar:clearStatusRefresh()
     end
@@ -693,6 +704,9 @@ function ZenSettingsPage:onCloseWidget()
     if self._deferred_arrange_parent then
         self._deferred_arrange_parent = nil
         self.invisible = false
+    end
+    if self.title_bar and self.title_bar._cancelPendingSearch then
+        self.title_bar:_cancelPendingSearch()
     end
     if self.title_bar and self.title_bar.clearStatusRefresh then
         self.title_bar:clearStatusRefresh()
@@ -741,7 +755,7 @@ function ZenSettingsPage:_buildSearchIndex()
         local ok, items = pcall(provider, self)
         if not ok or type(items) ~= "table" then return end
         for _i, item in ipairs(items) do
-            local label = item_text(item)
+            local label = search_item_text(item)
             if visible(item) and label ~= ""
                     and type(item._zen_search_open) == "function" then
                 local crumbs = {}
@@ -771,13 +785,15 @@ function ZenSettingsPage:_buildSearchIndex()
         seen[items] = true
         for item_index, item in ipairs(items or {}) do
             if type(item) == "table" then
-                local label = item_text(item)
+                local label = search_item_text(item)
                 if label ~= "" then
                     local crumbs = {}
                     for i = 2, #levels do crumbs[#crumbs + 1] = levels[i].title end
                     local breadcrumb = table.concat(crumbs, " › ")
                     local help_text = item.help_text
-                    local sub_items = self:_resolveSubItems(item)
+                    -- ponytail: Dynamic children stay unindexed; add search-only providers where needed.
+                    local sub_items = type(item.sub_item_table_func) ~= "function"
+                        and self:_resolveSubItems(item) or nil
                     index[#index + 1] = {
                         item = item,
                         index = item_index,
@@ -797,7 +813,7 @@ function ZenSettingsPage:_buildSearchIndex()
                         child_levels[#child_levels + 1] = {
                             title = sub_items._zen_title,
                             items = sub_items,
-                            selector = resume_selector(items, item, label),
+                            selector = resume_selector(items, item, label, search_item_text),
                         }
                         walk(sub_items, child_levels, depth + 1)
                     end
@@ -831,6 +847,7 @@ function ZenSettingsPage:_searchResults(query)
                 _zen_settings_row = true,
                 _zen_display_text = entry.label,
                 _zen_settings_breadcrumb = entry.breadcrumb,
+                _zen_settings_submenu = has_declared_submenu(source, entry.label),
                 _zen_has_submenu = entry.sub_items ~= nil or entry.open_callback ~= nil,
                 _zen_search_result = entry,
             }

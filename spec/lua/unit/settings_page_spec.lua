@@ -737,6 +737,53 @@ describe("Zen settings page", function()
         assert.are.equal(1, settings.itemnumber)
     end)
 
+    it("does not build dynamic menus while typing a settings search", function()
+        local native_builds = 0
+        local settings = make_page({
+            {
+                text = "KOReader",
+                sub_item_table_func = function()
+                    native_builds = native_builds + 1
+                    return {{ text = "Native child" }}
+                end,
+            },
+            { text = "Other", sub_item_table = {{ text = "Zen child" }} },
+        })
+
+        settings:_onSearchChanged("Zen child")
+        assert.are.equal(0, native_builds)
+        assert.are.equal("Zen child", settings.item_table[1].text)
+
+        settings:_onSearchChanged("KOReader")
+        assert.are.equal(0, native_builds)
+        assert.is_true(settings.item_table[1]._zen_has_submenu)
+        settings:onMenuSelect(settings.item_table[1])
+        assert.are.equal(1, native_builds)
+        assert.are.equal("Native child", settings.item_table[1].text)
+    end)
+
+    it("indexes static labels without evaluating dynamic font labels", function()
+        local label_calls = 0
+        local font = {
+            _zen_search_text = "Font",
+            text_func = function()
+                label_calls = label_calls + 1
+                return "Font: custom"
+            end,
+            sub_item_table = {{ text = "Font face" }},
+        }
+        local settings = make_page({
+            { text = "Library", sub_item_table = { font } },
+        })
+
+        settings:_onSearchChanged("Font face")
+        assert.are.equal(0, label_calls)
+        assert.are.equal("Font face", settings.item_table[1].text)
+        settings:onMenuSelect(settings.item_table[1])
+        assert.are.equal(0, label_calls)
+        assert.are.equal("Font", settings._resume_path[2].text)
+    end)
+
     it("hides gated settings from menus and search", function()
         local visible_plugin = { text = "Visible plugin", show_func = function() return true end }
         local hidden_plugin = { text = "Hidden plugin", show_func = function() return false end }

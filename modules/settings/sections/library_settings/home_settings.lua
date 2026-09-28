@@ -543,6 +543,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     return string.format("%s %s", _("Font:"),
                         font_label(ensure_datetime_text_style(mcfg, key).font_face))
@@ -637,12 +638,14 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Time"),
                 text_func = function()
                     return _("Time") .. ": " .. datetime_style_summary(mcfg, "time")
                 end,
                 sub_item_table = build_datetime_text_style_items(mcfg, "time", _("Time")),
             },
             {
+                _zen_search_text = _("Date"),
                 text_func = function()
                     return _("Date") .. ": " .. datetime_style_summary(mcfg, "date")
                 end,
@@ -688,6 +691,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local style = ensure_featured_text_style(mcfg, key)
                     return string.format("%s %s", _("Font:"), font_label(style.font_face))
@@ -780,6 +784,7 @@ function M.build(ctx)
     local function featured_text_style_item(mcfg, key, label, show_key)
         local item = {
             sub_title = label,
+            _zen_search_text = label,
             text_func = function()
                 return label .. ": " .. featured_text_style_summary(mcfg, key)
             end,
@@ -1662,6 +1667,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local style = ensure_strip_cfg(dcfg).controls.text_style
                     return string.format("%s %s", _("Font:"), font_label(style.font_face))
@@ -1743,6 +1749,7 @@ function M.build(ctx)
                             end,
                         }, icons.navbar_tabs),
                         IconItem.decorate({
+                            _zen_search_text = _("Font"),
                             text_func = function()
                                 return _("Font") .. ": " .. strip_control_style_summary(mcfg)
                             end,

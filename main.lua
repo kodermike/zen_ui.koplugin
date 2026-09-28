@@ -831,9 +831,9 @@ function ZenUI:init()
                     if ui and ui.document then ui.tearing_down = was_tearing_down end
                     if not ui then return end
                     if ui.document then
-                        local kindle = require("modules/filebrowser/patches/kindle_virtual_library")
                         library_navigation.showFromReader(ui, _zen_plugin_ref,
-                            { force_default = kindle.isBookPath(ui.document.file) })
+                            { force_default = not library_navigation.restoreEnabled(_zen_plugin_ref)
+                                or not paths.isInHomeDir(ui.document.file) })
                     else
                         local is_default_active = rawget(_G, "__ZEN_UI_NAVBAR_IS_DEFAULT_TAB_ACTIVE")
                         if type(is_default_active) == "function" and is_default_active() then

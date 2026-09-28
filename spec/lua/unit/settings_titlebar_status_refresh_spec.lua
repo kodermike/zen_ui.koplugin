@@ -100,7 +100,8 @@ describe("settings title bar", function()
             return spec
         end
         for _i, name in ipairs(dependency_names) do
-            if name:find("^ui/widget/") or name == "common/ui/zen_icon_button" then
+            if name:find("^ui/widget/") or name == "common/ui/zen_icon_button"
+                    or name == "common/ui/zen_solid_circle" then
                 package.loaded[name].new = new_widget
             end
         end
@@ -120,6 +121,35 @@ describe("settings title bar", function()
         title_bar:init()
         return title_bar
     end
+
+    it("waits for typing to pause before searching settings", function()
+        local queries = {}
+        local text = ""
+        package.loaded["ui/size"].padding = { small = 4 }
+        local title_bar = init_title_bar({
+            title = "Settings", search_expanded = true,
+            search_callback = function(query) queries[#queries + 1] = query end,
+        })
+        title_bar.search_input.getText = function() return text end
+        title_bar.search_input.setText = function(_self, value) text = value end
+
+        text = "f"
+        title_bar.search_input.edit_callback(true)
+        local first = scheduled[1].callback
+        text = "fo"
+        title_bar.search_input.edit_callback(true)
+
+        assert.are.equal(first, unscheduled[1])
+        assert.are.equal(0.15, scheduled[2].delay)
+        scheduled[2].callback()
+        assert.same({ "fo" }, queries)
+
+        text = "foo"
+        title_bar.search_input.edit_callback(true)
+        title_bar:setQuery("other")
+        assert.are.equal(scheduled[3].callback, unscheduled[2])
+        assert.same({ "fo" }, queries)
+    end)
 
     it("omits hidden close controls and their space, and shows them by default", function()
         local closed = false

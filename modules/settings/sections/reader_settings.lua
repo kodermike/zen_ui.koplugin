@@ -504,6 +504,7 @@ function M.build(ctx)
                 sub_item_table = make_header_slot_items("right", _("Arrange right items")),
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
                     local face = type(config.reader_top_status_bar) == "table" and config.reader_top_status_bar.font_face
@@ -537,6 +538,7 @@ function M.build(ctx)
                         end,
                     },
                     {
+                        _zen_search_text = _("Font"),
                         text_func = function()
                             local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
                             local face = type(config.reader_top_status_bar) == "table" and config.reader_top_status_bar.font_face
@@ -578,10 +580,6 @@ function M.build(ctx)
                     },
                     {
                         text = _("Use default font"),
-                        show_func = function()
-                            local ok = pcall(require, "ui/widget/fontchooser")
-                            return ok
-                        end,
                         callback = function(touchmenu_instance)
                             if type(config.reader_top_status_bar) ~= "table" then config.reader_top_status_bar = {} end
                             config.reader_top_status_bar.font_face = "default"
@@ -889,6 +887,7 @@ function M.build(ctx)
             end,
         })
         table.insert(edit_items, {
+            _zen_search_text = _("Theme font"),
             text_func = function()
                 local ok, FontChooser = pcall(require, "ui/widget/fontchooser")
                 local face = editable_theme.font_face

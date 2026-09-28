@@ -52,7 +52,8 @@ local function apply_responsive_keyboard()
         local original_add_keys = VirtualKeyboard.addKeys
         function VirtualKeyboard:addKeys(...)
             local keys = self.KEYS
-            local english_layout = self:getKeyboardLayout() == "en"
+            local layouts = self.lang_to_keyboard_layout
+            local english_layout = (layouts[self:getKeyboardLayout()] or layouts.en) == "en_keyboard"
             local standard_layout = keys and #keys == 5 and #keys[1] == 10
                 and #keys[2] == 10 and #keys[3] == 10 and #keys[4] == 9 and #keys[5] == 7
             if english_layout and self.keyboard_layer > 2 and Device:isTouchDevice()
