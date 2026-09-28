@@ -81,11 +81,9 @@ def test_native_settings_context_layout_selectors_and_defaults(format):
             _select(driver, "KOReader")
             labels = driver.command("settings_page_state")["settings"]["labels"]
             assert labels == ["Navigation", "Typesetting", "Settings", "Tools", "Search", "Main menu"]
-            assert driver.command("settings_page_search", query="layout")["ok"]
-            matches = driver.command("settings_page_state")["settings"]["items"]
-            index = next(index for index, item in enumerate(matches, 1)
-                         if item["label"] == "Layout" and "KOReader" in item["breadcrumb"])
-            assert driver.command("settings_page_select", index=index)["ok"]
+            _select(driver, "Typesetting")
+            _select(driver, "Document settings")
+            _select(driver, "Layout")
             _wait(driver, "settings_page_state", lambda result: result.get("settings", {}).get("title") == "Layout")
             field, label = ("font_size", "Font Size") if format == "epub" else ("contrast", "Contrast")
             state = driver.command("native_settings_state", keys=[field])
