@@ -108,6 +108,29 @@ describe("battery stats", function()
         assert.is_nil(BatteryStats.snapshot().since_charge)
     end)
 
+    it("waits for an hour of discharge data for used and awake rates", function()
+        BatteryStats.start()
+        now, level = now + 1800, 95
+        scheduled[#scheduled].callback()
+        local stats = BatteryStats.snapshot()
+        assert.is_nil(stats.overall)
+        assert.is_nil(stats.awake)
+        assert.is_nil(stats.remaining)
+
+        BatteryStats.suspend()
+        now, level = now + 3600, 94
+        BatteryStats.resume()
+        stats = BatteryStats.snapshot()
+        assert.are.equal(4, stats.overall)
+        assert.is_nil(stats.awake)
+        assert.are.equal(1, stats.asleep)
+
+        now, level = now + 1800, 89
+        scheduled[#scheduled].callback()
+        stats = BatteryStats.snapshot()
+        assert.are.equal(10, stats.awake)
+    end)
+
     it("caps the log and does not write when statistics are viewed", function()
         for i = 1, 520 do
             stored.events[i] = { time = now - (521 - i) * 1800, level = 80,

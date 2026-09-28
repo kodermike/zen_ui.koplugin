@@ -212,10 +212,10 @@ function M.snapshot()
     if current and #events > 0 and events[#events].charging == current.charging then
         accumulate(events[#events], current)
     end
-    local function rate(bucket)
-        return bucket.time > 0 and bucket.loss * 3600 / bucket.time or nil
+    local function rate(bucket, minimum_seconds)
+        return bucket.time >= (minimum_seconds or 1) and bucket.loss * 3600 / bucket.time or nil
     end
-    local overall = rate(total)
+    local overall = rate(total, 3600)
     local full_mah, design_mah, health, current_mah = device_capacity()
     local unplug = settings:readSetting("last_unplug")
     if current and #events > 0 then
@@ -234,7 +234,7 @@ function M.snapshot()
         health = health,
         charging = current and current.charging,
         overall = overall,
-        awake = rate(awake),
+        awake = rate(awake, 3600),
         asleep = rate(asleep),
         awake_time = awake.elapsed,
         asleep_time = asleep.elapsed,
