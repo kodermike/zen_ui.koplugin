@@ -198,10 +198,10 @@ function M.snapshot()
     local function accumulate(first, second)
         if type(first) ~= "table" or type(second) ~= "table" or second.gap then return end
         local elapsed = second.time - first.time
-        if elapsed <= 0 then return end
+        if elapsed <= 0 or first.charging then return end
         local bucket = first.sleeping and asleep or awake
         bucket.elapsed = bucket.elapsed + elapsed
-        if first.charging or first.level < second.level then return end
+        if first.level < second.level then return end
         local loss = first.level - second.level
         bucket.loss = bucket.loss + loss
         bucket.time = bucket.time + elapsed
