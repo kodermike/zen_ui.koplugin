@@ -329,6 +329,7 @@ describe("file browser navbar navigation", function()
             "__ZEN_UI_LIBRARY_STATE", "__ZEN_UI_OPEN_HOME_AFTER_FILEMANAGER",
             "__ZEN_UI_OPEN_TARGET_TAB", "__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB",
             "__ZEN_UI_OPEN_TARGET_FOLDER", "__ZEN_UI_OPEN_TARGET_TAG",
+            "__ZEN_UI_KEEP_BOOK_LOCATION",
             "__ZEN_UI_HIDDEN_HOME_BOOTSTRAP", "__ZEN_UI_DEFER_FILEMANAGER_LISTING",
             "__ZEN_UI_ARCHIVE_LISTING_DIRTY",
         }) do
@@ -623,6 +624,21 @@ describe("file browser navbar navigation", function()
         assert.are.equal("/library", measurement_detail(measurements[1], "path="))
         assert.is_true(measurement_detail(measurements[1], "listing_deferred="))
         assert.is_true(measurement_detail(measurements[1], "covers_suppressed="))
+    end)
+
+    it("keeps FileManager visible when returning to a PDF outside Library", function()
+        local fm = {
+            root_path = "/outside",
+            focused_file = nil,
+        }
+        FileManager.instance = nil
+        _G.__ZEN_UI_KEEP_BOOK_LOCATION = true
+
+        FileManager.setupLayout(fm)
+
+        assert.is_nil(fm.invisible)
+        assert.is_nil(fm._zen_hidden_home_startup)
+        assert.are.equal("/outside", fm.root_path)
     end)
 
     it("opens deferred Home below every existing startup widget without polling", function()

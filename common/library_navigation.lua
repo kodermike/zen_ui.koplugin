@@ -100,7 +100,7 @@ function M.showFromReader(ui, plugin, opts)
         elseif not restore and not outside_home then
             _G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB = true
             default_requested = true
-        elseif outside_home then
+        elseif outside_home and not restore then
             _G.__ZEN_UI_KEEP_BOOK_LOCATION = true
         end
     end

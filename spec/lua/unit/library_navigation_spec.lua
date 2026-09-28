@@ -203,6 +203,18 @@ describe("library navigation", function()
         assert.is_nil(_G.__ZEN_UI_FORCE_DEFAULT_LIBRARY_TAB)
     end)
 
+    it("restores Home after opening an outside PDF from Continue", function()
+        local ui = reader("/outside/Book.pdf")
+        _G.__ZEN_UI_LIBRARY_STATE = { tab = "home" }
+
+        Navigation.showFromReader(ui, {
+            config = { features = { restore_library_view = true } },
+        })
+
+        assert.is_nil(_G.__ZEN_UI_KEEP_BOOK_LOCATION)
+        assert.are.equal("home", _G.__ZEN_UI_LIBRARY_STATE.tab)
+    end)
+
     it("uses KOReader's Android home when no explicit home is stored", function()
         _G.G_reader_settings = ZenSpec.memorySettings({
             allow_commaneer_filemanager = true,

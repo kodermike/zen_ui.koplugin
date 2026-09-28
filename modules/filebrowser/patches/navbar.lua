@@ -3528,6 +3528,7 @@ local function apply_navbar()
                 or rawget(_G, "__ZEN_UI_OPEN_TARGET_TAB") ~= nil
                 or rawget(_G, "__ZEN_UI_OPEN_TARGET_FOLDER") ~= nil
                 or rawget(_G, "__ZEN_UI_OPEN_TARGET_TAG") ~= nil
+                or rawget(_G, "__ZEN_UI_KEEP_BOOK_LOCATION") == true
                 or rawget(_G, "__ZEN_UI_LIBRARY_STATE") ~= nil then
             return false
         end
