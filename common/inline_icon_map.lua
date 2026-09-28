@@ -150,5 +150,7 @@ return {
     double_tap   = "\u{F073C}",
     koreader_menu = "\u{F035C}",  -- mdi-menu
     koreader_file_browser = "\u{F0AB6}",
+    koreader_navigation = "\u{F0B64}",
+    koreader_typesetting = "\u{F09EE}",
     bullet       = "\u{2022}",   -- bullet point
 }

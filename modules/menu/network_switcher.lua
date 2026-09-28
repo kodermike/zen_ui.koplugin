@@ -66,6 +66,11 @@ function M.open(on_connected, settings_subpage, plugin)
             NetworkMgr:openSettings()
             return true
         end
+        if Device.isPocketBook and Device:isPocketBook()
+                and Device.hasWifiToggle and Device:hasWifiToggle() then
+            require("ffi/inkview").OpenBook("/ebrmain/bin/settings.app", nil, 0)
+            return true
+        end
         UIManager:show(InfoMessage:new{text = _("Network selection is not supported on this device.")})
         return false
     end

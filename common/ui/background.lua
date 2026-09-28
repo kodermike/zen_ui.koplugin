@@ -187,6 +187,7 @@ local function get_widget(path, w, h)
         center_y_ratio = 0.5,
         file_do_cache = false,
         alpha = true,
+        original_in_nightmode = false,
     }
     _cache[key] = iw
     return iw

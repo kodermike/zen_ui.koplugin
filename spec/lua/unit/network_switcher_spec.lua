@@ -42,6 +42,7 @@ describe("network switcher", function()
         "ui/network/manager",
         "ui/uimanager",
         "ffi/util",
+        "ffi/inkview",
         "liblipclua",
         "common/inline_icon_map",
         "common/plugin_root",
@@ -413,6 +414,50 @@ describe("network switcher", function()
         network_menu.custom_title_bar.action.callback()
         while #scheduled > 0 do table.remove(scheduled, 1)() end
     end
+
+    it("opens PocketBook settings without changing an active connection", function()
+        ZenSpec.replace("device", {
+            model = "PB700",
+            hasWifiManager = function() return false end,
+            hasWifiToggle = function() return true end,
+            isPocketBook = function() return true end,
+        })
+        local launches, callbacks = 0, 0
+        ZenSpec.replace("ffi/inkview", {
+            OpenBook = function(path, position, flags)
+                assert.are.equal("/ebrmain/bin/settings.app", path)
+                assert.is_nil(position)
+                assert.are.equal(0, flags)
+                launches = launches + 1
+            end,
+        })
+
+        local Switcher = require("modules/menu/network_switcher")
+        assert.is_true(Switcher.open(function() callbacks = callbacks + 1 end))
+        assert.is_true(Switcher.open(nil, true, {}))
+
+        assert.are.equal(2, launches)
+        assert.are.equal(0, callbacks)
+        assert.is_true(NetworkMgr.wifi_on)
+        assert.are.equal("Home", NetworkMgr.current_ssid)
+        assert.is_nil(NetworkMgr.disconnected)
+        assert.is_nil(NetworkMgr.released)
+        assert.is_nil(scan_task)
+        assert.are.same({}, events)
+        assert.are.same({}, shown)
+    end)
+
+    it("keeps devices without Wi-Fi unsupported", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return false end,
+            hasWifiToggle = function() return false end,
+            isPocketBook = function() return true end,
+        })
+        local Switcher = require("modules/menu/network_switcher")
+        assert.is_false(Switcher.open())
+        assert.are.equal("Network selection is not supported on this device.", shown[1].text)
+        assert.is_nil(scan_task)
+    end)
 
     it("opens connected Wi-Fi without scanning or changing the connection", function()
         local Switcher = require("modules/menu/network_switcher")

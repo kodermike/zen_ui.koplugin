@@ -1312,11 +1312,10 @@ function M.build(ctx)
                 checked_func = function()
                     return ensure_lib_bg().invert_with_dark_mode ~= false
                 end,
-                checkmark_callback = function(touchmenu_instance)
+                callback = function()
                     local bg = ensure_lib_bg()
                     bg.invert_with_dark_mode = bg.invert_with_dark_mode == false
                     save_lib_bg()
-                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             },
         },

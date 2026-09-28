@@ -36,15 +36,6 @@ local function apply_context_menu()
     local Geom            = require("ui/geometry")
     local Blitbuffer      = require("ffi/blitbuffer")
     local library_font    = require("modules/filebrowser/patches/library_font")
-    local utils           = require("common/utils")
-    local _icons_dir
-    do
-        local src = debug.getinfo(1, "S").source or ""
-        if src:sub(1, 1) == "@" then
-            local root = src:sub(2):match("^(.*)/modules/")
-            if root then _icons_dir = root .. "/icons/" end
-        end
-    end
 
     local function archive_context_row(fm, file, is_file)
         local config = zen_plugin and zen_plugin.config

@@ -57,6 +57,9 @@ describe("library background cleanup", function()
                         assert.is_true(options.alpha)
                         assert.are.equal("white", buffer.fill_color)
                         buffer.image_paints = buffer.image_paints + 1
+                        if screen.night_mode and options.original_in_nightmode ~= false then
+                            buffer:invertRect()
+                        end
                     end,
                     free = function() end,
                 }

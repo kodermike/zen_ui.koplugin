@@ -223,7 +223,7 @@ function M.settingsItems(scope)
         filemanager_settings = icons.koreader_file_browser,
         setting = icons.settings, tools = icons.settings_advanced,
         search = icons.search, main = icons.koreader_menu,
-        navi = icons.settings_navbar, typeset = icons.settings_reader,
+        navi = icons.koreader_navigation, typeset = icons.koreader_typesetting,
     }
     local injected = { zen_ui = true, zen_library_home = true, quicksettings = true,
         app_launcher = true, filemanager = true }
