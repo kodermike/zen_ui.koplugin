@@ -2,7 +2,7 @@
 title: About
 category: About
 summary: View version and device information or open support tools.
-settingsPath: Zen Settings > General > About
+settingsPath: Zen Settings > About
 order: 80
 ---
 

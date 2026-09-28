@@ -156,10 +156,6 @@ function M.build(plugin)
         text = _("Updates"),
         sub_item_table = updates_items,
     }, icons.upgrade))
-    table.insert(general_items, IconItem.decorate({
-        text = _("About"),
-        sub_item_table = about_items,
-    }, icons.settings_about))
 
     extras_items = utils.order_items_by_text(extras_items, {
         _("Install ZenPM"),
@@ -203,8 +199,9 @@ function M.build(plugin)
             sub_item_table = interface_items,
             _zen_settings_root = "interface",
         }, icons.settings_global),
-        IconItem.decorate({ text = _("General"), sub_item_table = general_items }, icons.settings),
         IconItem.decorate({ text = _("Extras"), sub_item_table = extras_items }, icons.fav_add),
+        { text = "", enabled = false },
+        IconItem.decorate({ text = _("General"), sub_item_table = general_items }, icons.settings),
         {
             text = _("KOReader"),
             icon_file = plugin_root .. "/icons/koreader.png",
@@ -213,6 +210,7 @@ function M.build(plugin)
                 return require("modules/menu/app_launcher/native_menu").settingsItems("active")
             end,
         },
+        IconItem.decorate({ text = _("About"), sub_item_table = about_items }, icons.settings_about),
     }
 
     root_items._zen_header_action_func = function()

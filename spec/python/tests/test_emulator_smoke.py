@@ -588,13 +588,13 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             assert settings.get("title_font_size") == settings["row_style"]["font_size"]
             assert settings.get("title_bold") is True
             assert settings.get("labels") == [
-                "Home", "Library", "Reader", "Interface", "General", "Extras", "KOReader",
+                "Home", "Library", "Reader", "Interface", "Extras", "", "General", "KOReader", "About",
             ]
             assert driver.command("settings_page_select", label="Interface")["ok"] is True
             interface_labels = driver.command("settings_page_state")["settings"]["labels"]
             assert interface_labels[:3] == ["Controls", "Launcher", "Navbar"]
             assert interface_labels[3].startswith("Font:")
-            assert interface_labels[4:] == ["Zen Keyboard", "Zen Search", "Custom icons"]
+            assert interface_labels[4:] == ["Zen Keyboard", "Zen Search", "Wallpaper", "Custom icons"]
             assert driver.command("settings_page_select", label=interface_labels[3])["ok"] is True
             font_labels = driver.command("settings_page_state")["settings"]["labels"]
             assert font_labels[0].startswith("Font size:")
@@ -605,7 +605,7 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             assert driver.command("settings_page_select", label="General")["ok"] is True
             general_labels = driver.command("settings_page_state")["settings"]["labels"]
             expected_general = [
-                "Wi-Fi", "Schedules", "Sleep", "Language", "Time and date", "Advanced", "Updates", "About",
+                "Wi-Fi", "Schedules", "Sleep", "Language", "Time and date", "Advanced", "Updates",
             ]
             if "Bluetooth" in general_labels:
                 expected_general.insert(1, "Bluetooth")

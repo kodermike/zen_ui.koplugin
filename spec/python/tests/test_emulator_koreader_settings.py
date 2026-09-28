@@ -54,12 +54,12 @@ def test_native_settings_context_layout_selectors_and_defaults(format):
             assert driver.command("open_settings_page")["ok"]
             _wait(driver, "settings_page_state", lambda result: result.get("ok") is True)
             labels = driver.command("settings_page_state")["settings"]["labels"]
-            assert labels[-1] == "KOReader"
+            assert labels[-2] == "KOReader"
             settings = driver.command("settings_page_state")["settings"]
             while settings["page"] < settings["page_count"]:
                 assert driver.command("settings_page_footer_tap", zone="right")["ok"]
                 settings = driver.command("settings_page_state")["settings"]
-            logo = settings["items"][-1]
+            logo = settings["items"][-2]
             assert logo["icon_file"].endswith("/icons/koreader.png")
             bounds = logo["icon_bounds"]
             slot_center = settings["row_alignment"]["text_x"] - settings["standard_style"]["icon_width"] / 2 - settings["icon_gap"]
