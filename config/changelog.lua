@@ -361,6 +361,7 @@ return {
         "Add manual order TBR (TBR Context menu > Sort > Order)",
         "Add Zen Settings option to be in Controls",
         "Add Launcher button to Controls",
+        "Add battery stats to General settings",
         "Add Kobo bluetooth control (KLC, Mediatek, Sage, Clara 2E)",
         "Add single tap context menu when double tap open is enabled",
         "Add more options to Book Switcher - # of books, remove book, hide finished",
