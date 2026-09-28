@@ -16,7 +16,7 @@ order: 10
 
 ## Overview
 
-Build a personal Home page from date and time, featured book, reading stats, reading goals, book strip, and quotes widgets. The layout uses a responsive capacity grid so it can make better use of taller or wider screens while keeping widget proportions predictable. Use a built-in preset or save your own layout.
+Home settings let you arrange the start page's widgets and choose the books, statistics, goals, and quotes they show. You can also manage layout presets, text styles, and the Home status bar.
 
 ## Options
 

@@ -3,8 +3,14 @@ title: KOReader
 category: KOReader
 summary: Access KOReader menus and document layout controls through Zen settings.
 settingsPath: Zen Settings > KOReader
-order: 100
+order: 75
 ---
+
+## Overview
+
+KOReader gives access to its native menus and document settings within Zen Settings. Available tools depend on whether you are browsing books or reading one.
+
+## Menus and layout
 
 If accessed from the library, just like in KOReader, the menu contains File browser, Settings, Tools, Search, and Main menu. While reading, it contains Navigation, Typesetting, Settings, Tools, Search, and Main menu.
 

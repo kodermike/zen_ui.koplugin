@@ -1,5 +1,6 @@
 common/arrange_state.lua|unit
 common/archive_actions.lua|unit
+common/battery_stats.lua|unit
 common/author_sort.lua|unit
 common/book_open_tap.lua|unit
 _meta.lua|load

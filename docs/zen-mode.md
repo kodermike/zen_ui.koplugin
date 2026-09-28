@@ -1,6 +1,6 @@
 ---
 title: Zen Mode
-category: Zen Mode
+category: Interface
 summary: Simplify KOReader
 settingsPath: Zen Settings > Interface > Controls > Buttons > Zen mode
 order: 30

@@ -1,6 +1,6 @@
 ---
 title: Launcher
-category: Launcher
+category: Interface
 summary: Customizable app launcher with action buttons, plugin buttons, and folders.
 settingsPath: Zen Settings > Interface > Launcher
 order: 40

@@ -1,6 +1,6 @@
 ---
 title: Updates
-category: Updates
+category: General
 summary: Update ZenOS and KOReader, read the changelog, and configure the update channel and automatic checks.
 settingsPath: Zen Settings > General > Updates
 order: 79

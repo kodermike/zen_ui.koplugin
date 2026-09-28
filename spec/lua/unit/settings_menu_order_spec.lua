@@ -17,16 +17,33 @@ describe("settings menu organization", function()
         end
 
         replace("gettext", function(text) return text end)
-        replace("ui/uimanager", {})
+        local shown_dialog, reset_calls, menu_updates, has_current_capacity, missing_stats
+        replace("ui/uimanager", { show = function(_, dialog) shown_dialog = dialog end })
+        replace("ui/widget/confirmbox", { new = function(_, dialog) return dialog end })
         replace("common/shutdown", {})
         replace("modules/settings/zen_settings_apply", {})
         replace("modules/settings/zen_updater", {
             init_banner = function() end,
             build_update_available_action = function() end,
         })
+        replace("common/battery_stats", {
+            snapshot = function()
+                if missing_stats == "none" then return nil end
+                if missing_stats == "partial" then return { samples = 0 } end
+                return { level = 80, overall = 0.5, awake = 1, asleep = 0.1,
+                    awake_time = 7200, asleep_time = 14400,
+                    current_mah = has_current_capacity and 600 or nil,
+                    full_mah = 1200, design_mah = 1600, health = 75, remaining = 576000,
+                    since_charge = 3600, samples = reset_calls > 0 and 0 or 24 }
+            end,
+            reset = function() reset_calls = reset_calls + 1 end,
+        })
+        replace("datetime", { secondsToClockDuration = function(_, seconds) return seconds .. "s" end })
         local interface_icon = require("common/inline_icon_map").settings_global
         assert.are.equal("\u{F0574}", interface_icon)
-        replace("common/inline_icon_map", { settings = "gear", settings_global = interface_icon })
+        replace("common/inline_icon_map", {
+            settings = "gear", settings_global = interface_icon, battery = "battery_icon",
+        })
         replace("common/ui/icon_menu_item", {
             installMenuPatch = function() end,
             decorate = function(item, glyph)
@@ -85,6 +102,7 @@ describe("settings menu organization", function()
         ZenSpec.unload("modules/settings/zen_settings")
         local builder = require("modules/settings/zen_settings")
         for _i, available in ipairs({ false, true }) do
+            reset_calls, menu_updates, has_current_capacity, missing_stats = 0, 0, true, nil
             has_bluetooth = available
             local root = builder.build({ config = { features = {} } }).sub_item_table
             assert.are.same({ "Home", "Library", "Reader", "Interface", "Extras", "", "General", "KOReader", "About" }, labels(root))
@@ -103,9 +121,38 @@ describe("settings menu organization", function()
             assert.are.same({ "Font size", "Font", "Reset font" }, labels(interface[4].sub_item_table))
             assert.are.equal("gear", root[7].icon_glyph)
             local general = root[7].sub_item_table
-            local expected = { "Wi-Fi", "Schedules", "Sleep", "Language", "Time and date", "Advanced", "Updates" }
+            local expected = { "Wi-Fi", "Schedules", "Sleep", "Battery", "Language", "Time and date", "Advanced", "Updates" }
             if available then table.insert(expected, 2, "Bluetooth") end
             assert.are.same(expected, labels(general))
+            local battery_item = general[available and 5 or 4]
+            assert.are.equal("battery_icon", battery_item.icon_glyph)
+            local battery = battery_item.sub_item_table_func()
+            assert.are.equal("Battery percentage: 80%", battery[1].text)
+            assert.are.equal("Current capacity: 600 mAh", battery[2].text)
+            has_current_capacity = false
+            assert.are.equal("Full capacity: 1200 mAh", battery_item.sub_item_table_func()[2].text)
+            has_current_capacity = true
+            assert.are.equal("Full capacity: 1200 mAh", battery[3].text)
+            assert.are.equal("Design capacity: 1600 mAh", battery[4].text)
+            assert.are.equal("Battery health: 75%", battery[5].text)
+            assert.are.equal("While asleep: 0.10%/h", battery[8].text)
+            assert.are.equal("Screen on time: 7200s", battery[9].text)
+            assert.are.equal("Screen off time: 14400s", battery[10].text)
+            assert.are.equal("Tracked samples: 24", battery[13].text)
+            assert.are.equal("Reset battery log", battery[14].text)
+            local battery_menu = { updateItems = function() menu_updates = menu_updates + 1 end }
+            battery[14].callback(battery_menu)
+            assert.are.equal("Reset battery log?", shown_dialog.text)
+            shown_dialog.ok_callback()
+            assert.are.equal(menu_updates, reset_calls)
+            assert.are.equal("Tracked samples: 0", battery_menu.item_table[13].text)
+            missing_stats = "partial"
+            local missing_rows = battery_item.sub_item_table_func()
+            for index = 1, 11 do
+                assert.are.equal(": -", missing_rows[index].text:sub(-3))
+            end
+            missing_stats = "none"
+            assert.are.same({ "-" }, labels(battery_item.sub_item_table_func()))
             assert.are.equal(wifi_item, general[1])
             assert.are.equal(language_item, general[#general - 3])
             assert.are.equal(time_item, general[#general - 2])

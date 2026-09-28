@@ -18,7 +18,6 @@ Advanced settings expose maintenance and lower-level behavior. They include meta
 
 - Extract metadata and cover images for books in the current directory.
 - Toggle partial page refresh.
-- Require two quick taps on the same book before touch input opens it.
 - Show hidden and unsupported files outside the home folder.
 - Toggle KOReader verbose debug logging.
 - Clear gestures while preserving reader top-right bookmark.

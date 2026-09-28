@@ -1,6 +1,6 @@
 ---
 title: Navbar
-category: Navbar
+category: Interface
 summary: The customizable bottom navigation bar
 settingsPath: Zen Settings > Interface > Navbar
 order: 35

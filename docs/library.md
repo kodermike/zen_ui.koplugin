@@ -18,9 +18,7 @@ order: 30
 
 ## Overview
 
-Library settings control the KOReader library. Customize the top status bar, layout, folder display, background image, book details, and metadata tools. Tap and hold on any item in the Library or the Navbar and it will bring up the Context Menu. This is a detailed menu of actions for the currently selected item.
-
-The global ZenOS font family and base text size are configured under **Zen Settings > Interface > Font**. Reader fonts remain under **Reader**.
+Library settings control how books and folders appear and how you browse them. They cover display layouts, sorting, covers, the status bar, home folders, book details, and metadata tools.
 
 ## Options
 
@@ -30,7 +28,6 @@ The global ZenOS font family and base text size are configured under **Zen Setti
 - Optionally flatten subfolders into one library view without changing files on disk.
 - Configure cover badges, progress indicators, uniform cover ratios, rounded corners, title and author text, and finished-book dimming.
 - Configure the scroll bar as a bar, dots, or page number.
-- Set a custom Library wallpaper image.
 - Set and lock the home folder, add extra home folders, and control delete access.
 - Edit book metadata and covers manually or fill them from online providers.
 - Choose and arrange the information shown on Book details pages.
@@ -83,9 +80,6 @@ The global ZenOS font family and base text size are configured under **Zen Setti
 | Scroll bar > Style | Selects bar, dots, or page number scrolling. |
 | Scroll bar > Page number format | Shows the current page only or page x / y when page-number style is active. |
 | Scroll bar > Hold to skip | Sets page-number long-press behavior to skip 10 pages, skip 20 pages, or jump to beginning/end. |
-| Wallpaper > Enable | Shows the selected wallpaper image behind Library surfaces. |
-| Wallpaper > Image | Opens a file chooser for a JPG, JPEG, or PNG wallpaper image. PNG transparency is rendered as white. Hold this row to clear the selected image. |
-| Wallpaper > Invert with dark mode | Inverts the wallpaper in dark mode by default. Turn off to keep its daytime appearance. |
 | Home folder > Set home folder | Opens a folder chooser for the primary library root. |
 | Home folder > Lock home folder | Selects Off, Only in Zen Mode, or Always for navigation outside the home folder. |
 | Home folder > Additional home folders | Adds or removes extra library roots. |
@@ -94,11 +88,9 @@ The global ZenOS font family and base text size are configured under **Zen Setti
 | Double tap to open books | Requires two rapid taps on the same book in Library, Home, or Book switcher before opening it. Keyboard controls are unchanged. Its submenu can make a single tap open the context menu. |
 | Library > Allow delete | Enables or disables delete actions in the library context menu. |
 
-## Fonts
+## To Be Read
 
-The library **Font** settings set the global ZenOS font. You can change the font family and base size, and it applies across the whole interface — library, navbar, home, menus, status bars — everything except the reader.
-
-The reader has its own separate font controls, so you can give the reading view a different font, size, and bold setting from the rest of the UI.
+To add a book to To Be Read, hold it in the Library and choose **Read status > To Be Read**. It then appears in To Be Read Navbar tabs and Home widgets that use that source. **Include new books in TBR** also includes unread or modified books without changing their saved read status.
 
 ## Metadata editor
 
@@ -131,10 +123,6 @@ For EPUB files, ZenOS writes supported metadata into the book after confirmation
 Long-press a folder and open **Edit > Set folder cover** to see a full-screen vertical mosaic of cover slots and their current previews. Each row places the preview on the left, **Cover N** vertically centered, and a Zen **Clear** button at the far right. Tap a cover or press OK/Enter on its focused row to choose an image; press and hold it or tap **Clear** to remove the reference. Single-cover mode offers one slot; gallery and stack modes show all four slots together on one page without pagination. Previews scale to fit the page while using the same aspect ratio, crop mode, and rounded-corner styling as the Library file picker. A gallery or stack with only one chosen or automatic cover is displayed as one full-size cover, and chosen covers are not filled out with automatic book covers.
 
 ZenOS stores only a reference to each chosen image: it does not copy the image into the folder or modify the source file, so the source must remain available at the selected location. Folder covers accept case-insensitive `.jpg` and `.jpeg` files. You can also manage them manually as `cover.jpg`, `cover.jpeg`, `cover1.jpg`, `cover1.jpeg`, and the equivalent names through `cover4`; these managed images stay hidden in the Library file list and override covers generated from the folder's contents. PNG, WebP, GIF, and other formats are not treated as folder covers and remain visible.
-
-## Library Wallpaper
-
-Use **Zen Settings > Library > Wallpaper > Enable** and **Zen Settings > Library > Wallpaper > Image** to add a custom JPG/JPEG or PNG wallpaper to the Library. Transparent PNG pixels are rendered as white. Changing or clearing the wallpaper refreshes the Library, Home, and Navbar surfaces so the new image is applied without hunting through separate settings.
 
 ## Context menu
 

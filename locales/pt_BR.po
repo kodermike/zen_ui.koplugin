@@ -6597,3 +6597,59 @@ msgstr "1 arquivo"
 #: modules/filebrowser/patches/context_menu.lua
 msgid "%1 files"
 msgstr "%1 arquivos"
+
+#. Battery statistics
+msgid "Used per hour"
+msgstr "Consumo por hora"
+
+#. Battery statistics
+msgid "While awake"
+msgstr "Em uso"
+
+#. Battery statistics
+msgid "While asleep"
+msgstr "Em suspensão"
+
+#. Battery statistics
+msgid "Estimated time remaining"
+msgstr "Autonomia restante estimada"
+
+#. Battery statistics
+msgid "Time since last charge"
+msgstr "Tempo desde a última recarga"
+
+#. Battery statistics
+msgid "Tracked samples"
+msgstr "Amostras registradas"
+
+#. Battery statistics
+msgid "Charging"
+msgstr "Carregando"
+
+#. Battery statistics
+msgid "Full capacity"
+msgstr "Capacidade com carga completa"
+
+#. Battery statistics
+msgid "Battery health"
+msgstr "Saúde da bateria"
+
+#. Battery statistics
+msgid "Design capacity"
+msgstr "Capacidade de projeto"
+
+#. Battery statistics
+msgid "Current capacity"
+msgstr "Capacidade atual"
+
+#. Battery statistics
+msgid "Reset battery log"
+msgstr "Zerar registro da bateria"
+
+#. Battery statistics
+msgid "Screen on time"
+msgstr "Tempo de tela ligada"
+
+#. Battery statistics
+msgid "Screen off time"
+msgstr "Tempo de tela desligada"

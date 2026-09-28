@@ -6597,3 +6597,59 @@ msgstr "1 個檔案"
 #: modules/filebrowser/patches/context_menu.lua
 msgid "%1 files"
 msgstr "%1 個檔案"
+
+#. Battery statistics
+msgid "Used per hour"
+msgstr "每小時耗電"
+
+#. Battery statistics
+msgid "While awake"
+msgstr "喚醒時"
+
+#. Battery statistics
+msgid "While asleep"
+msgstr "休眠時"
+
+#. Battery statistics
+msgid "Estimated time remaining"
+msgstr "預計剩餘續航時間"
+
+#. Battery statistics
+msgid "Time since last charge"
+msgstr "距離上次充電時間"
+
+#. Battery statistics
+msgid "Tracked samples"
+msgstr "已記錄的取樣數"
+
+#. Battery statistics
+msgid "Charging"
+msgstr "充電中"
+
+#. Battery statistics
+msgid "Full capacity"
+msgstr "滿電容量"
+
+#. Battery statistics
+msgid "Battery health"
+msgstr "電池健康度"
+
+#. Battery statistics
+msgid "Design capacity"
+msgstr "設計容量"
+
+#. Battery statistics
+msgid "Current capacity"
+msgstr "目前容量"
+
+#. Battery statistics
+msgid "Reset battery log"
+msgstr "重設電池記錄"
+
+#. Battery statistics
+msgid "Screen on time"
+msgstr "亮屏時間"
+
+#. Battery statistics
+msgid "Screen off time"
+msgstr "熄屏時間"

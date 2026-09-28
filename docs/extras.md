@@ -10,7 +10,7 @@ order: 60
 
 ## Overview
 
-Extras collects optional additions that fall outside of the Library/Reader. It includes Stats, ZenPM installation, Zen OPDS, TBR behavior, Rakuyomi return behavior, and Lockdown Mode. Schedules and sleep settings live in General. Custom icons, Zen Keyboard, and Zen Search live in Interface.
+Extras contains optional tools and integrations. It covers reading statistics, plugin installation, OPDS browsing, Rakuyomi behavior, and Lockdown Mode.
 
 ## ZenPM
 
@@ -36,25 +36,6 @@ Use the switch on **Zen Settings > Extras > Zen OPDS** to apply ZenOS styling to
 
 Tap and hold any item to open the OPDS context menu for per-item actions.
 
-## To Be Read
-
-To add one book to your To Be Read list, tap and hold it in the Library, choose **Read status**, then choose **To Be Read**. The book appears in the To Be Read Navbar tab and anywhere the Home Featured or unified Strip widget uses To Be Read as its source.
-
-To include every new book automatically, enable **Zen Settings > Library > Include new books in TBR**. This adds books with the New status to the To Be Read Navbar tab and Home widgets without changing their saved read status. New includes unread books and books modified since they were last opened.
-
-## Custom Icons
-
-The bundled ZenOS and KOReader icons remain the default. To use loose icon
-overrides, turn on the switch at **Zen Settings > Interface > Custom icons** and place them directly in
-`/koreader/icons` as before.
-
-For a named pack, copy its folder or ZIP into `/koreader/icons/zen`, enable
-custom icons, and select it under **Zen Settings > Interface > Custom icons > Custom icon pack**. Valid ZIPs are
-installed automatically. See [Custom Icon Packs](/zen-os/docs/icon-packs) for the complete
-installation and authoring guide.
-
-> Note: Icons placed directly inside `/koreader/plugins/zenos.koplugin/icons` are erased on updates, so do not put custom icons there.
-
 ## Rakuyomi
 
 Enable **Zen Settings > Extras > Rakuyomi > Return to chapter list on exit** to keep the current behavior: Rakuyomi-owned books return to the manga chapter list when you exit the reader.
@@ -63,19 +44,9 @@ Disable it to return to the Rakuyomi library view instead.
 
 Enable **Exclude from Home** to keep Rakuyomi chapters out of recent Home content.
 
-## Schedules
+## Lockdown Mode
 
-Use **Zen Settings > General > Schedules** for automatic brightness, night mode, and warmth changes. Brightness and warmth can follow either a clock schedule or KOReader's light/dark mode, with separate values for each state. These two methods are mutually exclusive for each setting: enabling a schedule turns off its light/dark values, and enabling light/dark values turns off its schedule.
-
-Lighting automation disables KOReader's Auto warmth and night mode plugin because it would compete for the same device controls. Warmth settings appear only on devices with natural-light support.
-
-## Search, Sleep, And Lockdown
-
-Use the switch on **Zen Settings > Interface > Zen Search** to enable or disable Zen Search. Open its submenu to switch library search between substring and whole-word matching. Zen Keyboard and Zen Search appear directly after Font in Interface.
-
-Use **Zen Settings > General > Sleep** for KOReader sleep screen controls, sleep presets, automatic dimmer, and automatic suspend integrations when available.
-
-Use **Zen Settings > Extras > Lockdown mode** to configure library, Controls, and reader restrictions.
+Use **Lockdown mode** to configure library, Controls, and reader restrictions. See [Lockdown Mode](/zen-os/docs/lockdown-mode) for details.
 
 ## Setting reference
 
@@ -89,17 +60,6 @@ Use **Zen Settings > Extras > Lockdown mode** to configure library, Controls, an
 | Extras > Install ZenPM | Installs the Zen plugin manager on supported non-Android ARM devices. |
 | Extras > Zen OPDS | Enables ZenOS OPDS enhancements, including cover art, list/mosaic view, hold menu, and navigation changes. |
 | Extras > Zen OPDS > Display mode | Selects mosaic, list, or classic OPDS display mode. |
-| Library > Include new books in TBR | Adds books with the New status to the To Be Read tab and Home widgets. New includes unread books and books modified since they were last opened. |
-| Interface > Custom icons | Enables loose icon overrides or the selected ZenOS icon pack with the row's switch. |
-| Interface > Custom icons > Custom icon pack | Installs ZIPs from `/koreader/icons/zen` and selects an unpacked pack. |
 | Extras > Rakuyomi > Exclude from Home | Keeps Rakuyomi chapters out of recent Home content. |
 | Extras > Rakuyomi > Return to chapter list on exit | Returns Rakuyomi-owned books to their manga chapter list when exiting the reader. Disable this to return to Rakuyomi library view. |
-| Interface > Zen Search | Enables Zen Search in the file browser and reader; changes require a restart. |
-| Interface > Zen Search > Match whole words | Uses whole-word search instead of substring search. |
-| General > Schedules > Brightness > Enable brightness schedule | Enables automatic frontlight brightness changes and sets day/night times and values. |
-| General > Schedules > Brightness > Light mode / Dark mode brightness | Applies separate brightness values as KOReader changes between light and dark mode, without requiring a clock schedule. |
-| General > Schedules > Night mode schedule > Enable night mode schedule | Enables automatic night mode changes and sets on/off times. |
-| General > Schedules > Warmth > Enable warmth schedule | Enables automatic warmth changes and sets day/night times and values on natural-light devices. |
-| General > Schedules > Warmth > Light mode / Dark mode warmth | Applies separate warmth values as KOReader changes between light and dark mode, without requiring a clock schedule. |
-| General > Sleep | Shows supported sleep screen controls, sleep presets, automatic dimmer, and automatic suspend integrations. |
 | Extras > Lockdown mode | Configures library, Controls, and reader restrictions for Lockdown Mode. |

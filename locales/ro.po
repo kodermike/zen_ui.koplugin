@@ -6597,3 +6597,59 @@ msgstr "1 fișier"
 #: modules/filebrowser/patches/context_menu.lua
 msgid "%1 files"
 msgstr "%1 fișiere"
+
+#. Battery statistics
+msgid "Used per hour"
+msgstr "Consum pe oră"
+
+#. Battery statistics
+msgid "While awake"
+msgstr "În stare activă"
+
+#. Battery statistics
+msgid "While asleep"
+msgstr "În repaus"
+
+#. Battery statistics
+msgid "Estimated time remaining"
+msgstr "Autonomie rămasă estimată"
+
+#. Battery statistics
+msgid "Time since last charge"
+msgstr "Timp de la ultima încărcare"
+
+#. Battery statistics
+msgid "Tracked samples"
+msgstr "Eșantioane înregistrate"
+
+#. Battery statistics
+msgid "Charging"
+msgstr "Se încarcă"
+
+#. Battery statistics
+msgid "Full capacity"
+msgstr "Capacitate la încărcare completă"
+
+#. Battery statistics
+msgid "Battery health"
+msgstr "Starea bateriei"
+
+#. Battery statistics
+msgid "Design capacity"
+msgstr "Capacitate proiectată"
+
+#. Battery statistics
+msgid "Current capacity"
+msgstr "Capacitate curentă"
+
+#. Battery statistics
+msgid "Reset battery log"
+msgstr "Resetează jurnalul bateriei"
+
+#. Battery statistics
+msgid "Screen on time"
+msgstr "Timp cu ecranul pornit"
+
+#. Battery statistics
+msgid "Screen off time"
+msgstr "Timp cu ecranul oprit"

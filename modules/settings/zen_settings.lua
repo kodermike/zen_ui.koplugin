@@ -149,6 +149,65 @@ function M.build(plugin)
     move_item(about_items, _("Bluetooth"), general_items)
     move_item(extras_items, _("Schedules"), general_items)
     move_item(extras_items, _("Sleep"), general_items)
+    local battery_item
+    battery_item = IconItem.decorate({
+        text = _("Battery"),
+        sub_item_table_func = function()
+            local BatteryStats = require("common/battery_stats")
+            local stats = BatteryStats.snapshot()
+            local missing = "-"
+            if not stats then return {{ text = missing, keep_menu_open = true }} end
+            local datetime = require("datetime")
+            local duration_format = G_reader_settings:readSetting("duration_format", "classic")
+            local function duration(seconds)
+                return seconds and datetime.secondsToClockDuration(
+                    duration_format, seconds, true, true) or missing
+            end
+            local function rate(value)
+                return value and string.format("%.2f%%/h", value) or missing
+            end
+            local function row(label, value)
+                return { text = label .. ": " .. value, keep_menu_open = true }
+            end
+            local items = {
+                row(_("Battery percentage"), stats.level and stats.level .. "%" or missing),
+                row(_("Full capacity"), stats.full_mah and string.format("%.0f mAh", stats.full_mah) or missing),
+                row(_("Design capacity"), stats.design_mah and string.format("%.0f mAh", stats.design_mah) or missing),
+                row(_("Battery health"), stats.health and string.format("%.0f%%", stats.health) or missing),
+                row(_("Used per hour"), rate(stats.overall)),
+                row(_("While awake"), rate(stats.awake)),
+                row(_("While asleep"), rate(stats.asleep)),
+                row(_("Screen on time"), duration(stats.awake_time)),
+                row(_("Screen off time"), duration(stats.asleep_time)),
+                row(_("Estimated time remaining"), duration(stats.remaining)),
+                row(_("Time since last charge"), stats.charging and _("Charging") or duration(stats.since_charge)),
+                row(_("Tracked samples"), tostring(stats.samples)),
+                {
+                    text = _("Reset battery log"),
+                    separator = true,
+                    keep_menu_open = true,
+                    callback = function(touchmenu)
+                        UIManager:show(require("ui/widget/confirmbox"):new{
+                            text = _("Reset battery log") .. "?",
+                            ok_text = _("Reset"),
+                            ok_callback = function()
+                                BatteryStats.reset()
+                                if touchmenu and touchmenu.updateItems then
+                                    touchmenu.item_table = battery_item.sub_item_table_func()
+                                    touchmenu:updateItems()
+                                end
+                            end,
+                        })
+                    end,
+                },
+            }
+            if stats.current_mah then
+                table.insert(items, 2, row(_("Current capacity"), string.format("%.0f mAh", stats.current_mah)))
+            end
+            return items
+        end,
+    }, icons.battery)
+    table.insert(general_items, battery_item)
     table.insert(general_items, language_item)
     table.insert(general_items, time_item)
     move_item(about_items, _("Advanced"), general_items)

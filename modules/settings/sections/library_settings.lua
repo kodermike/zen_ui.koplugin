@@ -1745,7 +1745,7 @@ function M.build(ctx)
                 end,
             },
         },
-    }, icons.more))
+    }, icons.more_vertical))
 
     return items
 end

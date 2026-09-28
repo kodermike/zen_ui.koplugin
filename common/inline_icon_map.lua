@@ -68,6 +68,7 @@ return {
     plugin       = "\u{F06A5}",
     action       = "\u{F140B}",
     more         = "\u{F01D8}",  -- mdi-dots-horizontal
+    more_vertical = "\u{F01D9}",  -- mdi-dots-vertical
     settings       = "\u{F0493}",
 
     -- network / sync (opds.lua)
@@ -101,6 +102,7 @@ return {
     widgets           = "\u{F072C}",
     settings_global   = "\u{F0574}",
     settings_status   = "\u{F12F0}",
+    battery           = "\u{F0079}",  -- mdi-battery
     reader_themes     = "\u{F03D8}",
     settings_folders  = "\u{F0256}",
     settings_covers   = "\u{F168B}",  -- mdi-view-module

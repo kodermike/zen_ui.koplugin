@@ -61,6 +61,7 @@ local _ = require("gettext")
 local _pt_active = package.loaded["ptutil"] ~= nil
 
 local ConfigManager = require("config/manager")
+local BatteryStats = require("common/battery_stats")
 local _startup_config = ConfigManager.load()
 local registry = require("modules/registry")
 local zen_settings_page = require("modules/settings/zen_settings_page")
@@ -232,6 +233,7 @@ function ZenUI:init()
     end
     i18n.refresh()
     self.config = ConfigManager.load()
+    BatteryStats.start()
     if _plugin_root then
         require("common/utils").copyDefaultCustomTabIcon(
             _plugin_root .. "/icons/", self.config and self.config.navbar)
@@ -946,6 +948,7 @@ end
 -- Also called from init() so a fresh KOReader start triggers the same check.
 function ZenUI:onResume()
     if self._zenos_brand_inert then return end
+    BatteryStats.resume()
     zen_updater.schedule_wakeup_check()
     local ok_incognito, Incognito = pcall(require, "modules/global/patches/incognito_mode")
     if ok_incognito and type(Incognito.onResume) == "function" then
@@ -989,12 +992,23 @@ end
 -- On suspend: cancel the pending timer so checks don't run while asleep.
 function ZenUI:onSuspend()
     if self._zenos_brand_inert then return end
+    BatteryStats.suspend()
     zen_updater.cancel_wakeup_check()
     require("modules/menu/bluetooth/bluetooth").onSuspend()
     local ok_incognito, Incognito = pcall(require, "modules/global/patches/incognito_mode")
     if ok_incognito and type(Incognito.onSuspend) == "function" then
         Incognito.onSuspend()
     end
+end
+
+function ZenUI:onCharging()
+    if self._zenos_brand_inert then return end
+    BatteryStats.chargingChanged()
+end
+
+function ZenUI:onNotCharging()
+    if self._zenos_brand_inert then return end
+    BatteryStats.chargingChanged()
 end
 
 local function close_zen_standalone_views(shared)
@@ -1020,6 +1034,7 @@ end
 
 function ZenUI:onCloseWidget()
     if self._zenos_brand_inert then return end
+    BatteryStats.stop()
     cancel_item_table_cache_persist()
     close_zen_standalone_views(self._zen_shared)
 end
@@ -1028,6 +1043,7 @@ end
 -- the "delete plugin settings" action during disable/uninstall.
 function ZenUI:deletePluginSettings()
     zen_updater.cancel_wakeup_check()
+    BatteryStats.stop()
     zen_updater._on_update_found = nil
     cancel_item_table_cache_persist()
 
