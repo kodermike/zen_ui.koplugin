@@ -14,7 +14,11 @@ General contains device and system settings. Use it to manage wireless connectio
 
 Battery shows the current charge, estimated drain per hour overall and during awake and asleep periods, screen on and off time, estimated time remaining, and time since the last charge. It also lets you reset the battery log.
 
-Capacity in mAh appears only when the device reports charge capacity. Battery health requires both full and design charge values, with empty thresholds included when available; percentage alone cannot provide either value. ZenOS samples every 30 minutes while awake and at power and sleep changes, keeping up to 512 samples from the last 30 days.
+ZenOS records the battery percentage every 30 minutes while awake, and when the device sleeps, wakes, or changes charging state. It keeps the most recent 512 samples, with no calendar cutoff. Drain rates divide the total percentage points lost by the elapsed hours between samples: for example, a 5-point drop in 2 hours is 2.5% per hour. Overall, awake, and asleep rates use the same calculation on their respective intervals. Charging intervals, rising battery readings, and gaps while KOReader was closed are excluded. Screen on and off time total the tracked awake and asleep intervals, so they are approximations rather than direct screen measurements.
+
+Estimated time remaining divides the current percentage by the overall drain rate; it is unavailable until there is usable discharge history. Time since last charge starts when charging stops. If ZenOS cannot establish that time, the value is unavailable. Reset battery log clears the samples and last-charge time.
+
+Current, full, and design capacity in mAh appear only when the device reports charge values. ZenOS converts reported microamp-hours to mAh and subtracts the matching empty thresholds when available. Battery health is full capacity divided by design capacity, multiplied by 100; battery percentage alone cannot provide capacity or health.
 
 ## Schedules and sleep
 

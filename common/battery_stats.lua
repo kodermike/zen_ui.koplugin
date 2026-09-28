@@ -5,7 +5,6 @@ local UIManager = require("ui/uimanager")
 
 local M = {}
 local SAMPLE_SECONDS = 30 * 60
-local RETAIN_SECONDS = 30 * 24 * 60 * 60
 local MAX_EVENTS = 512
 local settings
 local sleeping = false
@@ -83,8 +82,8 @@ local function device_capacity()
     return full_mah, design_mah, health, current_mah
 end
 
-local function trim(events, now)
-    while #events > MAX_EVENTS or (#events > 1 and events[1].time < now - RETAIN_SECONDS) do
+local function trim(events)
+    while #events > MAX_EVENTS do
         table.remove(events, 1)
     end
 end
@@ -111,7 +110,7 @@ local function sample(gap, charging_event)
         end
     end
     events[#events + 1] = event
-    trim(events, event.time)
+    trim(events)
     settings:flush()
 end
 
@@ -199,7 +198,7 @@ function M.snapshot()
     local function accumulate(first, second)
         if type(first) ~= "table" or type(second) ~= "table" or second.gap then return end
         local elapsed = second.time - first.time
-        if elapsed <= 0 or elapsed > RETAIN_SECONDS then return end
+        if elapsed <= 0 then return end
         local bucket = first.sleeping and asleep or awake
         bucket.elapsed = bucket.elapsed + elapsed
         if first.charging or first.level < second.level then return end

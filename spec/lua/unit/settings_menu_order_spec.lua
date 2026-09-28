@@ -105,11 +105,10 @@ describe("settings menu organization", function()
             reset_calls, menu_updates, has_current_capacity, missing_stats = 0, 0, true, nil
             has_bluetooth = available
             local root = builder.build({ config = { features = {} } }).sub_item_table
-            assert.are.same({ "Home", "Library", "Reader", "Interface", "Extras", "", "General", "KOReader", "About" }, labels(root))
-            assert.is_false(root[6].enabled)
-            assert.is_function(root[8].sub_item_table_func)
-            assert.are.equal("koreader.png", root[8].icon_file:match("([^/]+)$"))
-            assert.is_nil(root[8].icon_glyph)
+            assert.are.same({ "Home", "Library", "Reader", "Interface", "Extras", "General", "KOReader", "About" }, labels(root))
+            assert.is_function(root[7].sub_item_table_func)
+            assert.are.equal("koreader.png", root[7].icon_file:match("([^/]+)$"))
+            assert.is_nil(root[7].icon_glyph)
             local interface = root[4].sub_item_table
             assert.are.equal("interface", root[4]._zen_settings_root)
             assert.are.equal(interface_icon, root[4].icon_glyph)
@@ -119,8 +118,8 @@ describe("settings menu organization", function()
             assert.are.equal(wallpaper_item, interface[7])
             assert.are.equal("Font: Hyperreadable, 24", interface[4].text_func())
             assert.are.same({ "Font size", "Font", "Reset font" }, labels(interface[4].sub_item_table))
-            assert.are.equal("gear", root[7].icon_glyph)
-            local general = root[7].sub_item_table
+            assert.are.equal("gear", root[6].icon_glyph)
+            local general = root[6].sub_item_table
             local expected = { "Wi-Fi", "Schedules", "Sleep", "Battery", "Language", "Time and date", "Advanced", "Updates" }
             if available then table.insert(expected, 2, "Bluetooth") end
             assert.are.same(expected, labels(general))
@@ -161,7 +160,7 @@ describe("settings menu organization", function()
             assert.are.same({ "Original control" }, labels(general[#general].sub_item_table))
             assert.are.same({ "Original control", "Double tap to open books" }, labels(root[2].sub_item_table))
             assert.are.equal(double_tap_item, root[2].sub_item_table[#root[2].sub_item_table])
-            assert.are.same({ "Version", "Device", "Setup Guide", "Report a Bug", "Quit KOReader" }, labels(root[9].sub_item_table))
+            assert.are.same({ "Version", "Device", "Setup Guide", "Report a Bug", "Quit KOReader" }, labels(root[8].sub_item_table))
             assert.are.same({ "Install ZenPM", "Zen OPDS", "Stats", "Rakuyomi", "Lockdown mode" }, labels(root[5].sub_item_table))
         end
         package.loaded["modules/settings/zen_settings"] = original_builder

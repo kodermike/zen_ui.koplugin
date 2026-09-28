@@ -120,6 +120,19 @@ describe("battery stats", function()
         assert.are.equal(before, writes)
     end)
 
+    it("keeps old samples and counts intervals longer than 30 days", function()
+        now, level = 10000000, 70
+        stored.events = {
+            { time = now - 50 * 86400, level = 80, charging = false, sleeping = false },
+            { time = now - 10 * 86400, level = 70, charging = false, sleeping = false },
+        }
+        BatteryStats.start()
+        local stats = BatteryStats.snapshot()
+        assert.are.equal(3, stats.samples)
+        assert.are.equal(40 * 86400, stats.awake_time)
+        assert.are.equal(10 * 3600 / (40 * 86400), stats.overall)
+    end)
+
     it("resets samples, unplug time, and the old log backup", function()
         BatteryStats.start()
         now, level = now + 1800, 95

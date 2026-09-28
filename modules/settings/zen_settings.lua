@@ -259,7 +259,6 @@ function M.build(plugin)
             _zen_settings_root = "interface",
         }, icons.settings_global),
         IconItem.decorate({ text = _("Extras"), sub_item_table = extras_items }, icons.fav_add),
-        { text = "", enabled = false },
         IconItem.decorate({ text = _("General"), sub_item_table = general_items }, icons.settings),
         {
             text = _("KOReader"),
