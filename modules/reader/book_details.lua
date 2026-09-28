@@ -224,11 +224,10 @@ function M.getReadingTimes(ui, requested)
     local current_page, total_pages = current_page_info(ui)
     if not (current_page and total_pages) then
         local ratio, pages, derived_current, derived_total = M.getProgress(ui)
-        total_pages = total_pages or derived_total or db_pages or pages
-        current_page = current_page or derived_current
-        if not current_page and ratio and total_pages then
-            current_page = math.floor(total_pages * ratio + 0.5)
-        end
+        total_pages = total_pages or pages or db_pages or positive_number(derived_total)
+        current_page = current_page or (ratio and total_pages
+            and math.floor(total_pages * ratio + 0.5))
+            or nonnegative_number(derived_current)
     end
     if requested.time_remaining == true
             and avg_time and avg_time > 0 and avg_time < math.huge

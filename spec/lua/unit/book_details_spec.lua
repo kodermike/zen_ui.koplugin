@@ -430,6 +430,34 @@ describe("reader book details", function()
         assert.are.equal(10440, time_left)
     end)
 
+    it("uses progress instead of saved page labels for remaining time", function()
+        local ui = reader_ui()
+        ui.document = { file = "/books/test.epub" }
+        ui.view = nil
+        local settings = {
+            pagemap_use_page_labels = true,
+            pagemap_doc_pages = 200,
+            pagemap_current_page_label = "100",
+            pagemap_last_page_label = "200",
+            percent_finished = 0.25,
+        }
+        ui.doc_settings = {
+            readSetting = function(_self, key) return settings[key] end,
+        }
+        fallback_average = 60
+        fallback_pages = 200
+        local BookDetails = require("modules/reader/book_details")
+
+        assert.are.equal(9000, BookDetails.getReadingTimes(ui, {
+            time_remaining = true,
+        }))
+        settings.pagemap_current_page_label = "xii"
+        settings.pagemap_last_page_label = "cc"
+        assert.are.equal(9000, BookDetails.getReadingTimes(ui, {
+            time_remaining = true,
+        }))
+    end)
+
     it("omits reading times when statistics are unavailable", function()
         local BookDetails = require("modules/reader/book_details")
         local time_left, read_time, today_duration, today_pages =
