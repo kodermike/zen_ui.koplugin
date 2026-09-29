@@ -347,21 +347,22 @@ return {
      ["3.3.1"] = {
         "Fix TBR applying Library filter hiding all TBR books"
      },
-     ["3.4.0"] = {
+     ["4.0.0"] = {
         "Add KOReader menus and document layout controls inside Zen Settings",
         "Add Bluetooth device manager for Kindle, Kobo, and PocketBook (hold Bluetooth in Controls or open from Device settings)",
+        "Add wifi switcher to settings",
         "Add unified brightness/warmth slider (Controls > Unified brightness/warmth slider)",
+        "Add Zen Settings option to be in Controls",
+        "Add Launcher button to Controls",
+        "Add Zen keyboard to settings (improved responsiveness and EN layout)",
         "Add color pickers for Reader themes and highlights",
         "Add Airplane Mode control when the plugin is installed",
-        "Add customizable Settings and Launcher controls",
         "Add plugin actions to Context Menu in the More section (Library > Context menu)",
         "Add Archive functionality from default move to Archive plugin (Library > Context Menu)",
         "Add swipe to go back gesture in Zen Settings",
         "Add Kindle books to Home/Collections",
         "Add manual order TBR (TBR Context menu > Sort > Order)",
-        "Add Zen Settings option to be in Controls",
-        "Add Launcher button to Controls",
-        "Add battery stats to General settings",
+        "Add Zen battery stats to General settings",
         "Add Kobo bluetooth control (KLC, Mediatek, Sage, Clara 2E)",
         "Add single tap context menu when double tap open is enabled",
         "Add more options to Book Switcher - # of books, remove book, hide finished",
@@ -378,7 +379,6 @@ return {
         "Option to exclude Rakuyomi comics from history/home (Extras > Rakuyomi)",
         "Open KOReader + menu outside home in context menu",
         "Fix even home widget spacing",
-        "Improve virtual keyboard responsiveness and layouts",
         "Bug fixes & performance improvements",
      }
 }
