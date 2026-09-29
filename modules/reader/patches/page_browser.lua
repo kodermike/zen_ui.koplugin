@@ -2789,7 +2789,6 @@ local function apply_page_browser()
             enable_search_dialog_close(self.input_dialog)
             -- Always case insensitive, whole-word via regex
             self.case_insensitive = true
-            self._zen_whole_word = true
             self.check_button_case = { checked = false }
             self.check_button_regex = { checked = false }
 
@@ -2954,19 +2953,6 @@ local function apply_page_browser()
         -- the full screen.  A flashui setDirty then schedules a full e-ink refresh.
         local _orig_onShowFindAllResults = ReaderSearch.onShowFindAllResults
         ReaderSearch.onShowFindAllResults = function(self, not_cached)
-            -- Only apply whole-word filtering when substring mode is NOT enabled
-            if not is_substring_enabled() and self._zen_whole_word and not_cached and self.findall_results then
-                local filtered = {}
-                for _i, item in ipairs(self.findall_results) do
-                    local pre = item.matched_word_prefix or ""
-                    local suf = item.matched_word_suffix or ""
-                    if pre == "" and suf == "" then
-                        table.insert(filtered, item)
-                    end
-                end
-                self.findall_results = filtered
-            end
-
             _orig_onShowFindAllResults(self, not_cached)
             local menu = self.result_menu
             if not menu or not UIManager:isWidgetShown(menu) then return end

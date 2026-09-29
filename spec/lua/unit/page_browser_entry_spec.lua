@@ -851,6 +851,33 @@ describe("page browser entry", function()
         expect(ReaderSearch.current_search_type == default_search_type)
     end)
 
+    it("keeps KOReader book-search results with word context", function()
+        local results = {
+            { matched_text = "river", matched_word_prefix = "", matched_word_suffix = "s" },
+            { matched_text = "river", matched_word_prefix = "a", matched_word_suffix = "" },
+        }
+        local shown_results
+        local ReaderSearch = {
+            findall_results = results,
+            onShowFindAllResults = function(self)
+                shown_results = self.findall_results
+            end,
+        }
+        ZenSpec.replace("apps/reader/modules/readersearch", ReaderSearch)
+        ZenSpec.replace("apps/reader/modules/readermenu", { initGesListener = function() end })
+        ZenSpec.replace("apps/reader/modules/readerconfig", { onSwipeShowConfigMenu = function() end })
+        _G.__ZEN_UI_PLUGIN = {
+            config = {
+                features = { page_browser = false },
+                search = { substring = false },
+            },
+        }
+        require("modules/reader/patches/page_browser")()
+
+        ReaderSearch:onShowFindAllResults(true)
+        expect(shown_results == results and #shown_results == 2)
+    end)
+
     it("leaves KOReader reader search untouched when Zen Search is disabled", function()
         local stock_show = function() return "stock" end
         local stock_search = function() return "search" end
