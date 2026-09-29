@@ -6653,3 +6653,11 @@ msgstr "Timp cu ecranul pornit"
 #. Battery statistics
 msgid "Screen off time"
 msgstr "Timp cu ecranul oprit"
+
+#. Battery statistics
+msgid "Health"
+msgstr "Starea bateriei"
+
+#. Battery statistics
+msgid "Usage"
+msgstr "Utilizare"

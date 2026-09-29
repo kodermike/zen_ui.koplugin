@@ -6654,3 +6654,11 @@ msgstr "Время с включённым экраном"
 #. Battery statistics
 msgid "Screen off time"
 msgstr "Время с выключенным экраном"
+
+#. Battery statistics
+msgid "Health"
+msgstr "Состояние"
+
+#. Battery statistics
+msgid "Usage"
+msgstr "Использование"

@@ -229,7 +229,7 @@ end
 function ZenSettingsPage:_syncHeader()
     if not self.title_bar then return end
     local at_root = #self.item_table_stack == 0
-    self.title_bar:setState(self:_currentTitle(), not at_root, true)
+    self.title_bar:setState(self:_currentTitle(), not at_root, self.search_visible ~= false)
     local action_func = self._root_items and self._root_items._zen_header_action_func
     if type(self.title_bar.setAction) == "function" then
         self.title_bar:setAction(at_root and type(action_func) == "function"
@@ -302,7 +302,7 @@ function ZenSettingsPage:init()
         title = self.title,
         title_full_width = true,
         back_visible = false,
-        search_visible = true,
+        search_visible = self.search_visible ~= false,
         show_parent = self,
         back_callback = function() self:backToUpperMenu() end,
         back_hold_callback = function() self:backToRootMenu() end,
@@ -648,7 +648,7 @@ function ZenSettingsPage:onCloseAllMenus()
 end
 
 function ZenSettingsPage:_rememberResume()
-    if self._resume_recorded then return end
+    if self._resume_recorded or self._zen_standalone then return end
     self._resume_recorded = true
     local items = self._search_snapshot and self._search_snapshot.item_table or self.item_table
     resume_state = {
@@ -980,13 +980,17 @@ end
 
 function M.show(plugin, opts)
     opts = opts or {}
+    local standalone = type(opts.root_items) == "table"
     if active_page and not active_page._closed then
-        schedule_open_path(active_page, opts.path, true)
-        return active_page
+        if not standalone and not active_page._zen_standalone then
+            schedule_open_path(active_page, opts.path, true)
+            return active_page
+        end
+        active_page:closeMenu()
     end
     install_modal_keyboard_dismissal()
     local resume
-    if resume_state then
+    if resume_state and not standalone then
         local age = os.time() - resume_state.closed_at
         if age >= 0 and age <= RESUME_TTL_SECONDS and not opts.path then
             resume = resume_state
@@ -1001,13 +1005,17 @@ function M.show(plugin, opts)
     restoring_arrange_resume = resume and resume.arrange or nil
     arrange_open_context = nil
     I18n.refresh()
-    local root_items = require("modules/settings/zen_settings").build(plugin).sub_item_table
-    root_items._zen_title = _("Settings")
+    local root_items = opts.root_items
+        or require("modules/settings/zen_settings").build(plugin).sub_item_table
+    local title = opts.title or _("Settings")
+    root_items._zen_title = title
     local page = ZenSettingsPage:new{
-        title = _("Settings"),
+        title = title,
         item_table = root_items,
         _root_items = root_items,
         _initial_resume_path = resume and resume.path or nil,
+        _zen_standalone = standalone,
+        search_visible = not standalone,
         plugin = plugin,
     }
     if resume and resume.arrange then

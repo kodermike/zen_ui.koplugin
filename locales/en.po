@@ -6659,3 +6659,11 @@ msgstr "Screen on time"
 #. Battery statistics
 msgid "Screen off time"
 msgstr "Screen off time"
+
+#. Battery statistics
+msgid "Health"
+msgstr "Health"
+
+#. Battery statistics
+msgid "Usage"
+msgstr "Usage"

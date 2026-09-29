@@ -62,6 +62,7 @@ describe("quick settings plugin controls", function()
         "modules/menu/app_launcher/page_plan",
         "modules/menu/app_launcher/menu_host",
         "modules/menu/patches/app_launcher",
+        "modules/settings/battery_stats_menu",
         "modules/settings/zen_settings_page",
         "common/plugin_root",
         "modules/menu/patches/touch_menu_panel",
@@ -400,6 +401,24 @@ describe("quick settings plugin controls", function()
         assert.are.equal("/tmp/zen-ui/icons/zen_ui.svg", controls.zen_settings.icon)
         assert.are.equal("Launcher", controls.launcher.label)
         assert.are.equal("/tmp/zen-ui/icons/app_launcher.svg", controls.launcher.icon)
+    end)
+
+    it("offers Battery Stats as a control and opens the Zen page", function()
+        _G.__ZEN_UI_PLUGIN.config._meta = { installed_plugins = {} }
+        local controls = {}
+        for _i, item in ipairs(_G.__ZEN_UI_QUICK_SETTINGS.getItems()) do
+            controls[item.id] = item
+        end
+        assert.are.equal("/tmp/zen-ui/icons/quick_battery.svg", controls.battery_stats.icon)
+
+        local opened_plugin, closes
+        ZenSpec.replace("modules/settings/battery_stats_menu", {
+            open = function(plugin) opened_plugin = plugin end,
+        })
+        local touch_menu = { closeMenu = function() closes = (closes or 0) + 1 end }
+        assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.activate("battery_stats", touch_menu))
+        assert.are.equal(1, closes)
+        assert.are.equal(_G.__ZEN_UI_PLUGIN, opened_plugin)
     end)
 
     it("renders default controls while the setup tour is pending", function()

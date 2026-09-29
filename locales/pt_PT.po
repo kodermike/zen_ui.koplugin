@@ -6653,3 +6653,11 @@ msgstr "Tempo de ecrã ligado"
 #. Battery statistics
 msgid "Screen off time"
 msgstr "Tempo de ecrã desligado"
+
+#. Battery statistics
+msgid "Health"
+msgstr "Saúde"
+
+#. Battery statistics
+msgid "Usage"
+msgstr "Utilização"

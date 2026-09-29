@@ -6653,3 +6653,11 @@ msgstr "Tijd met scherm aan"
 #. Battery statistics
 msgid "Screen off time"
 msgstr "Tijd met scherm uit"
+
+#. Battery statistics
+msgid "Health"
+msgstr "Conditie"
+
+#. Battery statistics
+msgid "Usage"
+msgstr "Verbruik"

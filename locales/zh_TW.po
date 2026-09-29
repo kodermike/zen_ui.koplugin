@@ -6653,3 +6653,11 @@ msgstr "亮屏時間"
 #. Battery statistics
 msgid "Screen off time"
 msgstr "熄屏時間"
+
+#. Battery statistics
+msgid "Health"
+msgstr "健康度"
+
+#. Battery statistics
+msgid "Usage"
+msgstr "使用情況"

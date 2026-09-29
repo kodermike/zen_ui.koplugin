@@ -1053,12 +1053,11 @@ local function apply_quick_settings()
             end,
         },
         battery_stats = {
-            icon = "quick_battery",
+            icon = utils.resolveLocalIcon(_icons_dir, "quick_battery"),
             label = _("Battery"),
-            visible_func = function() return hasPlugin("batterystat") end,
             callback = function(touch_menu)
                 touch_menu:closeMenu()
-                UIManager:broadcastEvent(Event:new("ShowBatteryStatistics"))
+                require("modules/settings/battery_stats_menu").open(zen_plugin)
             end,
         },
         kosync = {

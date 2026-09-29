@@ -368,6 +368,37 @@ describe("Zen settings page", function()
         assert.are.equal(2, translation_refreshes)
     end)
 
+    it("uses the Zen settings page for a standalone root with an X", function()
+        local plugin = { config = {} }
+        local root = {{ text = "Health", mandatory = "75%", sub_item_table = {{ text = "Current capacity" }} }}
+        local previous = PageModule.show(plugin)
+        local page = PageModule.show(plugin, { title = "Battery", root_items = root })
+
+        assert.is_true(previous._closed)
+        assert.are.equal(page, shown_widgets[2])
+        assert.are.equal("zen_settings", page.name)
+        assert.is_true(page.covers_fullscreen)
+        assert.are.equal(root, page.item_table)
+        assert.is_true(root[1]._zen_settings_row)
+        assert.is_true(root[1]._zen_has_submenu)
+        assert.is_false(page.title_bar.back_visible)
+        assert.is_false(page.title_bar.search_visible)
+        assert.is_function(page.title_bar.close_callback)
+
+        page:onMenuSelect(root[1])
+        assert.are.equal("Health", page.title_bar.title)
+        assert.is_true(page.title_bar.back_visible)
+        assert.is_false(page.title_bar.search_visible)
+        page.title_bar.back_callback()
+        assert.are.equal("Battery", page.title_bar.title)
+        page.title_bar.close_callback()
+        assert.is_true(page._closed)
+
+        local settings = PageModule.show(plugin)
+        assert.are.equal("Settings", settings.title_bar.title)
+        assert.is_true(settings.title_bar.search_visible)
+    end)
+
     it("closes every arrange overlay without losing the deepest resume route", function()
         local restored_path
         require("modules/settings/zen_settings").build = function()

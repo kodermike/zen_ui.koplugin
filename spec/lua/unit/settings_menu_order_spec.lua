@@ -30,17 +30,29 @@ describe("settings menu organization", function()
             snapshot = function()
                 if missing_stats == "none" then return nil end
                 if missing_stats == "partial" then return { samples = 0 } end
-                return { level = 80, overall = 0.5, awake = 1, asleep = 0.1,
+                local overall = reset_calls == 0 and 0.5 or nil
+                return { level = 80, overall = overall, awake = 1, asleep = 0.1,
                     awake_time = 7200, asleep_time = 14400,
                     current_mah = has_current_capacity and 600 or nil,
-                    full_mah = 1200, design_mah = 1600, health = 75, remaining = 576000,
+                    full_mah = 1200, design_mah = 1600, health = 75, remaining = 125100,
                     since_charge = 3600, samples = reset_calls > 0 and 0 or 24 }
             end,
             reset = function() reset_calls = reset_calls + 1 end,
         })
-        replace("datetime", { secondsToClockDuration = function(_, seconds) return seconds .. "s" end })
+        replace("datetime", { secondsToClockDuration = function(format, seconds, without_seconds, with_days)
+            assert.are.equal("letters", format)
+            assert.is_true(without_seconds)
+            assert.is_true(with_days)
+            return ({
+                [7200] = "2h\u{2009}0m",
+                [14400] = "4h\u{2009}0m",
+                [125100] = "1d\u{2009}10h\u{2009}45m",
+                [3600] = "1h\u{2009}0m",
+            })[seconds]
+        end })
         local interface_icon = require("common/inline_icon_map").settings_global
         assert.are.equal("\u{F0574}", interface_icon)
+        assert.are.equal("\u{F0080}", require("common/inline_icon_map").battery)
         replace("common/inline_icon_map", {
             settings = "gear", settings_global = interface_icon, battery = "battery_icon",
         })
@@ -126,30 +138,44 @@ describe("settings menu organization", function()
             local battery_item = general[available and 5 or 4]
             assert.are.equal("battery_icon", battery_item.icon_glyph)
             local battery = battery_item.sub_item_table_func()
-            assert.are.equal("Battery percentage: 80%", battery[1].text)
-            assert.are.equal("Current capacity: 600 mAh", battery[2].text)
+            assert.are.same({ "Health", "Usage", "Estimated time remaining",
+                "Time since last charge", "Settings" }, labels(battery))
+            assert.are.equal("75%", battery[1].mandatory)
+            assert.are.equal("0.50%/h", battery[2].mandatory)
+            assert.are.equal("1d 10h 45m", battery[3].mandatory)
+            assert.are.equal("1h 0m", battery[4].mandatory)
+            local health = battery[1].sub_item_table
+            local usage = battery[2].sub_item_table
+            local settings = battery[5].sub_item_table
+            assert.are.equal("Battery percentage: 80%", health[1].text)
+            assert.are.equal("Current capacity: 600 mAh", health[2].text)
             has_current_capacity = false
-            assert.are.equal("Full capacity: 1200 mAh", battery_item.sub_item_table_func()[2].text)
+            assert.are.equal("Current capacity: -",
+                battery_item.sub_item_table_func()[1].sub_item_table[2].text)
             has_current_capacity = true
-            assert.are.equal("Full capacity: 1200 mAh", battery[3].text)
-            assert.are.equal("Design capacity: 1600 mAh", battery[4].text)
-            assert.are.equal("Battery health: 75%", battery[5].text)
-            assert.are.equal("While asleep: 0.10%/h", battery[8].text)
-            assert.are.equal("Screen on time: 7200s", battery[9].text)
-            assert.are.equal("Screen off time: 14400s", battery[10].text)
-            assert.are.equal("Tracked samples: 24", battery[13].text)
-            assert.are.equal("Reset battery log", battery[14].text)
-            local battery_menu = { updateItems = function() menu_updates = menu_updates + 1 end }
-            battery[14].callback(battery_menu)
+            assert.are.equal("Full capacity: 1200 mAh", health[3].text)
+            assert.are.equal("Design capacity: 1600 mAh", health[4].text)
+            assert.are.equal("Battery health: 75%", health[5].text)
+            assert.are.equal("Used per hour: 0.50%/h", usage[1].text)
+            assert.are.equal("While asleep: 0.10%/h", usage[3].text)
+            assert.are.equal("Screen on time: 2h 0m", usage[4].text)
+            assert.are.equal("Screen off time: 4h 0m", usage[5].text)
+            assert.are.equal("Tracked samples: 24", settings[1].text)
+            assert.are.equal("Reset battery log", settings[2].text)
+            local battery_menu = { item_table = settings,
+                updateItems = function() menu_updates = menu_updates + 1 end }
+            settings[2].callback(battery_menu)
             assert.are.equal("Reset battery log?", shown_dialog.text)
             shown_dialog.ok_callback()
             assert.are.equal(menu_updates, reset_calls)
-            assert.are.equal("Tracked samples: 0", battery_menu.item_table[13].text)
+            assert.are.equal("Tracked samples: 0", battery_menu.item_table[1].text)
+            assert.are.equal("-", battery[2].mandatory)
             missing_stats = "partial"
             local missing_rows = battery_item.sub_item_table_func()
-            for index = 1, 11 do
-                assert.are.equal(": -", missing_rows[index].text:sub(-3))
-            end
+            assert.are.equal("-", missing_rows[1].mandatory)
+            assert.are.equal("-", missing_rows[2].mandatory)
+            assert.are.equal("Battery percentage: -", missing_rows[1].sub_item_table[1].text)
+            assert.are.equal("Used per hour: -", missing_rows[2].sub_item_table[1].text)
             missing_stats = "none"
             assert.are.same({ "-" }, labels(battery_item.sub_item_table_func()))
             assert.are.equal(wifi_item, general[1])

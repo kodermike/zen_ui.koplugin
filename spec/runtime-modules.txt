@@ -225,6 +225,7 @@ modules/reader/lookup_plugin_items.lua|unit
 modules/reader/reader.lua|integration
 modules/reader/zen_toc_widget.lua|integration
 modules/registry.lua|integration
+modules/settings/battery_stats_menu.lua|unit
 modules/settings/sections/about_settings.lua|integration
 modules/settings/sections/advanced_settings.lua|integration
 modules/settings/sections/app_launcher_settings.lua|integration
