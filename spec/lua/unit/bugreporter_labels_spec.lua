@@ -1,4 +1,5 @@
 local JSON = require("json")
+local lfs = require("lfs")
 
 describe("bug reporter labels", function()
     local channel
@@ -51,6 +52,7 @@ describe("bug reporter labels", function()
         ZenSpec.replace("common/restart", {})
         ZenSpec.replace("common/utils", {
             truncateUtf8Bytes = function(value) return value end,
+            utf8SafeSuffix = function(value, max_bytes) return value:sub(-max_bytes) end,
         })
         ZenSpec.replace("modules/settings/zen_updater", {
             get_channel = function() return channel end,
@@ -122,6 +124,27 @@ describe("bug reporter labels", function()
         UIManager.submit_callback()
 
         assert.are.equal(1, #payloads)
+    end)
+
+    it("uploads only a bounded tail of a large crash log", function()
+        local data_dir = os.tmpname()
+        os.remove(data_dir)
+        assert.is_true(lfs.mkdir(data_dir))
+        local log_path = data_dir .. "/crash.log"
+        local file = assert(io.open(log_path, "wb"))
+        file:write("old crash\n", string.rep("x", 600000), "recent crash\n")
+        file:close()
+        package.loaded.datastorage.getDataDir = function() return data_dir end
+
+        submit()
+
+        local uploaded = payloads[1].log
+        assert.is_true(uploaded:find("%[truncated %- showing last 512000 bytes", 1) == 1)
+        assert.is_nil(uploaded:find("old crash", 1, true))
+        assert.are.equal("recent crash\n", uploaded:sub(-13))
+        assert.is_true(#uploaded < 512100)
+        os.remove(log_path)
+        lfs.rmdir(data_dir)
     end)
 
     it("adds the beta label on the beta update channel", function()

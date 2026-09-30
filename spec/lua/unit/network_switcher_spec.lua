@@ -496,6 +496,38 @@ describe("network switcher", function()
         assert.are.equal(0, #shown)
     end)
 
+    it("uses KOReader's Wi-Fi toggle on Kobo with no saved Zen networks", function()
+        ZenSpec.replace("device", {
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        package.loaded["ui/uimanager"].topdown_widgets_iter = function()
+            return function() end
+        end
+        local updates = 0
+        local touch_menu = { updateItems = function() updates = updates + 1 end }
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.getAllSavedNetworks = function()
+            error("Kobo toggle should not inspect Zen saved networks")
+        end
+        NetworkMgr.getWifiMenuTable = function()
+            return { callback = function(menu)
+                assert.are.equal(touch_menu, menu)
+                NetworkMgr.wifi_on = not NetworkMgr.wifi_on
+                menu:updateItems()
+            end }
+        end
+        local Switcher = require("modules/menu/network_switcher")
+        Switcher.open = function() error("Kobo toggle should not open the Zen switcher") end
+
+        Switcher.toggleWifi(touch_menu, nil, true, {})
+        assert.is_true(NetworkMgr.wifi_on)
+        Switcher.toggleWifi(touch_menu, nil, true, {})
+        assert.is_false(NetworkMgr.wifi_on)
+        assert.are.equal(2, updates)
+    end)
+
     it("opens and scans the switcher when KOReader has no saved networks", function()
         ZenSpec.replace("device", {
             hasWifiManager = function() return true end,
@@ -516,7 +548,16 @@ describe("network switcher", function()
         assert.are.equal("Home", network_menu.item_table[1].text)
     end)
 
-    it("replaces KOReader's no-connection dialog with the Zen switcher", function()
+    it("replaces Kobo's native network list with the Zen switcher", function()
+        ZenSpec.replace("device", {
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.getAllSavedNetworks = function()
+            error("Kobo toggle should not inspect Zen saved networks")
+        end
         local NetworkSetting = {}
         ZenSpec.replace("ui/widget/networksetting", NetworkSetting)
         local UIManager = package.loaded["ui/uimanager"]
@@ -530,12 +571,16 @@ describe("network switcher", function()
         end
         UIManager.close = function(_self, widget)
             closed[#closed + 1] = widget
+            if widget.onCloseWidget then widget:onCloseWidget() end
             for index = #windows, 1, -1 do
                 if windows[index] == widget then table.remove(windows, index) end
             end
         end
         local stock_calls, switcher_calls = 0, 0
-        local dialog = setmetatable({ network_list = {} }, NetworkSetting)
+        local dialog = setmetatable({
+            network_list = {},
+            onCloseWidget = function() NetworkMgr.pending_connection = false end,
+        }, NetworkSetting)
         local notice = { text = "Connection failed" }
         NetworkMgr.getWifiMenuTable = function()
             return { callback = function(touch_menu)
@@ -551,6 +596,7 @@ describe("network switcher", function()
         local Switcher = require("modules/menu/network_switcher")
         Switcher.open = function(callback, settings_subpage, plugin)
             switcher_calls = switcher_calls + 1
+            assert.is_false(NetworkMgr.pending_connection)
             assert.is_function(callback)
             assert.is_false(settings_subpage)
             assert.are.equal("plugin", plugin)
@@ -675,6 +721,110 @@ describe("network switcher", function()
 
         network_menu.custom_title_bar.action.callback()
         assert.are.equal(1, scans)
+    end)
+
+    it("disconnects and clears a connected Kobo network when forgotten", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.getCurrentNetwork = function()
+            return { ssid = "Home", id = 7 }
+        end
+        NetworkMgr.getAllSavedNetworks = function()
+            return { readSetting = function()
+                return { flags = "[WPA2]", password = "saved" }
+            end }
+        end
+        local disconnect_fails = true
+        NetworkMgr.disconnectNetwork = function(self, network)
+            if disconnect_fails then return nil, "WPA client unavailable" end
+            self.disconnected = network
+            self.current_ssid = nil
+        end
+        local refreshes = 0
+        local Switcher = require("modules/menu/network_switcher")
+        assert.is_true(Switcher.open(function() refreshes = refreshes + 1 end))
+        scan_task()
+        network_menu.item_table[1].callback()
+        button_dialog.buttons[4][1].callback()
+        confirm_box.ok_callback()
+        assert.is_nil(NetworkMgr.deleted)
+        assert.is_true(network_menu.item_table[1].network.connected)
+        disconnect_fails = false
+        confirm_box.ok_callback()
+
+        assert.are.equal(7, NetworkMgr.disconnected.wpa_supplicant_id)
+        assert.is_true(NetworkMgr.released)
+        assert.are.equal("Home", NetworkMgr.deleted.ssid)
+        assert.are.equal(1, refreshes)
+        assert.is_nil(network_menu.item_table[1].network.saved)
+        assert.are.equal("Available", network_menu.item_table[1]._zen_settings_breadcrumb)
+        network_menu:onMenuHold(network_menu.item_table[1])
+        assert.are.equal(2, #button_dialog.buttons)
+    end)
+
+    it("saves a Kobo connection and remembers Wi-Fi for restoration", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        local saved_password
+        local saves = 0
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.wifi_was_on = false
+        G_reader_settings:saveSetting("wifi_was_on", false)
+        NetworkMgr.getNetworkList = function()
+            return {{
+                ssid = "Guest", flags = "[WPA2]", signal_quality = 80,
+                password = saved_password,
+            }}
+        end
+        NetworkMgr.saveNetwork = function(_self, network)
+            saves = saves + 1
+            saved_password = network.password
+        end
+        NetworkMgr.getAllSavedNetworks = function()
+            return { readSetting = function()
+                return saved_password and { password = saved_password } or nil
+            end }
+        end
+        local Switcher = require("modules/menu/network_switcher")
+        assert.is_true(Switcher.open())
+        scan_task()
+        network_menu.item_table[1].callback()
+        password_dialog.buttons[1][2].callback()
+
+        assert.are.equal("guest-password", saved_password)
+        assert.are.equal(1, saves)
+        assert.is_true(NetworkMgr.wifi_was_on)
+        assert.is_true(G_reader_settings:isTrue("wifi_was_on"))
+
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        ip_calls = 0
+        password_dialog = nil
+        assert.is_true(Switcher.open())
+        scan_task()
+        assert.are.equal("Saved · 80%", network_menu.item_table[1]._zen_settings_breadcrumb)
+        network_menu.item_table[1].callback()
+        assert.is_nil(password_dialog)
+        assert.are.equal("Guest", NetworkMgr.authenticated.ssid)
+
+        local messages = {}
+        for _i, entry in ipairs(logs) do
+            messages[#messages + 1] = entry[2]
+            for _j, value in ipairs(entry) do
+                assert.not_equal("guest-password", value)
+            end
+        end
+        local output = table.concat(messages, "\n")
+        assert.is_truthy(output:find("Kobo scan result", 1, true))
+        assert.is_truthy(output:find("Kobo credentials saved", 1, true))
+        assert.is_truthy(output:find("Kobo connection result", 1, true))
     end)
 
     it("scans automatically when there is no current network", function()

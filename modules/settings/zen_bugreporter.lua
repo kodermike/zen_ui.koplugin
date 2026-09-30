@@ -15,6 +15,7 @@ local updater = require("modules/settings/zen_updater")
 local PROXY_URL       = "https://zen-reporter.misty-mud-afb2.workers.dev/"
 local UPLOAD_URL = PROXY_URL .. "upload"
 local MAX_CRASH_LOG = 60000
+local MAX_UPLOAD_LOG = 512000
 local MAX_TITLE     = 500
 local MAX_BODY      = 65536
 
@@ -59,13 +60,20 @@ local function upload_crash_log(log_data)
     return nil
 end
 
---- Read the full content of a file. Returns string or nil.
+--- Read a bounded tail of the crash log.
 local function read_file_content(path)
     local f = io.open(path, "rb")
     if not f then return nil end
-    local data = f:read("*a")
+    local size = f:seek("end")
+    f:seek("set", math.max(0, size - MAX_UPLOAD_LOG - 3))
+    local data = f:read(MAX_UPLOAD_LOG + 3)
     f:close()
-    return (data and data ~= "") and data or nil
+    if not data or data == "" then return nil end
+    if size > MAX_UPLOAD_LOG then
+        return "[truncated - showing last " .. MAX_UPLOAD_LOG .. " bytes of " .. size .. " total]\n"
+            .. zen_utils.utf8SafeSuffix(data, MAX_UPLOAD_LOG)
+    end
+    return data
 end
 
 -- ---------------------------------------------------------------------------
@@ -321,7 +329,7 @@ function M._do_submit(ctx, bug_title, description, github_username)
         local data_dir = ok_ds and DataStorage:getDataDir() or nil
         local crash_log_full = data_dir and read_file_content(data_dir .. "/crash.log")
 
-        -- Upload the full log; only truncate if upload fails and we need inline embedding.
+        -- Upload the bounded log; shorten it further for inline fallback.
         local log_url = crash_log_full and upload_crash_log(crash_log_full)
         local crash_log_inline
         if not log_url and crash_log_full then
