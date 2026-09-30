@@ -15,6 +15,9 @@ describe("settings menu organization", function()
             for _i, item in ipairs(item_table) do result[#result + 1] = item.text end
             return result
         end
+        local has_bluetooth, double_tap_item
+        local language_item = { text = "Language", sub_item_table = {} }
+        local time_item = { text = "Time and date", sub_item_table = {} }
 
         replace("gettext", function(text) return text end)
         local shown_dialog, reset_calls, menu_updates, has_current_capacity, missing_stats
@@ -64,13 +67,27 @@ describe("settings menu organization", function()
             end,
         })
         replace("device", {})
+        replace("ui/network/manager", {})
+        replace("ui/event", {})
+        replace("modules/menu/bluetooth/bluetooth", {
+            isAvailable = function() return has_bluetooth end,
+        })
+        replace("ui/language", {
+            getLangMenuTable = function() return language_item end,
+        })
+        replace("ui/elements/common_settings_menu_table", { time = time_item })
         replace("modules/settings/zen_settings_utils", false)
         for _i, section in ipairs({
             "library_settings/home_settings", "library_settings/navbar_settings",
-            "menu_settings", "app_launcher_settings",
+            "app_launcher_settings",
         }) do
             replace("modules/settings/sections/" .. section, { build = function() return {} end })
         end
+        replace("modules/settings/sections/menu_settings", {
+            build = function()
+                return { sub_item_table = items({ "Blur menu background" }) }
+            end,
+        })
         local font_item, wallpaper_item
         replace("modules/settings/sections/library_settings", {
             build = function()
@@ -93,20 +110,16 @@ describe("settings menu organization", function()
                 return items({ "Stats", "Install ZenPM", "Zen OPDS", "Rakuyomi", "Schedules", "Sleep", "Zen Search", "Lockdown mode", "Zen Keyboard", "Custom icons" })
             end,
         })
-        local has_bluetooth, wifi_item, bluetooth_item, double_tap_item, language_item, time_item
+        replace("modules/settings/sections/advanced_settings", {
+            build = function()
+                local result = items({ "Original control", "Double tap to open books" })
+                double_tap_item = result[2]
+                return result
+            end,
+        })
         replace("modules/settings/sections/about_settings", {
             build = function()
-                local result = items({ "Version", "Wi-Fi", "Device", "Setup Guide", "Report a Bug", "Advanced" })
-                wifi_item = result[2]
-                result[6].sub_item_table = items({ "Original control", "Double tap to open books" })
-                double_tap_item = result[6].sub_item_table[2]
-                language_item = { text = "Language", sub_item_table = {} }
-                time_item = { text = "Time and date", sub_item_table = {} }
-                if has_bluetooth then
-                    bluetooth_item = { text = "Bluetooth" }
-                    table.insert(result, 3, bluetooth_item)
-                end
-                return result, language_item, time_item
+                return items({ "Version", "Device", "Setup Guide", "Report a Bug" })
             end,
         })
 
@@ -124,7 +137,7 @@ describe("settings menu organization", function()
             local interface = root[4].sub_item_table
             assert.are.equal("interface", root[4]._zen_settings_root)
             assert.are.equal(interface_icon, root[4].icon_glyph)
-            assert.are.same({ "Controls", "Launcher", "Navbar", "Font", "Zen Keyboard", "Zen Search", "Wallpaper", "Custom icons" }, labels(interface))
+            assert.are.same({ "Controls", "Launcher", "Navbar", "Font", "Zen Keyboard", "Zen Search", "Wallpaper", "Blur menu background", "Custom icons" }, labels(interface))
             assert.are.equal("launcher", interface[2]._zen_settings_root)
             assert.are.equal(font_item, interface[4])
             assert.are.equal(wallpaper_item, interface[7])
@@ -178,10 +191,10 @@ describe("settings menu organization", function()
             assert.are.equal("Used per hour: -", missing_rows[2].sub_item_table[1].text)
             missing_stats = "none"
             assert.are.same({ "-" }, labels(battery_item.sub_item_table_func()))
-            assert.are.equal(wifi_item, general[1])
-            assert.are.equal(language_item, general[#general - 3])
+            assert.are.equal("Wi-Fi", general[1].text)
+            assert.are.equal(language_item.sub_item_table, general[#general - 3].sub_item_table)
             assert.are.equal(time_item, general[#general - 2])
-            if available then assert.are.equal(bluetooth_item, general[2]) end
+            if available then assert.are.equal("Bluetooth", general[2].text) end
             assert.are.same({ "Original control" }, labels(general[#general - 1].sub_item_table))
             assert.are.same({ "Original control" }, labels(general[#general].sub_item_table))
             assert.are.same({ "Original control", "Double tap to open books" }, labels(root[2].sub_item_table))

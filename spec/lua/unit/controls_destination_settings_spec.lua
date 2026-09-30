@@ -323,7 +323,7 @@ describe("Controls destination settings", function()
         assert.are.equal(2, saves)
     end)
 
-    it("toggles background hatching", function()
+    it("toggles menu background blur", function()
         local saves = 0
         local section = require("modules/settings/sections/menu_settings").build({
             config = config,
@@ -335,11 +335,11 @@ describe("Controls destination settings", function()
         })
         local hatching
         for _i, item in ipairs(section.sub_item_table) do
-            if item.text == "Background hatching" then hatching = item end
+            if item.text == "Blur menu background" then hatching = item end
         end
 
         assert.is_table(hatching)
-        assert.are.equal("Background hatching", hatching.text)
+        assert.are.equal("Blur menu background", hatching.text)
         assert.is_false(hatching.checked_func())
         hatching.callback()
         assert.is_true(hatching.checked_func())

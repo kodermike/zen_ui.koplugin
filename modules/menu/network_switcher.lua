@@ -3,6 +3,51 @@ local M = {}
 local VERIFY_ATTEMPTS = 60
 local VERIFY_DELAY_US = 250 * 1000
 
+function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
+    local UIManager = require("ui/uimanager")
+    local NetworkMgr = require("ui/network/manager")
+    local KindleNetworkAdapter = require("modules/menu/network_adapters/kindle")
+    local logger = require("common/zen_logger").new("network_switcher")
+    local _ = require("gettext")
+    local wifi_on = NetworkMgr:isWifiOn()
+    local connected = wifi_on and NetworkMgr:isConnected()
+    local kindle = KindleNetworkAdapter.isSupported(require("device"))
+    if not connected then
+        local no_saved = not kindle and not wifi_on
+            and next(NetworkMgr:getAllSavedNetworks().data) == nil
+        logger.dbg("Wi-Fi toggle", "wifi_on=", wifi_on, "connected=", connected,
+            "kindle=", kindle, "settings=", settings_subpage == true,
+            "open_switcher=", kindle or no_saved)
+        if kindle or no_saved then
+            return M.open(on_connected, settings_subpage, plugin)
+        end
+    end
+
+    logger.dbg("Wi-Fi toggle using KOReader action", "wifi_on=", wifi_on,
+        "connected=", connected, "kindle=", kindle)
+
+    local shown_before = {}
+    for widget in UIManager:topdown_widgets_iter() do shown_before[widget] = true end
+
+    NetworkMgr:getWifiMenuTable().callback(touch_menu)
+
+    local NetworkSetting = package.loaded["ui/widget/networksetting"]
+    local network_dialog, failure_notice
+    for widget in UIManager:topdown_widgets_iter() do
+        if not shown_before[widget] then
+            if NetworkSetting and getmetatable(widget) == NetworkSetting then
+                network_dialog = widget
+            elseif widget.text == _("Connection failed") then
+                failure_notice = widget
+            end
+        end
+    end
+    if not network_dialog then return end
+    UIManager:close(network_dialog)
+    if failure_notice then UIManager:close(failure_notice) end
+    return M.open(on_connected, settings_subpage, plugin)
+end
+
 local function is_secured(network)
     local flags = type(network.flags) == "string" and network.flags or ""
     return flags:find("WPA", 1, true) ~= nil or flags:find("SAE", 1, true) ~= nil
@@ -462,12 +507,12 @@ function M.open(on_connected, settings_subpage, plugin)
                 prompt_password(network, _("Enter a new Wi-Fi password."))
             end)
         end
-        if network.connected and not network.preview then
+        if network.connected then
             add(icons.wifi_off .. "  " .. _("Disconnect"), function()
                 disconnect_network(network)
             end)
         end
-        if network.password ~= nil then
+        if network.password ~= nil or network.saved then
             add(icons.delete .. "  " .. _("Forget"), function()
                 UIManager:show(ConfirmBox:new{
                     text = T(_("Forget Wi-Fi network %1?"), network.ssid),
@@ -502,7 +547,7 @@ function M.open(on_connected, settings_subpage, plugin)
                             y = icon_y,
                             w = icon_size,
                             h = icon_size,
-                        }
+                        }, true
                     end
                 end
             end,
@@ -643,8 +688,17 @@ function M.open(on_connected, settings_subpage, plugin)
                         previous_network = current
                         previous_ip = get_ip()
                     end
-                    network_list = {{ ssid = current.ssid, connected = true,
-                        flags = "—", preview = true }}
+                    local saved = adapter and adapter.getSavedNetwork(current.ssid)
+                        or NetworkMgr:getAllSavedNetworks():readSetting(current.ssid)
+                    network_list = {{
+                        ssid = current.ssid,
+                        connected = true,
+                        flags = saved and saved.flags or current.flags,
+                        password = saved and saved.password or current.password,
+                        psk = saved and saved.psk or current.psk,
+                        saved = saved ~= nil,
+                        wpa_supplicant_id = current.wpa_supplicant_id or current.id,
+                    }}
                     render_networks()
                 else
                     show_status(_("Connected"))

@@ -27,9 +27,10 @@ end)
 describe("common utils icon sizing", function()
     local utils = require("common/utils")
 
-    it("optically enlarges ZenFM and ZenPM icons", function()
+    it("optically enlarges ZenFM, ZenPM, and Zen UI icons", function()
         assert.are.equal(1.25, utils.iconOpticalScale("zenfm"))
         assert.are.equal(1.25, utils.iconOpticalScale("/plugins/zenpm/icons/zenpm.svg"))
+        assert.are.equal(1.25, utils.iconOpticalScale("/plugins/zenos/icons/zen_ui.svg"))
     end)
 
     it("keeps other icons at their requested size", function()

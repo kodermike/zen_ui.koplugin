@@ -148,6 +148,44 @@ describe("responsive keyboard patch", function()
         assert.is_true(symbol[1].invert)
     end)
 
+    it("uses the lowercase key for a second tap already in flight when one-shot Shift releases", function()
+        local typed = {}
+        local keyboard = setmetatable({
+            shiftmode = true,
+            symbolmode = false,
+            release_shift = true,
+        }, { __index = VirtualKeyboard })
+        function keyboard:setLayer()
+            self.shiftmode = not self.shiftmode
+            self.layout = self.shiftmode and self.upper_keys or self.lower_keys
+        end
+        local function letter(value)
+            local key = setmetatable({ keyboard = keyboard, key = value }, { __index = VirtualKey })
+            key.callback = function()
+                keyboard:addChar(key.key)
+                if keyboard.shiftmode and keyboard.release_shift then keyboard:setLayer("Shift") end
+            end
+            return key
+        end
+        local upper_a, upper_b = letter("A"), letter("B")
+        keyboard.upper_keys = { { upper_a, upper_b } }
+        keyboard.lower_keys = { { letter("a"), letter("b") } }
+        keyboard.layout = keyboard.upper_keys
+        keyboard.inputbox = { addChars = function(_, value) typed[#typed + 1] = value end }
+
+        upper_a:onTapSelect(true)
+        upper_b:onTapSelect(true)
+        assert.are.same({ "A", "b" }, typed)
+
+        typed = {}
+        keyboard.shiftmode = true
+        keyboard.release_shift = false
+        keyboard.layout = keyboard.upper_keys
+        upper_a:onTapSelect(true)
+        upper_b:onTapSelect(true)
+        assert.are.same({ "A", "B" }, typed)
+    end)
+
     it("simplifies and centers English touch letter rows", function()
         local comma = { { ";" }, { "," }, { ";" }, { "," } }
         local third_row = { {}, {}, {}, {}, {}, {}, {}, {}, {}, comma }

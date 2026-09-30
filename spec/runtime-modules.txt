@@ -230,6 +230,7 @@ modules/settings/sections/about_settings.lua|integration
 modules/settings/sections/advanced_settings.lua|integration
 modules/settings/sections/app_launcher_settings.lua|integration
 modules/settings/sections/extras_settings.lua|integration
+modules/settings/sections/general_settings.lua|unit
 modules/settings/sections/global_settings.lua|integration
 modules/settings/sections/library_settings.lua|integration
 modules/settings/sections/library_settings/metadata_settings.lua|unit

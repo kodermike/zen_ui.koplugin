@@ -27,6 +27,7 @@ describe("network switcher", function()
     local power_cycle_sleeps
     local created_profile
     local native_profiles
+    local profile_read_fails
     local deleted_profile_id
 
     local module_names = {
@@ -38,6 +39,7 @@ describe("network switcher", function()
         "ui/widget/infomessage",
         "ui/widget/inputdialog",
         "ui/widget/menu",
+        "ui/widget/networksetting",
         "ui/size",
         "ui/network/manager",
         "ui/uimanager",
@@ -83,6 +85,7 @@ describe("network switcher", function()
         native_profiles = {
             Home = { essid = "Home", netid = 11, psk = "saved" },
         }
+        profile_read_fails = false
         deleted_profile_id = nil
 
         ZenSpec.replace("device", {
@@ -207,6 +210,9 @@ describe("network switcher", function()
             end,
             obtainIP = function(self) self.obtained = true end,
             getCurrentNetwork = function(self) return { ssid = self.current_ssid } end,
+            getAllSavedNetworks = function()
+                return { readSetting = function() return nil end }
+            end,
             hasDefaultRoute = function() return false end,
             queryNetworkState = function(self) self.queried = true end,
         }
@@ -296,6 +302,7 @@ describe("network switcher", function()
                                 destroy = function() end,
                             }
                         elseif property == "profileData" then
+                            if profile_read_fails then error("profileData unavailable") end
                             return {
                                 to_table = function()
                                     local profiles = {}
@@ -415,6 +422,149 @@ describe("network switcher", function()
         while #scheduled > 0 do table.remove(scheduled, 1)() end
     end
 
+    it("opens and scans the switcher when Kindle has no saved networks", function()
+        native_profiles = {}
+        profile_read_fails = true
+        package.loaded["device"].hasWifiRestore = function() return true end
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.getWifiMenuTable = function()
+            error("KOReader Wi-Fi toggle should not run")
+        end
+        local Switcher = require("modules/menu/network_switcher")
+
+        assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
+        assert.are.equal("network_switcher", network_menu.name)
+        assert.is_function(scan_task)
+        scan_task()
+        assert.is_true(NetworkMgr.wifi_on)
+        assert.are.equal(1, kindle_scans)
+        while #scheduled > 0 do table.remove(scheduled, 1)() end
+        assert.are.equal("Home", network_menu.item_table[1].text)
+    end)
+
+    it("opens the switcher despite residual Kindle profiles", function()
+        native_profiles = {
+            Old = { essid = "Old", netid = 2, psk = "saved" },
+            Older = { essid = "Older", netid = 3, psk = "saved" },
+        }
+        package.loaded["device"].hasWifiRestore = function() return true end
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.restoreWifiAsync = function() error("Kindle restore should not run") end
+        NetworkMgr.getWifiMenuTable = function()
+            error("KOReader Wi-Fi toggle should not run")
+        end
+        local Switcher = require("modules/menu/network_switcher")
+
+        assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
+        assert.are.equal("network_switcher", network_menu.name)
+        scan_task()
+        assert.are.equal(1, kindle_scans)
+    end)
+
+    it("opens the switcher when Kindle Wi-Fi is on without a connection or saved network", function()
+        native_profiles = {}
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.getWifiMenuTable = function()
+            error("KOReader Wi-Fi toggle should not run")
+        end
+        local Switcher = require("modules/menu/network_switcher")
+
+        assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
+        assert.are.equal("network_switcher", network_menu.name)
+        scan_task()
+        assert.are.equal(1, kindle_scans)
+    end)
+
+    it("still turns off a connected Kindle", function()
+        local calls = 0
+        package.loaded["ui/uimanager"].topdown_widgets_iter = function()
+            return function() end
+        end
+        NetworkMgr.getWifiMenuTable = function()
+            return { callback = function()
+                calls = calls + 1
+                NetworkMgr.wifi_on = false
+            end }
+        end
+        local Switcher = require("modules/menu/network_switcher")
+
+        Switcher.toggleWifi({}, nil, false, {})
+        assert.are.equal(1, calls)
+        assert.is_false(NetworkMgr.wifi_on)
+        assert.are.equal(0, #shown)
+    end)
+
+    it("opens and scans the switcher when KOReader has no saved networks", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.wifi_on = false
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.getAllSavedNetworks = function() return { data = {} } end
+        NetworkMgr.getWifiMenuTable = function()
+            error("KOReader Wi-Fi toggle should not run")
+        end
+        local Switcher = require("modules/menu/network_switcher")
+
+        assert.is_true(Switcher.toggleWifi({}, function() end, true, {}))
+        assert.are.equal("network_switcher", network_menu.name)
+        scan_task()
+        assert.is_true(NetworkMgr.wifi_on)
+        assert.are.equal("Home", network_menu.item_table[1].text)
+    end)
+
+    it("replaces KOReader's no-connection dialog with the Zen switcher", function()
+        local NetworkSetting = {}
+        ZenSpec.replace("ui/widget/networksetting", NetworkSetting)
+        local UIManager = package.loaded["ui/uimanager"]
+        local windows = {{ text = "Existing message" }}
+        UIManager.topdown_widgets_iter = function()
+            local index = #windows + 1
+            return function()
+                index = index - 1
+                return windows[index]
+            end
+        end
+        UIManager.close = function(_self, widget)
+            closed[#closed + 1] = widget
+            for index = #windows, 1, -1 do
+                if windows[index] == widget then table.remove(windows, index) end
+            end
+        end
+        local stock_calls, switcher_calls = 0, 0
+        local dialog = setmetatable({ network_list = {} }, NetworkSetting)
+        local notice = { text = "Connection failed" }
+        NetworkMgr.getWifiMenuTable = function()
+            return { callback = function(touch_menu)
+                assert.are.equal("touch menu", touch_menu)
+                stock_calls = stock_calls + 1
+                if stock_calls == 1 then
+                    windows[#windows + 1] = dialog
+                    windows[#windows + 1] = notice
+                    NetworkMgr.pending_connection = true
+                end
+            end }
+        end
+        local Switcher = require("modules/menu/network_switcher")
+        Switcher.open = function(callback, settings_subpage, plugin)
+            switcher_calls = switcher_calls + 1
+            assert.is_function(callback)
+            assert.is_false(settings_subpage)
+            assert.are.equal("plugin", plugin)
+            return true
+        end
+
+        assert.is_true(Switcher.toggleWifi("touch menu", function() end, false, "plugin"))
+        assert.are.same({ dialog, notice }, closed)
+        assert.are.equal(1, switcher_calls)
+        assert.is_nil(Switcher.toggleWifi("touch menu", function() end, false, "plugin"))
+        assert.are.equal(2, stock_calls)
+        assert.are.equal(1, switcher_calls)
+    end)
+
     it("opens PocketBook settings without changing an active connection", function()
         ZenSpec.replace("device", {
             model = "PB700",
@@ -473,7 +623,24 @@ describe("network switcher", function()
         assert.is_nil(NetworkMgr.disconnected)
         assert.are.same({}, events)
         network_menu.item_table[1].callback()
-        assert.are.equal(1, #button_dialog.buttons)
+        assert.are.equal(4, #button_dialog.buttons)
+        assert.is_truthy(button_dialog.buttons[1][1].text:find("Info", 1, true))
+        assert.is_truthy(button_dialog.buttons[2][1].text:find("Edit", 1, true))
+        assert.is_truthy(button_dialog.buttons[3][1].text:find("Disconnect", 1, true))
+        assert.is_truthy(button_dialog.buttons[4][1].text:find("Forget", 1, true))
+        network_menu.dimen = { x = 20, y = 20 }
+        network_menu.item_dimen = { w = 560, h = 80 }
+        network_menu.title_bar = { getSize = function() return { h = 100 } end }
+        network_menu.item_group = {{ entry = network_menu.item_table[1] }}
+        local anchor, prefers_down = button_dialog.anchor()
+        assert.are.same({ x = 152, y = 149, w = 22, h = 22 }, anchor)
+        assert.is_true(prefers_down)
+        button_dialog.buttons[4][1].callback()
+        assert.are.equal("Forget Wi-Fi network Home?", confirm_box.text)
+        confirm_box.ok_callback()
+        assert.are.equal(1, kindle_deletes)
+        assert.is_false(NetworkMgr.wifi_on)
+        assert.are.equal(0, kindle_scans)
     end)
 
     it("does not scan connected non-Kindle Wi-Fi until refresh", function()
@@ -482,6 +649,15 @@ describe("network switcher", function()
             isKindle = function() return false end,
         })
         local scans = 0
+        NetworkMgr.getCurrentNetwork = function()
+            return { ssid = "Home", id = 7 }
+        end
+        NetworkMgr.getAllSavedNetworks = function()
+            return { readSetting = function(_self, ssid)
+                assert.are.equal("Home", ssid)
+                return { flags = "[WPA2]", password = "saved" }
+            end }
+        end
         NetworkMgr.getNetworkList = function()
             scans = scans + 1
             return {{ ssid = "Home", connected = true }}
@@ -492,6 +668,10 @@ describe("network switcher", function()
         scan_task()
         assert.are.equal(0, scans)
         assert.are.equal("Home", network_menu.item_table[1].text)
+        network_menu.item_table[1].callback()
+        assert.are.equal(4, #button_dialog.buttons)
+        button_dialog.buttons[3][1].callback()
+        assert.are.equal(7, NetworkMgr.disconnected.wpa_supplicant_id)
 
         network_menu.custom_title_bar.action.callback()
         assert.are.equal(1, scans)

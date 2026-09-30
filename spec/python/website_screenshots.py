@@ -1564,7 +1564,11 @@ class CaptureWorkflow:
             layout = _require_ok(driver.command("menu_tab_layout", tab_id=options["tab"]), action)
             if options.get("minimal_controls") is True and (
                 layout.get("active_tab") != "quicksettings"
-                or layout.get("button_ids") != ["zen_settings", "launcher"]
+                or "app_launcher" in layout.get("tabs", [])
+                or layout.get("button_ids") != [
+                    "wifi", "night", "rotate", "zen", "zen_settings", "launcher",
+                ]
+                or layout.get("unified_slider") is not True
                 or not {"Settings", "Launcher"}.issubset(layout.get("visible_texts", []))
             ):
                 raise CaptureError(f"minimal Controls layout mismatch: {layout}")

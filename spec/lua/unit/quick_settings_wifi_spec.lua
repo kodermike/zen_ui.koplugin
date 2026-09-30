@@ -9,6 +9,7 @@ describe("quick settings Wi-Fi", function()
     local native_launches
     local transition_closes
     local switcher_calls
+    local toggle_calls
 
     local module_names = {
         "ffi/blitbuffer",
@@ -45,7 +46,6 @@ describe("quick settings Wi-Fi", function()
         "modules/menu/app_launcher/plugin_scan",
         "common/plugin_root",
         "modules/menu/patches/touch_menu_panel",
-        "modules/menu/network_adapters/kindle",
         "modules/menu/network_switcher",
         "modules/menu/bluetooth_switcher",
         "ui/widget/touchmenu",
@@ -75,6 +75,7 @@ describe("quick settings Wi-Fi", function()
         native_launches = {}
         transition_closes = 0
         switcher_calls = 0
+        toggle_calls = 0
 
         local no_op = {}
         ZenSpec.replace("ffi/blitbuffer", no_op)
@@ -137,6 +138,14 @@ describe("quick settings Wi-Fi", function()
                 assert.are.equal(_G.__ZEN_UI_PLUGIN, plugin)
                 return true
             end,
+            toggleWifi = function(touch_menu, callback, settings_subpage, plugin)
+                toggle_calls = toggle_calls + 1
+                assert.is_function(touch_menu.updateItems)
+                assert.is_function(callback)
+                assert.is_false(settings_subpage)
+                assert.are.equal(_G.__ZEN_UI_PLUGIN, plugin)
+                NetworkMgr.toggle_callback = callback
+            end,
         })
         ZenSpec.replace("ui/widget/touchmenu", {
             init = function() end,
@@ -152,17 +161,15 @@ describe("quick settings Wi-Fi", function()
         ZenSpec.replace("apps/reader/readerui", {})
 
         Device = {
-            hasWifiRestore = function() return true end,
             isKindle = function() return true end,
             screen = {},
         }
         ZenSpec.replace("device", Device)
 
         UIManager = {
-            events = {},
             scheduled = {},
             shown = {},
-            broadcastEvent = function(self, event) self.events[#self.events + 1] = event end,
+            broadcastEvent = function() end,
             show = function(self, widget) self.shown[#self.shown + 1] = widget end,
             scheduleIn = function(self, delay, callback)
                 self.scheduled[#self.scheduled + 1] = { delay = delay, callback = callback }
@@ -174,27 +181,10 @@ describe("quick settings Wi-Fi", function()
         NetworkMgr = {
             wifi_on = false,
             connected = false,
-            restore_calls = 0,
-            connectivity_calls = 0,
-            stock_calls = 0,
             current_ssid = nil,
             isWifiOn = function(self) return self.wifi_on end,
             isConnected = function(self) return self.connected end,
             getCurrentNetwork = function(self) return { ssid = self.current_ssid } end,
-            restoreWifiAsync = function(self) self.restore_calls = self.restore_calls + 1 end,
-            scheduleConnectivityCheck = function(self, callback, widget)
-                self.connectivity_calls = self.connectivity_calls + 1
-                self.connectivity_callback = callback
-                self.connectivity_widget = widget
-            end,
-            getWifiMenuTable = function(self)
-                return {
-                    callback = function(touch_menu)
-                        self.stock_calls = self.stock_calls + 1
-                        self.stock_touch_menu = touch_menu
-                    end,
-                }
-            end,
         }
         ZenSpec.replace("ui/network/manager", NetworkMgr)
 
@@ -230,7 +220,7 @@ describe("quick settings Wi-Fi", function()
         _G.__ZEN_UI_QUICK_SETTINGS = original_quick_settings
     end)
 
-    it("restores Kindle Wi-Fi without guessing the network name", function()
+    it("routes a Kindle Wi-Fi tap through the shared toggle", function()
         local updates = 0
         local touch_menu = {
             item_table = { panel = true },
@@ -240,25 +230,16 @@ describe("quick settings Wi-Fi", function()
             end,
         }
 
-        NetworkMgr.current_ssid = "Previous"
         assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.activate("wifi", touch_menu))
 
-        assert.are.equal(1, NetworkMgr.restore_calls)
-        assert.are.equal(1, NetworkMgr.connectivity_calls)
-        assert.are.equal(0, NetworkMgr.stock_calls)
-        assert.is_true(NetworkMgr.pending_connection)
-        assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.isDimmed("wifi"))
-        assert.is_false(_G.__ZEN_UI_QUICK_SETTINGS.isDisabled("wifi"))
-        assert.is_false(_G.__ZEN_UI_QUICK_SETTINGS.isActive("wifi"))
-        assert.are.equal("NetworkConnecting", UIManager.events[1].name)
-        assert.are.equal("Connecting to Wi-Fi…", UIManager.shown[1].text)
-        assert.are.equal(UIManager.shown[1], NetworkMgr.connectivity_widget)
+        assert.are.equal(1, toggle_calls)
+        assert.is_false(_G.__ZEN_UI_QUICK_SETTINGS.isDimmed("wifi"))
+        assert.are.equal(0, #UIManager.shown)
         assert.are.equal(0, #UIManager.scheduled)
 
-        NetworkMgr.current_ssid = nil
         NetworkMgr.wifi_on = true
         NetworkMgr.connected = true
-        NetworkMgr.connectivity_callback()
+        NetworkMgr.toggle_callback()
 
         assert.are.equal(0, updates)
         assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.isActive("wifi"))
@@ -302,30 +283,18 @@ describe("quick settings Wi-Fi", function()
         assert.are.equal(3, updates)
     end)
 
-    it("keeps KOReader's normal Wi-Fi action as the fallback", function()
-        Device.hasWifiRestore = function() return false end
-        local touch_menu = { item_table = { panel = true }, updateItems = function() end }
-
-        assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.activate("wifi", touch_menu))
-
-        assert.are.equal(0, NetworkMgr.restore_calls)
-        assert.are.equal(1, NetworkMgr.stock_calls)
-        assert.is_function(NetworkMgr.stock_touch_menu.updateItems)
-    end)
-
     it("does not restart an active Wi-Fi connection attempt", function()
         NetworkMgr.pending_connection = true
 
         assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.activate("wifi", {}))
 
-        assert.are.equal(0, NetworkMgr.restore_calls)
-        assert.are.equal(0, NetworkMgr.stock_calls)
+        assert.are.equal(0, toggle_calls)
     end)
 
     it("opens the Zen network switcher on hold", function()
         assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.hold("wifi", {}))
         assert.are.equal(1, switcher_calls)
-        assert.are.equal(0, NetworkMgr.stock_calls)
+        assert.are.equal(0, toggle_calls)
     end)
 
     it("defers native menu controls and disables missing targets", function()

@@ -319,10 +319,29 @@ local function apply_responsive_keyboard()
         end
         logger.dbg("Zen keyboard tap", "key=", self.key, "skip_flash=", skip_flash,
             "skiptap=", self.skiptap, "flash_setting=", self.flash_keyboard)
+        local keyboard = self.keyboard
+        local current_key = self._zen_replacement_layout == keyboard.layout
+            and self._zen_replacement_key
         if not skip_flash and not self.skiptap then
-            show_feedback(self)
+            show_feedback(current_key or self)
         end
-        if self.callback then self.callback() end
+        local shifted_layout = keyboard.shiftmode and keyboard.release_shift
+            and not keyboard.symbolmode and keyboard.layout
+        local callback = current_key and current_key.callback or self.callback
+        if callback then callback() end
+        if shifted_layout and keyboard.layout and shifted_layout ~= keyboard.layout
+                and not keyboard.shiftmode then
+            -- A second tap may still be targeting the keys from before the Shift redraw.
+            for row_index, row in ipairs(shifted_layout) do
+                local current_row = keyboard.layout[row_index]
+                if current_row then
+                    for key_index, old_key in ipairs(row) do
+                        old_key._zen_replacement_layout = keyboard.layout
+                        old_key._zen_replacement_key = current_row[key_index]
+                    end
+                end
+            end
+        end
         self.keyboard._zen_double_space = nil
         return true
     end

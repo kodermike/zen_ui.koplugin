@@ -231,7 +231,11 @@ end
 local function show_minimal_controls()
     local plugin = get_zen_plugin()
     local config = plugin and plugin.config and plugin.config.quick_settings
-    if type(config) ~= "table" then return false, "quick settings unavailable" end
+    local features = plugin and plugin.config and plugin.config.features
+    if type(config) ~= "table" or type(features) ~= "table" then
+        return false, "quick settings unavailable"
+    end
+    local launcher_enabled = features.app_launcher
     local original = {
         button_order = config.button_order,
         show_buttons = config.show_buttons,
@@ -243,15 +247,20 @@ local function show_minimal_controls()
     local restore
     restore = function()
         for key, value in pairs(original) do config[key] = value end
+        features.app_launcher = launcher_enabled
         if controls_showcase_restore == restore then controls_showcase_restore = nil end
     end
     controls_showcase_restore = restore
-    config.button_order = { "zen_settings", "launcher" }
-    config.show_buttons = { zen_settings = true, launcher = true }
+    config.button_order = { "wifi", "night", "rotate", "zen", "zen_settings", "launcher" }
+    config.show_buttons = {
+        wifi = true, night = true, rotate = true, zen = true,
+        zen_settings = true, launcher = true,
+    }
+    features.app_launcher = false
     config.show_labels = true
-    config.show_frontlight = false
-    config.show_warmth = false
-    config.unified_light_slider = false
+    config.show_frontlight = true
+    config.show_warmth = true
+    config.unified_light_slider = true
     return true
 end
 
@@ -2079,6 +2088,8 @@ function Driver:handleCommand(command)
             active_tab = active_tab,
             visible_texts = visible_texts,
             button_ids = button_ids,
+            unified_slider = refs and refs.fl_progress ~= nil
+                and refs.fl_progress == refs.nl_progress or false,
             empty_segment = empty_segment,
             solid_separator_positions = solid_separator_positions,
         }

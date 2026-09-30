@@ -160,30 +160,21 @@ function M.isSupported(Device)
     return Device.isKindle and Device:isKindle()
 end
 
-function M.restoreWifi(NetworkMgr, callback)
-    local Device = require("device")
-    if NetworkMgr:isWifiOn() or not M.isSupported(Device)
-            or not (Device.hasWifiRestore and Device:hasWifiRestore()) then
-        return false
-    end
-
-    local Event = require("ui/event")
-    local InfoMessage = require("ui/widget/infomessage")
-    local _ = require("gettext")
-    local notice = InfoMessage:new{ text = _("Connecting to Wi-Fi…") }
-    NetworkMgr.pending_connection = true
-    UIManager:broadcastEvent(Event:new("NetworkConnecting"))
-    UIManager:show(notice)
-    NetworkMgr:restoreWifiAsync()
-    NetworkMgr:scheduleConnectivityCheck(callback, notice)
-    return true
-end
-
 function M.new(NetworkMgr)
     local adapter = { id = "kindle" }
     local closed = false
     local scan_handle
     local scan_poll
+
+    function adapter.getSavedNetwork(ssid)
+        local profile = get_profile(ssid)
+        if not profile then return nil end
+        return {
+            flags = profile.smethod and profile.smethod:upper()
+                or profile.psk and "WPA" or "",
+            password = profile.psk,
+        }
+    end
 
     function adapter.close()
         closed = true
@@ -232,8 +223,7 @@ function M.new(NetworkMgr)
     function adapter.getNetworkList()
         local scan_list, scan_error = read_hash("scanList")
         if not scan_list then return nil, scan_error end
-        local profiles, profiles_error = read_hash("profileData")
-        if not profiles then return nil, profiles_error end
+        local profiles = read_hash("profileData") or {}
 
         local saved = {}
         for _i, profile in ipairs(profiles) do

@@ -15,8 +15,8 @@ local menu_section     = require("modules/settings/sections/menu_settings")
 local app_launcher_section = require("modules/settings/sections/app_launcher_settings")
 local reader_section   = require("modules/settings/sections/reader_settings")
 local extras_section   = require("modules/settings/sections/extras_settings")
+local general_section  = require("modules/settings/sections/general_settings")
 local about_section    = require("modules/settings/sections/about_settings")
-local updates_section  = require("modules/settings/sections/updates_settings")
 local shutdown         = require("common/shutdown")
 
 local M = {}
@@ -57,8 +57,8 @@ function M.build(plugin)
     local app_launcher_item = app_launcher_section.build(ctx)
     local reader_items         = reader_section.build(ctx)
     local extras_items      = extras_section.build(ctx)
-    local about_items, language_item, time_item = about_section.build(ctx)
-    local updates_items     = updates_section.build(ctx)
+    local about_items     = about_section.build(ctx)
+    local general_items   = general_section.build(ctx, extras_items)
 
     table.insert(about_items, IconItem.decorate({
         text = _("Quit KOReader"),
@@ -128,7 +128,6 @@ function M.build(plugin)
     -- Root menu assembly
     -- -------------------------------------------------------------------------
 
-    local general_items = {}
     local function move_item(items, text, destination)
         for i, item in ipairs(items) do
             if item.text == text then
@@ -138,29 +137,12 @@ function M.build(plugin)
         end
     end
 
-    for _i, item in ipairs(about_items) do
+    for _i, item in ipairs(general_items) do
         if item.text == _("Advanced") then
             move_item(item.sub_item_table, _("Double tap to open books"), filebrowser_items)
             break
         end
     end
-
-    move_item(about_items, _("Wi-Fi"), general_items)
-    move_item(about_items, _("Bluetooth"), general_items)
-    move_item(extras_items, _("Schedules"), general_items)
-    move_item(extras_items, _("Sleep"), general_items)
-    local battery_item = IconItem.decorate({
-        text = _("Battery"),
-        sub_item_table_func = require("modules/settings/battery_stats_menu").buildItems,
-    }, icons.battery)
-    table.insert(general_items, battery_item)
-    table.insert(general_items, language_item)
-    table.insert(general_items, time_item)
-    move_item(about_items, _("Advanced"), general_items)
-    table.insert(general_items, IconItem.decorate({
-        text = _("Updates"),
-        sub_item_table = updates_items,
-    }, icons.upgrade))
 
     extras_items = utils.order_items_by_text(extras_items, {
         _("Install ZenPM"),

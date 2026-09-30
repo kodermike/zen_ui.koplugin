@@ -575,20 +575,17 @@ local function apply_quick_settings()
             active_func = isWifiConnected,
             dim_func = isWifiConnecting,
             callback = function(touch_menu)
-                if isWifiConnecting() then return end
-                if require("modules/menu/network_adapters/kindle").restoreWifi(
-                    NetworkMgr, function()
-                        refreshWifiQuickSettings(touch_menu)
-                    end)
-                then
+                if isWifiConnecting() then
+                    require("common/zen_logger").new("quick_settings").dbg(
+                        "Wi-Fi tap ignored during connection",
+                        "pending_connection=", NetworkMgr.pending_connection,
+                        "pending_connectivity_check=", NetworkMgr.pending_connectivity_check)
                     return
                 end
-                local wifi_menu = NetworkMgr:getWifiMenuTable()
-                wifi_menu.callback({
-                    updateItems = function()
-                        refreshWifiQuickSettings(touch_menu)
-                    end,
-                })
+                local refresh = function() refreshWifiQuickSettings(touch_menu) end
+                require("modules/menu/network_switcher").toggleWifi({
+                    updateItems = refresh,
+                }, refresh, false, zen_plugin)
             end,
             hold_callback = function(touch_menu)
                 return require("modules/menu/network_switcher").open(function()
