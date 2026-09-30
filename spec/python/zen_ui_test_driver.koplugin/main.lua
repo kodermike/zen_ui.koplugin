@@ -12,7 +12,8 @@ local showcase_quote
 local showcase_picker
 local showcase_picker_wrapped
 local metadata_showcase_editor
-local network_showcase_restore
+local switcher_showcase_restore
+local controls_showcase_restore
 
 local function get_zen_plugin()
     local PluginLoader = require("pluginloader")
@@ -224,6 +225,33 @@ local function show_lockdown_control()
         if id == "zen" then order[#order + 1] = "lockdown" end
     end
     quick_settings.button_order = order
+    return true
+end
+
+local function show_minimal_controls()
+    local plugin = get_zen_plugin()
+    local config = plugin and plugin.config and plugin.config.quick_settings
+    if type(config) ~= "table" then return false, "quick settings unavailable" end
+    local original = {
+        button_order = config.button_order,
+        show_buttons = config.show_buttons,
+        show_labels = config.show_labels,
+        show_frontlight = config.show_frontlight,
+        show_warmth = config.show_warmth,
+        unified_light_slider = config.unified_light_slider,
+    }
+    local restore
+    restore = function()
+        for key, value in pairs(original) do config[key] = value end
+        if controls_showcase_restore == restore then controls_showcase_restore = nil end
+    end
+    controls_showcase_restore = restore
+    config.button_order = { "zen_settings", "launcher" }
+    config.show_buttons = { zen_settings = true, launcher = true }
+    config.show_labels = true
+    config.show_frontlight = false
+    config.show_warmth = false
+    config.unified_light_slider = false
     return true
 end
 
@@ -1247,7 +1275,8 @@ end
 
 local function reset_showcase_ui(session)
     showcase_picker = nil
-    if network_showcase_restore then network_showcase_restore() end
+    if switcher_showcase_restore then switcher_showcase_restore() end
+    if controls_showcase_restore then controls_showcase_restore() end
     local settings_page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
     if settings_page and type(settings_page.onClose) == "function" then
         pcall(settings_page.onClose, settings_page)
@@ -1621,14 +1650,20 @@ local function show_network_switcher_fixture(names)
 
     local original_has_wifi_manager = Device.hasWifiManager
     local original_get_network_list = NetworkMgr.getNetworkList
+    local original_is_wifi_on = NetworkMgr.isWifiOn
+    local original_is_connected = NetworkMgr.isConnected
     local restore
     restore = function()
         Device.hasWifiManager = original_has_wifi_manager
         NetworkMgr.getNetworkList = original_get_network_list
-        if network_showcase_restore == restore then network_showcase_restore = nil end
+        NetworkMgr.isWifiOn = original_is_wifi_on
+        NetworkMgr.isConnected = original_is_connected
+        if switcher_showcase_restore == restore then switcher_showcase_restore = nil end
     end
-    network_showcase_restore = restore
+    switcher_showcase_restore = restore
     Device.hasWifiManager = function() return true end
+    NetworkMgr.isWifiOn = function() return true end
+    NetworkMgr.isConnected = function() return false end
     NetworkMgr.getNetworkList = function()
         restore()
         return networks
@@ -1644,11 +1679,70 @@ local function show_network_switcher_fixture(names)
     return true
 end
 
-local function network_switcher_fixture_state()
+local function show_bluetooth_switcher_fixture(names)
+    if type(names) ~= "table" or #names < 2 then
+        return false, "Bluetooth switcher fixture needs device names"
+    end
+    local states = {
+        { connected = true, paired = true, rssi = -38 },
+        { paired = true, rssi = -49 },
+        { paired = true, rssi = -60 },
+        { rssi = -68 },
+        { rssi = -75 },
+        { rssi = -84 },
+    }
+    local devices = {}
+    for index, name in ipairs(names) do
+        if type(name) ~= "string" or name == "" then
+            return false, "Bluetooth switcher fixture has an invalid device name"
+        end
+        local state = states[index] or states[#states]
+        devices[#devices + 1] = {
+            address = string.format("02:00:00:00:00:%02X", index),
+            name = name, connected = state.connected, paired = state.paired,
+            rssi = state.rssi,
+        }
+    end
+
+    local Kindle = require("modules/menu/bluetooth_adapters/kindle")
+    local Bluetooth = require("modules/menu/bluetooth/bluetooth")
+    local original_is_supported = Kindle.isSupported
+    local original_new = Kindle.new
+    local original_is_enabled = Bluetooth.isEnabled
+    local restore
+    restore = function()
+        Kindle.isSupported = original_is_supported
+        Kindle.new = original_new
+        Bluetooth.isEnabled = original_is_enabled
+        if switcher_showcase_restore == restore then switcher_showcase_restore = nil end
+    end
+    switcher_showcase_restore = restore
+    Kindle.isSupported = function() return true end
+    Kindle.new = function()
+        return {
+            id = "kindle",
+            getDeviceList = function() return devices end,
+            scan = function(done) restore(); done(true) end,
+            close = function() end,
+        }
+    end
+    Bluetooth.isEnabled = function() return true end
+
+    local ok_open, opened = pcall(function()
+        return require("modules/menu/bluetooth_switcher").open(nil, false, get_zen_plugin())
+    end)
+    if not ok_open or opened ~= true then
+        restore()
+        return false, tostring(opened)
+    end
+    return true
+end
+
+local function switcher_fixture_state(name)
     local stack = UIManager._window_stack or {}
     for index = #stack, 1, -1 do
         local menu = stack[index] and stack[index].widget
-        if menu and menu.name == "network_switcher" then
+        if menu and menu.name == name then
             local labels = {}
             for _i, item in ipairs(menu.item_table or {}) do
                 labels[#labels + 1] = item.text
@@ -1774,6 +1868,10 @@ function Driver:handleCommand(command)
         local ok, err = show_lockdown_control()
         return { ok = ok == true, error = err }
     end
+    if kind == "showcase_minimal_controls" then
+        local ok, err = show_minimal_controls()
+        return { ok = ok == true, error = err }
+    end
     if kind == "open_file_context" and type(params.path) == "string" then
         local ok, err = open_file_context(params.path)
         return { ok = ok == true, error = err }
@@ -1806,7 +1904,14 @@ function Driver:handleCommand(command)
         return { ok = ok == true, error = err }
     end
     if kind == "network_switcher_fixture_state" then
-        return { ok = true, network_switcher = network_switcher_fixture_state() }
+        return { ok = true, network_switcher = switcher_fixture_state("network_switcher") }
+    end
+    if kind == "show_bluetooth_switcher_fixture" then
+        local ok, err = show_bluetooth_switcher_fixture(params.names)
+        return { ok = ok == true, error = err }
+    end
+    if kind == "bluetooth_switcher_fixture_state" then
+        return { ok = true, bluetooth_switcher = switcher_fixture_state("bluetooth_switcher") }
     end
     if kind == "showcase_bounds" and type(params.target) == "string" then
         local bounds, err = showcase_bounds(params.target, params.label)
@@ -1949,6 +2054,11 @@ function Driver:handleCommand(command)
         local active_tab = touch_menu and tabs[touch_menu.cur_tab]
         local visible_texts = {}
         if touch_menu then collect_texts(touch_menu, visible_texts, {}, 0) end
+        local button_ids = {}
+        local refs = touch_menu and touch_menu._zen_panel_refs
+        for _i, button in ipairs(refs and refs.buttons or {}) do
+            button_ids[#button_ids + 1] = button.id
+        end
         local empty_segment = bar and bar.bar_sep and bar.bar_sep.empty_segments
             and bar.bar_sep.empty_segments[1]
         local solid_separator_positions = {}
@@ -1968,6 +2078,7 @@ function Driver:handleCommand(command)
             tab_segments = tab_segments,
             active_tab = active_tab,
             visible_texts = visible_texts,
+            button_ids = button_ids,
             empty_segment = empty_segment,
             solid_separator_positions = solid_separator_positions,
         }

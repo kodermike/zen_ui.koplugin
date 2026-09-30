@@ -114,6 +114,19 @@
     ]
   },
   {
+    "id": "quicksettings_minimal",
+    "group": "menus",
+    "session": "general",
+    "action": "menu_tab",
+    "tab": "quicksettings",
+    "background": "home_simple",
+    "minimal_controls": true,
+    "navbar": "library_home_icons",
+    "docs": [
+      "docs/controls.md"
+    ]
+  },
+  {
     "id": "network_switcher",
     "group": "menus",
     "session": "general",
@@ -125,6 +138,23 @@
       "Orbital Guest",
       "Coffee Then Wi-Fi",
       "NebulaNet"
+    ],
+    "docs": [
+      "docs/controls.md"
+    ]
+  },
+  {
+    "id": "bluetooth_switcher",
+    "group": "menus",
+    "session": "general",
+    "action": "bluetooth_switcher",
+    "device_names": [
+      "Luna Headphones",
+      "Paper Lantern Speaker",
+      "Cedar Keyboard",
+      "Pixel Stylus",
+      "Orbit Remote",
+      "Harbor Earbuds"
     ],
     "docs": [
       "docs/controls.md"
