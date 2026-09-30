@@ -3186,7 +3186,7 @@ local function build_home_content(menu, zen_config, dcfg, rows, data_provider)
         end)
     end
 
-    local top_tap_zone_h = math.max(1, math.floor(Screen:getHeight() * 0.05))
+    local top_tap_zone_h = math.max(1, math.floor(Screen:getHeight() * 0.07))
     local function open_top_menu(ges)
         if not (ges and ges.pos and ges.pos.y < top_tap_zone_h) then return false end
         local fm = FileManager.instance

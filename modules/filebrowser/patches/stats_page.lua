@@ -1484,7 +1484,7 @@ function StatsPage.create(createStatusRow, repaintTitleBar, zen_plugin)
             range = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() },
         },
     }
-    local top_tap_zone_h = math.max(1, math.floor(Screen:getHeight() * 0.05))
+    local top_tap_zone_h = math.max(1, math.floor(Screen:getHeight() * 0.07))
     menu.ges_events.ZenStatsTopTap = {
         GestureRange:new{
             ges = "tap",
