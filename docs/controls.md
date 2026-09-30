@@ -24,19 +24,19 @@ Controls adds a fast control panel to KOReader. It allows you to toggle Wi-Fi, f
 - Add KOReader menu buttons for native submenus available in the current library or reader context.
 - Get an automatically suggested icon when creating an action, plugin, or KOReader menu button.
 - Use the screenshot button with a configurable countdown timer.
-- Show brightness and warmth sliders when the device supports those controls.
+- Show brightness and warmth sliders, or combine them when the device supports both controls.
 - Hold a slider's minus button to turn the frontlight off or set warmth to zero.
 - Set an optional timeout that automatically turns Incognito Mode off.
 - Optionally turn Wi-Fi on and off with the Tailscale control.
-- Add hatching below the top-menu panel.
 - Flip the left-hand/right-hand icon used by Controls and the Library/Home menu tab.
-- Reset the button layout to defaults without deleting saved action and plugin buttons.
+- Show or hide the Zen Settings button in Controls.
+- Reset Controls to defaults without deleting saved custom buttons.
 
 ## Setting reference
 
 | Setting | Description |
 | --- | --- |
-| Buttons > Buttons | Opens the button arranger. Disabled buttons are dimmed when the 9-button limit is reached. |
+| Buttons | Opens the button arranger. Disabled buttons are dimmed when the 9-button limit is reached. |
 | Buttons > Built-in buttons | Includes Wi-Fi, Bluetooth, night mode, frontlight, autorotate, rotate, Zen Mode, Lockdown, Incognito, USB, file search, restart, exit, sleep, screenshot, sync, cloud, OPDS, Calibre, Calibre Search, Z-Library, LocalSend, Tailscale, ZenFM, Filebrowser, QuickRSS, Notion, reading streak, statistics progress, statistics calendar, battery stats, and supported game plugins when detected. |
 | Buttons > Autorotate | Changes the Autorotate button label and icon. An empty label restores the default. |
 | Buttons > Rotate action | Sets the rotate button to cycle rotation or apply 90, 180, or 270 rotation directly. |
@@ -56,12 +56,13 @@ Controls adds a fast control panel to KOReader. It allows you to toggle Wi-Fi, f
 | KOReader menu button > Label | Sets the button label. |
 | Custom button > Show | Shows or hides the button in Controls. |
 | Custom button > Delete | Deletes the button and removes it from the order list. |
-| Show labels | Shows or hides labels beneath Controls buttons. |
-| Show brightness slider | Shows the frontlight brightness slider in Controls. |
-| Show warmth slider | Shows the warmth slider on devices with natural light support. |
 | Buttons > Screenshot > Timer | Sets the screenshot countdown from 0 to 10 seconds. You can also hold the Screenshot button to change it. |
 | Buttons > Incognito > Timeout | Turns Incognito Mode off automatically after the selected number of minutes. Off keeps it active until you toggle it yourself. |
 | Buttons > Tailscale > Toggle Wi-Fi with Tailscale | Turns Wi-Fi on before starting Tailscale and off after stopping it. Available when the Tailscale plugin is installed. |
-| Background hatching | Fills the area below the top-menu panel with a hatched pattern. |
+| Show labels | Shows or hides labels beneath Controls buttons. |
+| Show brightness slider | Shows the frontlight brightness slider in Controls. |
+| Show warmth slider | Shows the warmth slider on devices with natural light support. |
+| Unified brightness/warmth slider | Combines brightness and warmth into one slider on devices with both controls. |
 | Flip LH/RH icon | Flips the Controls and Library/Home icons. |
-| Reset to defaults | Restores the default Controls button layout. Action, plugin, and KOReader menu buttons are not removed; they are disabled and kept in your saved configuration. |
+| Show Zen Settings in Controls | Shows or hides the Zen Settings button in Controls. |
+| Reset to defaults | Restores Controls defaults. Action, plugin, and KOReader menu buttons are disabled and kept in your saved configuration. |

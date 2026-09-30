@@ -187,6 +187,7 @@ function M.build(plugin)
     move_item(extras_items, _("Zen Keyboard"), interface_items)
     move_item(extras_items, _("Zen Search"), interface_items)
     move_item(filebrowser_items, _("Wallpaper"), interface_items)
+    move_item(quick_settings_item.sub_item_table, _("Blur menu background"), interface_items)
     move_item(extras_items, _("Custom icons"), interface_items)
 
     local library_item = IconItem.decorate({

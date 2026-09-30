@@ -1128,7 +1128,6 @@ function M.build(ctx)
         config.quick_settings.show_frontlight = def.show_frontlight
         config.quick_settings.show_warmth = def.show_warmth
         config.quick_settings.unified_light_slider = def.unified_light_slider
-        config.quick_settings.background_hatching = def.background_hatching
         config.quick_settings.flip_lh_rh_icon = def.flip_lh_rh_icon
         config.quick_settings.gyro_label = def.gyro_label
         config.quick_settings.gyro_icon = def.gyro_icon
@@ -1249,7 +1248,7 @@ function M.build(ctx)
                 end,
             }, icons.flip_lh_rh),
             IconItem.decorate({
-                text = _("Background hatching"),
+                text = _("Blur menu background"),
                 checked_func = function()
                     return config.quick_settings.background_hatching == true
                 end,
@@ -1257,7 +1256,7 @@ function M.build(ctx)
                     config.quick_settings.background_hatching = config.quick_settings.background_hatching ~= true
                     save_and_apply_quick_settings()
                 end,
-            }, icons.settings_background),
+            }, icons.settings_menu_blur),
             IconItem.decorate({
                 text = _("Show Zen Settings in Controls"),
                 checked_func = function()

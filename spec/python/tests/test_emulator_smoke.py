@@ -594,7 +594,9 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             interface_labels = driver.command("settings_page_state")["settings"]["labels"]
             assert interface_labels[:3] == ["Controls", "Launcher", "Navbar"]
             assert interface_labels[3].startswith("Font:")
-            assert interface_labels[4:] == ["Zen Keyboard", "Zen Search", "Wallpaper", "Custom icons"]
+            assert interface_labels[4:] == [
+                "Zen Keyboard", "Zen Search", "Wallpaper", "Blur menu background", "Custom icons",
+            ]
             assert driver.command("settings_page_select", label=interface_labels[3])["ok"] is True
             font_labels = driver.command("settings_page_state")["settings"]["labels"]
             assert font_labels[0].startswith("Font size:")
@@ -680,6 +682,7 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             assert driver.command("settings_page_select", label="Interface")["ok"] is True
             assert driver.command("settings_page_select", label="Controls")["ok"] is True
             settings = driver.command("settings_page_state")["settings"]
+            assert "Blur menu background" not in settings["labels"]
             assert settings.get("has_search_input") is False
             assert settings.get("has_search_button") is True
             assert driver.command("settings_page_back")["ok"] is True

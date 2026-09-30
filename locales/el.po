@@ -697,12 +697,6 @@ msgstr "Επιστροφή"
 msgid "Background color"
 msgstr "Χρώμα φόντου"
 
-#. Type: setting
-#. Context: IconItem.decorate({ text = _("Background hatching"), checked_func = function()
-#: menu_settings.lua:1252
-msgid "Background hatching"
-msgstr "Διαγράμμιση φόντου"
-
 #. Type: message
 #. Context: elseif code == "unsupported" or code == "decode_failed" then return _("Background image could not be loaded. It may be corrupt or unsupported.") end
 #: library_settings.lua:1231
@@ -846,6 +840,12 @@ msgstr "Συσκευές Bluetooth"
 #: bluetooth_switcher.lua:303
 msgid "Bluetooth scan failed."
 msgstr "Η σάρωση Bluetooth απέτυχε."
+
+#. Type: setting
+#. Context: IconItem.decorate({ text = _("Blur menu background"), checked_func = function()
+#: menu_settings.lua:1251
+msgid "Blur menu background"
+msgstr "Θόλωση φόντου μενού"
 
 #. Type: setting
 #. Context: local style = ensure_featured_text_style(mcfg, key) local weight = style.bold and _("bold") or _("regular") return string.format("%s, %s, %s", font_label(style.font_face), tostring(style.font_size), weight)

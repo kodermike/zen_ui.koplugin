@@ -42,7 +42,7 @@ See the [Home guide](docs/home.md).
 
 ### Controls
 
-Swipe down from anywhere for up to nine configurable controls plus brightness and warmth sliders. Buttons can toggle device features, run dispatcher actions, open plugins or KOReader menus, and expose installed integrations such as Bluetooth, Tailscale, and ZenFM. Tap Bluetooth to toggle it, or hold it to manage connections on Kindle, Kobo, and PocketBook. Tailscale can toggle Wi-Fi with itself, and optional hatching fills the area below the top menu. Hold the minus button on a lighting slider to jump to zero.
+Swipe down from anywhere for up to nine configurable controls plus brightness and warmth sliders. Buttons can toggle device features, run dispatcher actions, open plugins or KOReader menus, and expose installed integrations such as Bluetooth, Tailscale, and ZenFM. Tap Bluetooth to toggle it, or hold it to manage connections on Kindle, Kobo, and PocketBook. Tailscale can toggle Wi-Fi with itself. Hold the minus button on a lighting slider to jump to zero.
 
 <img src="./images/quickstart/onboarding/quicksettings.png" width="500" alt="Quick Settings">
 
@@ -108,7 +108,7 @@ See the [Extras](docs/extras.md), [Custom Icon Packs](docs/icon-packs.md), and [
 
 ## Unified Settings 
 
-Zen Settings brings ZenOS and frequently used KOReader settings into one searchable, key-friendly interface. Sections are organized as Home, Library, Reader, Interface, Extras, General, KOReader, and About. Interface groups Controls, Launcher, Navbar, the global font, Zen Keyboard, Zen Search, and custom icons. General groups Wi-Fi, Bluetooth, schedules, sleep, advanced settings, and updates. Stats is in Extras. It remembers your previous location, most features remain independently configurable, and ZenOS can update itself without leaving KOReader.
+Zen Settings brings ZenOS and frequently used KOReader settings into one searchable, key-friendly interface. Sections are organized as Home, Library, Reader, Interface, Extras, General, KOReader, and About. Interface groups Controls, Launcher, Navbar, the global font, Zen Keyboard, Zen Search, Wallpaper, Blur menu background, and custom icons. General groups Wi-Fi, Bluetooth, schedules, sleep, advanced settings, and updates. Stats is in Extras. It remembers your previous location, most features remain independently configurable, and ZenOS can update itself without leaving KOReader.
 
 New installations include a visual setup guide followed by short on-screen tours of Zen Mode, Zen Settings, and the Reader page browser. The guide remains available from **Zen Settings > About > Setup Guide**.
 

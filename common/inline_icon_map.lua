@@ -109,6 +109,7 @@ return {
     settings_scroll   = "\u{F0BB8}",
     settings_layout   = "\u{F0758}",
     settings_background = "\u{F0E09}",
+    settings_menu_blur = "\u{F00B5}",
     settings_home_folder = "\u{F10B6}",
     settings_navbar   = "\u{F10A9}",
     navbar_tabs       = "\u{F0837}",
