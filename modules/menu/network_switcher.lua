@@ -20,8 +20,8 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
             and next(NetworkMgr:getAllSavedNetworks().data) == nil
         logger.dbg("Wi-Fi toggle", "wifi_on=", wifi_on, "connected=", connected,
             "kindle=", kindle, "settings=", settings_subpage == true,
-            "open_switcher=", kindle or no_saved)
-        if kindle or no_saved then
+            "open_switcher=", no_saved)
+        if no_saved then
             return M.open(on_connected, settings_subpage, plugin)
         end
     end
@@ -32,7 +32,11 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
     local shown_before = {}
     for widget in UIManager:topdown_widgets_iter() do shown_before[widget] = true end
 
-    NetworkMgr:getWifiMenuTable().callback(touch_menu)
+    if kindle and not connected then
+        NetworkMgr:toggleWifiOn(function() touch_menu:updateItems() end, false, true)
+    else
+        NetworkMgr:getWifiMenuTable().callback(touch_menu)
+    end
 
     local NetworkSetting = package.loaded["ui/widget/networksetting"]
     local network_dialog, failure_notice
@@ -157,7 +161,9 @@ function M.open(on_connected, settings_subpage, plugin)
     local render_networks
     local show_network_actions
     local start_scan
+    local toggle_wifi
     local scanning = false
+    local changing_power = false
     local settings_font_size = IconItem.getSettingsFontSize()
 
     local function status_items(text)
@@ -186,6 +192,10 @@ function M.open(on_connected, settings_subpage, plugin)
         action = {
             file = utils.resolveLocalIcon(plugin_root and plugin_root .. "/icons/", "quick_sync"),
             callback = function() start_scan() end,
+        },
+        toggle = {
+            value_func = function() return NetworkMgr:isWifiOn() end,
+            callback = function() toggle_wifi() end,
         },
     }
     menu = Menu:new{
@@ -726,7 +736,7 @@ function M.open(on_connected, settings_subpage, plugin)
     end
 
     local function scan_networks()
-        if closed then return end
+        if closed or not scanning then return end
         show_status(_("Searching for networks…"))
 
         if adapter and not previous_network then
@@ -741,7 +751,7 @@ function M.open(on_connected, settings_subpage, plugin)
 
         logger.dbg("scan started", "adapter=", adapter and adapter.id)
         local function load_results(scanned, scan_error)
-            if closed then return end
+            if closed or not scanning then return end
             scanning = false
             if scanned == false then
                 logger.warn("adapter scan failed", scan_error)
@@ -773,7 +783,7 @@ function M.open(on_connected, settings_subpage, plugin)
     end
 
     start_scan = function()
-        if closed or scanning then return end
+        if closed or scanning or changing_power then return end
         scanning = true
         if NetworkMgr:isWifiOn() then
             scan_networks()
@@ -790,6 +800,30 @@ function M.open(on_connected, settings_subpage, plugin)
             return
         end
         UIManager:nextTick(scan_networks)
+    end
+
+    toggle_wifi = function()
+        if closed or changing_power then return end
+        if not NetworkMgr:isWifiOn() then start_scan(); return end
+        changing_power = true
+        scanning = false
+        if adapter then
+            adapter.close()
+            adapter = KindleNetworkAdapter.new(NetworkMgr)
+        end
+        NetworkMgr:toggleWifiOff(function()
+            changing_power = false
+            if closed then return end
+            if NetworkMgr:isWifiOn() then
+                render_networks()
+            else
+                network_list = {}
+                previous_network, previous_ip, connected_network = nil, nil, nil
+                restore_started = true
+                show_status(_("Off"))
+            end
+            if on_connected then on_connected() end
+        end, true)
     end
 
     UIManager:show(menu)

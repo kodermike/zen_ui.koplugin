@@ -30,6 +30,7 @@ describe("settings title bar", function()
         "common/ui/icon_menu_item",
         "common/ui/zen_icon_button",
         "common/ui/zen_solid_circle",
+        "common/ui/zen_toggle",
         "common/ui/zen_settings_titlebar",
         "common/ui/zen_title_style",
         "common/widget_resources",
@@ -71,6 +72,7 @@ describe("settings title bar", function()
         ZenSpec.unload("ui/gesturerange")
         ZenSpec.unload("apps/filemanager/filemanager")
         ZenSpec.unload("common/ui/zen_settings_titlebar")
+        ZenSpec.unload("common/ui/zen_toggle")
         SettingsTitleBar = require("common/ui/zen_settings_titlebar")
     end)
 
@@ -93,9 +95,14 @@ describe("settings title bar", function()
     end
 
     local function init_title_bar(options)
-        local function new_widget(_self, spec)
+        local function new_widget(widget_class, spec)
             spec.getSize = function(self)
                 return self.dimen or { w = self.width or 40, h = self.height or 40 }
+            end
+            if widget_class == package.loaded["ui/widget/button"] then
+                spec.label_container = { dimen = {
+                    w = spec.width - 2 * spec.padding, h = spec.height,
+                } }
             end
             return spec
         end
@@ -114,6 +121,9 @@ describe("settings title bar", function()
         style.LEFT_PADDING, style.RIGHT_PADDING, style.TRAILING_GAP = 12, 12, 4
         style.ROW_HEIGHT, style.VERTICAL_PADDING, style.DIVIDER_HEIGHT = 44, 6, 2
         style.getTitleFace = function() return {} end
+        local icon_item = package.loaded["common/ui/icon_menu_item"]
+        icon_item.SETTINGS_TOGGLE_WIDTH, icon_item.SETTINGS_TOGGLE_HEIGHT = 50, 25
+        package.loaded["common/widget_resources"].free = function() end
         package.loaded["common/utils"].resolveLocalIcon = function() return "/zen/icon.svg" end
         package.loaded["common/plugin_root"] = "/zen"
         options.ges_events = {}
@@ -168,11 +178,49 @@ describe("settings title bar", function()
         title_bar.close_visible = nil
         title_bar:init()
         assert.is_truthy(title_bar.close_button)
+        assert.are.equal(title_bar.close_button, title_bar._header_row[#title_bar._header_row][1])
         assert.are.equal(title_width - 48, title_bar._title_max_width)
         assert.are.same({ title_bar.back_button, title_bar.action_button, title_bar.close_button },
             title_bar:generateHorizontalLayout()[1])
         title_bar.close_button.callback()
         assert.is_true(closed)
+    end)
+
+    it("places a live Zen toggle beside the action and includes it in keyboard focus", function()
+        local enabled = true
+        local title_bar = init_title_bar({
+            title = "Wi-Fi networks", title_full_width = true,
+            back_visible = true, search_visible = false, close_visible = false,
+            action = { file = "/zen/refresh.svg" },
+        })
+        local title_width = title_bar._title_max_width
+        title_bar.toggle = {
+            value_func = function() return enabled end,
+            callback = function() enabled = not enabled end,
+        }
+        title_bar:init()
+
+        local button = title_bar.toggle_button
+        local toggle = button.label_widget
+        assert.are.equal(toggle, button.label_container[1])
+        assert.are.same({ w = 50, h = 28 }, button.label_container.dimen)
+        assert.are.equal(title_width - button:getSize().w - 4, title_bar._title_max_width)
+        assert.are.same({ title_bar.back_button, title_bar.action_button, button },
+            title_bar:generateHorizontalLayout()[1])
+        assert.are.equal(button, title_bar._header_row[#title_bar._header_row])
+        assert.is_true(toggle:getValue())
+        button.callback()
+        assert.is_false(toggle:getValue())
+        enabled = true
+        assert.is_true(toggle:getValue())
+
+        title_bar.close_visible = true
+        title_bar:init()
+        assert.are.equal(title_bar.close_button, title_bar._header_row[#title_bar._header_row][1])
+        assert.are.equal(title_bar.toggle_button, title_bar._header_row[#title_bar._header_row - 2])
+        assert.are.equal(title_bar.action_button, title_bar._header_row[#title_bar._header_row - 4])
+        assert.are.same({ title_bar.back_button, title_bar.action_button,
+            title_bar.toggle_button, title_bar.close_button }, title_bar:generateHorizontalLayout()[1])
     end)
 
     it("uses one back hitbox across the chevron, gap, and title", function()

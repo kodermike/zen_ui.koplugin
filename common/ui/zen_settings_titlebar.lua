@@ -199,6 +199,7 @@ function ZenSettingsTitleBar:init()
     local show_search = self.search_expanded == true and self.search_visible ~= false
     local show_search_button = self.search_visible ~= false and not show_search
     local show_action = self.action and not show_search
+    local show_toggle = self.toggle and not show_search
     local show_close = self.close_visible ~= false
     local title_cap = math.min(Screen:scaleBySize(150), math.floor(self.width * 0.25))
     local title_width = title_cap
@@ -267,10 +268,29 @@ function ZenSettingsTitleBar:init()
         end
         action_width = self.action_button:getSize().w
     end
+    self.toggle_button = nil
+    local toggle_width = 0
+    if show_toggle then
+        local toggle = require("common/ui/zen_toggle"):new{
+            width = IconItem.SETTINGS_TOGGLE_WIDTH,
+            height = IconItem.SETTINGS_TOGGLE_HEIGHT,
+            value_func = self.toggle.value_func,
+        }
+        self.toggle_button = Button:new{
+            text = "", width = toggle:getSize().w + 2 * button_padding,
+            height = icon_size, padding = button_padding, bordersize = 0, radius = 0,
+            show_parent = self.show_parent, callback = self.toggle.callback,
+        }
+        WidgetResources.free(self.toggle_button.label_widget)
+        self.toggle_button.label_container[1] = toggle
+        self.toggle_button.label_widget = toggle
+        toggle_width = self.toggle_button:getSize().w
+    end
     local trailing_controls = (show_close and 1 or 0) + (show_action and 1 or 0)
+        + (show_toggle and 1 or 0)
         + (show_search_button and 1 or 0)
     local trailing_gap = TitleStyle.TRAILING_GAP or Screen:scaleBySize(4)
-    local trailing_width = (show_close and button_size or 0) + action_width
+    local trailing_width = (show_close and button_size or 0) + action_width + toggle_width
         + (show_search_button and button_size or 0)
         + math.max(0, trailing_controls - 1) * trailing_gap
     local max_title_width = math.max(1,
@@ -490,6 +510,7 @@ function ZenSettingsTitleBar:init()
     } or nil
     local trailing_buttons = {}
     if self.action_button then table.insert(trailing_buttons, self.action_button) end
+    if self.toggle_button then table.insert(trailing_buttons, self.toggle_button) end
     if self.search_button then table.insert(trailing_buttons, self.search_button) end
     if self.close_button then
         table.insert(trailing_buttons, OverlapGroup:new{
@@ -747,6 +768,7 @@ local function focus_controls(title_bar)
     append(title_bar.back_button)
     append(title_bar.search_input)
     append(title_bar.action_button)
+    append(title_bar.toggle_button)
     append(title_bar.search_button)
     append(title_bar.close_button)
     return controls

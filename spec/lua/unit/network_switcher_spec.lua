@@ -439,59 +439,98 @@ describe("network switcher", function()
         while #scheduled > 0 do table.remove(scheduled, 1)() end
     end
 
-    it("opens and scans the switcher when Kindle has no saved networks", function()
-        native_profiles = {}
-        profile_read_fails = true
-        package.loaded["device"].hasWifiRestore = function() return true end
-        NetworkMgr.wifi_on = false
-        NetworkMgr.current_ssid = nil
-        NetworkMgr.getWifiMenuTable = function()
-            error("KOReader Wi-Fi toggle should not run")
-        end
-        local Switcher = require("modules/menu/network_switcher")
+    for _i, wifi_on in ipairs({ false, true }) do
+        it("rejoins saved Kindle Wi-Fi with the radio " .. (wifi_on and "on" or "off"), function()
+            NetworkMgr.wifi_on = wifi_on
+            NetworkMgr.current_ssid = nil
+            local updates = 0
+            local UIManager = require("ui/uimanager")
+            UIManager.topdown_widgets_iter = function() return function() end end
+            NetworkMgr.getWifiMenuTable = function() error("Should connect without a prompt") end
+            NetworkMgr.toggleWifiOn = function(self, callback, long_press, interactive)
+                assert.is_false(long_press)
+                assert.is_true(interactive)
+                self:turnOnWifi()
+                self.current_ssid = "Home"
+                callback()
+            end
+            local Switcher = require("modules/menu/network_switcher")
+            Switcher.open = function() error("Saved Wi-Fi should rejoin without the switcher") end
 
-        assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
-        assert.are.equal("network_switcher", network_menu.name)
-        assert.is_function(scan_task)
+            Switcher.toggleWifi({ updateItems = function() updates = updates + 1 end })
+
+            assert.is_true(NetworkMgr:isWifiOn())
+            assert.are.equal("Home", NetworkMgr.current_ssid)
+            assert.are.equal(1, updates)
+            assert.is_nil(scan_task)
+            assert.are.same({}, shown)
+        end)
+    end
+
+    for _i, has_saved in ipairs({ false, true }) do
+        it("opens the Kindle switcher when " .. (has_saved and "saved networks are out of range"
+                or "no networks are saved"), function()
+            native_profiles = has_saved and {
+                Old = { essid = "Old", netid = 2, psk = "saved" },
+            } or {}
+            NetworkMgr.wifi_on = false
+            NetworkMgr.current_ssid = nil
+            local NetworkSetting = {}
+            ZenSpec.replace("ui/widget/networksetting", NetworkSetting)
+            local dialog = setmetatable({}, NetworkSetting)
+            local UIManager = require("ui/uimanager")
+            UIManager.topdown_widgets_iter = function()
+                local index = #shown + 1
+                return function()
+                    index = index - 1
+                    return shown[index]
+                end
+            end
+            local attempts = 0
+            NetworkMgr.toggleWifiOn = function(self)
+                attempts = attempts + 1
+                self:turnOnWifi()
+                UIManager:show(dialog)
+            end
+            local Switcher = require("modules/menu/network_switcher")
+
+            assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
+            assert.are.equal(1, attempts)
+            assert.are.same({ dialog }, closed)
+            assert.are.equal("network_switcher", network_menu.name)
+            scan_task()
+            assert.is_true(NetworkMgr.wifi_on)
+            assert.are.equal(1, kindle_scans)
+            while #scheduled > 0 do table.remove(scheduled, 1)() end
+            assert.are.equal("Home", network_menu.item_table[1].text)
+        end)
+    end
+
+    it("toggles Wi-Fi from the title bar and resumes scanning in the same switcher", function()
+        local changed = 0
+        NetworkMgr.toggleWifiOff = function(self, callback, interactive)
+            assert.is_true(interactive)
+            self:turnOffWifi()
+            callback()
+        end
+        require("modules/menu/network_switcher").open(function() changed = changed + 1 end, true)
         scan_task()
-        assert.is_true(NetworkMgr.wifi_on)
+        local toggle = network_menu.custom_title_bar.toggle
+        assert.is_true(toggle.value_func())
+
+        toggle.callback()
+        assert.is_false(toggle.value_func())
+        assert.are.equal("Off", network_menu.item_table[1].text)
+        assert.is_false(network_menu.item_table[1].select_enabled)
+        assert.are.equal(1, changed)
+        assert.are.equal(1, #shown)
+
+        toggle.callback()
+        assert.is_true(toggle.value_func())
         assert.are.equal(1, kindle_scans)
         while #scheduled > 0 do table.remove(scheduled, 1)() end
         assert.are.equal("Home", network_menu.item_table[1].text)
-    end)
-
-    it("opens the switcher despite residual Kindle profiles", function()
-        native_profiles = {
-            Old = { essid = "Old", netid = 2, psk = "saved" },
-            Older = { essid = "Older", netid = 3, psk = "saved" },
-        }
-        package.loaded["device"].hasWifiRestore = function() return true end
-        NetworkMgr.wifi_on = false
-        NetworkMgr.current_ssid = nil
-        NetworkMgr.restoreWifiAsync = function() error("Kindle restore should not run") end
-        NetworkMgr.getWifiMenuTable = function()
-            error("KOReader Wi-Fi toggle should not run")
-        end
-        local Switcher = require("modules/menu/network_switcher")
-
-        assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
-        assert.are.equal("network_switcher", network_menu.name)
-        scan_task()
-        assert.are.equal(1, kindle_scans)
-    end)
-
-    it("opens the switcher when Kindle Wi-Fi is on without a connection or saved network", function()
-        native_profiles = {}
-        NetworkMgr.current_ssid = nil
-        NetworkMgr.getWifiMenuTable = function()
-            error("KOReader Wi-Fi toggle should not run")
-        end
-        local Switcher = require("modules/menu/network_switcher")
-
-        assert.is_true(Switcher.toggleWifi({}, function() end, false, {}))
-        assert.are.equal("network_switcher", network_menu.name)
-        scan_task()
-        assert.are.equal(1, kindle_scans)
+        assert.are.equal(1, #shown)
     end)
 
     it("still turns off a connected Kindle", function()
