@@ -45,9 +45,13 @@ describe("network switcher", function()
         "ui/network/manager",
         "ui/uimanager",
         "ffi/util",
+        "ffi/crypto",
+        "ffi/sha2",
         "ffi/inkview",
         "liblipclua",
         "lj-wpaclient/wpaclient",
+        "ui/network/wpa_supplicant",
+        "util",
         "common/inline_icon_map",
         "common/plugin_root",
         "common/ui/icon_menu_item",
@@ -73,6 +77,7 @@ describe("network switcher", function()
         fail_first_auth = false
         ip_calls = 0
         logs = {}
+        password_dialog = nil
         button_dialog = nil
         scan_task = nil
         scheduled = {}
@@ -221,6 +226,9 @@ describe("network switcher", function()
             queryNetworkState = function(self) self.queried = true end,
         }
         ZenSpec.replace("ui/network/manager", NetworkMgr)
+        ZenSpec.replace("lj-wpaclient/wpaclient", {
+            __index = { enableNetworkByID = function() end },
+        })
         ZenSpec.replace("liblipclua", {
             init = function(name)
                 assert.are.equal("com.github.koreader.networkmgr", name)
@@ -698,6 +706,76 @@ describe("network switcher", function()
         assert.are.equal(0, kindle_scans)
     end)
 
+    for _i, case in ipairs({
+        { name = "accepts an unchanged IP when reconnecting with a default route",
+            route = true, connected = true, sleeps = 0 },
+        { name = "waits for a default route when reconnecting with an unchanged IP",
+            route = true, connected = true, sleeps = 1 },
+        { name = "rejects an unchanged IP when reconnecting without a default route",
+            route = false, sleeps = 60 },
+        { name = "handles a failed route check when reconnecting with an unchanged IP",
+            route_error = true, sleeps = 60 },
+        { name = "rejects a stale IP and route when switching to another network",
+            switch_network = true, route = true, sleeps = 60 },
+        { name = "checks the active SSID before accepting an unchanged IP",
+            current_ssid = "Guest", route = true, sleeps = 60 },
+        { name = "rejects an unchanged IP and route when authentication selects another SSID",
+            actual_ssid = "Guest", route = true, sleeps = 60 },
+    }) do
+        it(case.name, function()
+            local ip = "192.168.1.10"
+            ZenSpec.replace("modules/settings/zen_settings_utils", {
+                get_device_ip_address = function() return ip end,
+            })
+            NetworkMgr.hasDefaultRoute = function()
+                if case.route_error then error("route unavailable") end
+                return case.route and verification_sleeps >= (case.connected and case.sleeps or 0)
+            end
+            NetworkMgr.obtainIP = function(self)
+                self.obtained = true
+                if case.actual_ssid then self.current_ssid = case.actual_ssid end
+            end
+            local reported_network, reported_ip
+            local Switcher = require("modules/menu/network_switcher")
+            assert.is_true(Switcher.open(function(network, address)
+                reported_network, reported_ip = network, address
+            end))
+            if case.switch_network then finish_scan() else scan_task() end
+            local item = network_menu.item_table[case.switch_network and 2 or 1]
+            local target_ssid = item.network.ssid
+            network_menu:onMenuHold(item)
+            button_dialog.buttons[2][1].callback()
+            if case.current_ssid then NetworkMgr.current_ssid = case.current_ssid end
+            local buttons = password_dialog.buttons[1]
+            buttons[#buttons].callback()
+
+            assert.are.equal(case.sleeps, verification_sleeps)
+            assert.is_nil(NetworkMgr.released)
+            assert.is_nil(NetworkMgr.disconnected)
+            if case.connected then
+                assert.are.equal(target_ssid, reported_network.ssid)
+                assert.are.equal(ip, reported_ip)
+                assert.are.equal(target_ssid, NetworkMgr.lease_ssid)
+                assert.are.same({ "NetworkConnecting", "NetworkConnected" }, events)
+            else
+                assert.is_nil(reported_network)
+                assert.is_nil(reported_ip)
+                assert.is_nil(NetworkMgr.lease_ssid)
+                assert.are.same(case.switch_network
+                    and { "NetworkConnecting", "NetworkConnecting" }
+                    or { "NetworkConnecting" }, events)
+                if case.actual_ssid then
+                    assert.are.equal("Connected to Guest instead of Home. The password may be incorrect.",
+                        password_dialog.description)
+                else
+                    assert.are.equal("Connected to " .. target_ssid
+                        .. ", but no IP address or default route was assigned.",
+                        network_menu.item_table[1].text)
+                end
+            end
+        end)
+    end
+
     it("does not scan connected non-Kindle Wi-Fi until refresh", function()
         ZenSpec.replace("device", {
             hasWifiManager = function() return true end,
@@ -746,6 +824,7 @@ describe("network switcher", function()
         NetworkMgr.getCurrentNetwork = function()
             return { ssid = "Home", id = 7 }
         end
+        NetworkMgr.getConfiguredNetworks = function() return {} end
         NetworkMgr.getAllSavedNetworks = function()
             return { readSetting = function()
                 return { flags = "[WPA2]", password = "saved" }
@@ -779,6 +858,72 @@ describe("network switcher", function()
         assert.are.equal(2, #button_dialog.buttons)
     end)
 
+    it("persists Kobo Forget before deleting KOReader credentials", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.wpa_supplicant = { ctrl_interface = "/var/run/wpa_supplicant/wlan0" }
+        NetworkMgr.getCurrentNetwork = function(self)
+            return self.current_ssid and { ssid = self.current_ssid, id = "7" } or nil
+        end
+        local profiles = {{ ssid = "Home", id = "7" }, { ssid = "Guest", id = "8" }}
+        NetworkMgr.getConfiguredNetworks = function() return profiles end
+        local saved = { flags = "[WPA2]", password = "saved" }
+        NetworkMgr.getAllSavedNetworks = function()
+            return { readSetting = function() return saved end }
+        end
+        NetworkMgr.deleteNetwork = function(self, network)
+            self.deleted = network
+            saved = nil
+        end
+        NetworkMgr.disconnectNetwork = function() error("profile was already removed") end
+        local commands = {}
+        local save_fails = true
+        ZenSpec.replace("lj-wpaclient/wpaclient", {
+            new = function()
+                return {
+                    sendCtrlCmd = function(_self, command)
+                        commands[#commands + 1] = command
+                        if command == "REMOVE_NETWORK 7" then
+                            profiles = {{ ssid = "Guest", id = "8" }}
+                            NetworkMgr.current_ssid = nil
+                        elseif command == "RECONFIGURE" then
+                            profiles = {{ ssid = "Home", id = "7" }, { ssid = "Guest", id = "8" }}
+                            NetworkMgr.current_ssid = "Home"
+                        elseif command == "SAVE_CONFIG" and save_fails then
+                            return "FAIL\n"
+                        end
+                        return "OK\n"
+                    end,
+                    close = function() end,
+                }
+            end,
+        })
+
+        local Switcher = require("modules/menu/network_switcher")
+        assert.is_true(Switcher.open())
+        scan_task()
+        network_menu.item_table[1].callback()
+        button_dialog.buttons[4][1].callback()
+        confirm_box.ok_callback()
+        assert.are.same({ "REMOVE_NETWORK 7", "SAVE_CONFIG", "RECONFIGURE" }, commands)
+        assert.is_nil(NetworkMgr.deleted)
+        assert.is_true(network_menu.item_table[1].network.connected)
+
+        save_fails = false
+        confirm_box.ok_callback()
+        assert.are.same({ "REMOVE_NETWORK 7", "SAVE_CONFIG", "RECONFIGURE",
+            "REMOVE_NETWORK 7", "SAVE_CONFIG" }, commands)
+        assert.are.same({{ ssid = "Guest", id = "8" }}, profiles)
+        assert.are.equal("Home", NetworkMgr.deleted.ssid)
+        assert.is_true(NetworkMgr.released)
+        assert.are.equal("Available", network_menu.item_table[1]._zen_settings_breadcrumb)
+        network_menu.item_table[1].callback()
+        assert.is_not_nil(password_dialog)
+    end)
+
     it("reuses a Kobo-configured network after disconnect without a KOReader password", function()
         ZenSpec.replace("device", {
             hasWifiManager = function() return true end,
@@ -799,6 +944,7 @@ describe("network switcher", function()
         local commands = {}
         local association_checks = 0
         ZenSpec.replace("lj-wpaclient/wpaclient", {
+            __index = { enableNetworkByID = function() end },
             new = function(path)
                 assert.are.equal("/var/run/wpa_supplicant/wlan0", path)
                 return {
@@ -830,6 +976,8 @@ describe("network switcher", function()
         assert.is_true(Switcher.open())
         scan_task()
         assert.are.equal("Saved · 80%", network_menu.item_table[1]._zen_settings_breadcrumb)
+        network_menu:onMenuHold(network_menu.item_table[1])
+        assert.is_truthy(button_dialog.buttons[3][1].text:find("Forget", 1, true))
         network_menu.item_table[1].callback()
         assert.is_nil(password_dialog)
         assert.are.same({ "DISCONNECT", "SELECT_NETWORK 7",
@@ -842,7 +990,7 @@ describe("network switcher", function()
         network_menu.item_table[1].callback()
         button_dialog.buttons[2][1].callback()
         ip_calls = 0
-        password_dialog.buttons[1][2].callback()
+        password_dialog.buttons[1][3].callback()
         assert.are.equal("guest-password", NetworkMgr.authenticated.password)
         assert.are.same({ "DISCONNECT", "SELECT_NETWORK 7",
             "ENABLE_NETWORK all" }, commands)
@@ -873,6 +1021,98 @@ describe("network switcher", function()
         assert.are.equal("Timed out", reason)
         assert.are.equal(120, verification_sleeps)
         assert.are.same({ "SELECT_NETWORK 7", "ENABLE_NETWORK all" }, commands)
+    end)
+
+    it("resumes Kobo password authentication after Disconnect and Forget", function()
+        NetworkMgr.wpa_supplicant = { ctrl_interface = "/var/run/wpa_supplicant/wlan0" }
+        local profiles = {{ ssid = "Home", id = "7" }, { ssid = "Other", id = "8" }}
+        NetworkMgr.getConfiguredNetworks = function() return profiles end
+        local disconnected = false
+        local current_id = "7"
+        local other_enabled = true
+        local auth_client
+        local WpaClient = { __index = {} }
+        WpaClient.new = function()
+            return setmetatable({}, WpaClient)
+        end
+        local methods = WpaClient.__index
+        methods.sendCtrlCmd = function(_self, command)
+            if command == "DISCONNECT" then
+                disconnected = true
+                current_id = nil
+            elseif command == "REMOVE_NETWORK 7" then
+                table.remove(profiles, 1)
+            elseif command == "SELECT_NETWORK 9" then
+                disconnected = false
+                other_enabled = false
+                current_id = "9"
+            elseif command == "ENABLE_NETWORK all" then
+                other_enabled = true
+            elseif command == "ENABLE_NETWORK 9" and not disconnected then
+                current_id = "9"
+            end
+            return "OK\n"
+        end
+        methods.enableNetworkByID = function(self, id)
+            return self:sendCtrlCmd("ENABLE_NETWORK " .. id)
+        end
+        local original_enable = methods.enableNetworkByID
+        methods.addNetwork = function(self)
+            auth_client = self
+            return "9"
+        end
+        methods.setNetwork = function(_self, id, key, value)
+            assert.are.equal("9", id)
+            assert.are.equal(key == "ssid" and "Home" or "new-psk", value)
+            return "OK"
+        end
+        methods.getConnectedNetwork = function()
+            if current_id then return { id = current_id, ssid = "Home" } end
+            return nil, "DISCONNECTED"
+        end
+        methods.attach = function() return true end
+        methods.readEvent = function() end
+        methods.waitForEvent = function() end
+        methods.removeNetwork = function() end
+        methods.close = function(self) self.closed = true end
+        ZenSpec.replace("lj-wpaclient/wpaclient", WpaClient)
+        ZenSpec.replace("ffi/crypto", {
+            pbkdf2_hmac_sha1 = function(password, ssid)
+                assert.are.equal("new-password", password)
+                assert.are.equal("Home", ssid)
+                return "new-psk"
+            end,
+        })
+        ZenSpec.replace("ffi/sha2", { bin_to_hex = function(value) return value end })
+        ZenSpec.replace("util", {})
+        ZenSpec.unload("ui/network/wpa_supplicant")
+        NetworkMgr.authenticateNetwork = require("ui/network/wpa_supplicant").authenticateNetwork
+        local Kobo = require("modules/menu/network_adapters/kobo")
+        local adapter = Kobo.new(NetworkMgr, require("common/zen_logger").new())
+        local network = { ssid = "Home", wpa_supplicant_id = "7", password = "new-password" }
+
+        assert.is_true(adapter.disconnect(network, true))
+        assert.is_true(adapter.forgetNetwork(network))
+        assert.is_true(adapter.connect(network, true))
+        assert.is_false(disconnected)
+        assert.are.equal("9", network.wpa_supplicant_id)
+        assert.are.equal("new-psk", NetworkMgr.saved.psk)
+        assert.are.same({{ ssid = "Other", id = "8" }}, profiles)
+        assert.is_true(other_enabled)
+        assert.is_true(auth_client.closed)
+        assert.are.equal(original_enable, methods.enableNetworkByID)
+
+        NetworkMgr.authenticateNetwork = function()
+            auth_client = WpaClient.new()
+            auth_client:enableNetworkByID("9")
+            error("authentication interrupted")
+        end
+        local authenticated, err = adapter.connect(network, true)
+        assert.is_false(authenticated)
+        assert.is_truthy(err:find("authentication interrupted", 1, true))
+        assert.is_true(other_enabled)
+        assert.is_true(auth_client.closed)
+        assert.are.equal(original_enable, methods.enableNetworkByID)
     end)
 
     it("saves a Kobo connection and remembers Wi-Fi for restoration", function()

@@ -53,10 +53,75 @@ function M.new(NetworkMgr, logger)
         return disconnected, err
     end
 
+    function adapter.forgetNetwork(network)
+        if type(NetworkMgr.getConfiguredNetworks) ~= "function" then
+            return false, "Kobo Wi-Fi profiles are unavailable"
+        end
+        local profiles, err = NetworkMgr:getConfiguredNetworks()
+        if not profiles then return false, err or "Could not read Kobo Wi-Fi profiles" end
+        local ids = {}
+        for _i, profile in ipairs(profiles) do
+            if profile.ssid == network.ssid then ids[#ids + 1] = profile.id end
+        end
+        if #ids == 0 then return true, nil, false end
+
+        local WpaClient = require("lj-wpaclient/wpaclient")
+        local wcli
+        wcli, err = WpaClient.new(NetworkMgr.wpa_supplicant.ctrl_interface)
+        if not wcli then return false, err end
+        for _i, id in ipairs(ids) do
+            local reply
+            reply, err = wcli:sendCtrlCmd("REMOVE_NETWORK " .. tostring(id))
+            if not reply or reply:sub(1, 2) ~= "OK" then
+                wcli:sendCtrlCmd("RECONFIGURE")
+                wcli:close()
+                return false, err or reply
+            end
+        end
+        local reply
+        reply, err = wcli:sendCtrlCmd("SAVE_CONFIG")
+        if not reply or reply:sub(1, 2) ~= "OK" then
+            wcli:sendCtrlCmd("RECONFIGURE")
+            wcli:close()
+            return false, err or reply
+        end
+        wcli:close()
+        logger.dbg("Kobo profiles forgotten", "ssid=", network.ssid, "profiles=", #ids)
+        return true, nil, true
+    end
+
+    local function authenticate_password(network)
+        local methods = require("lj-wpaclient/wpaclient").__index
+        local enable = methods.enableNetworkByID
+        local auth_client
+        -- KOReader authenticates synchronously; SELECT_NETWORK clears an earlier DISCONNECT.
+        methods.enableNetworkByID = function(wcli, id)
+            auth_client = wcli
+            local close = wcli.close
+            wcli.close = function(self)
+                auth_client = nil
+                local reply, err = self:sendCtrlCmd("ENABLE_NETWORK all")
+                if not reply or reply:sub(1, 2) ~= "OK" then
+                    logger.warn("could not re-enable Kobo Wi-Fi profiles", err or reply)
+                end
+                return close(self)
+            end
+            local reply, err = wcli:sendCtrlCmd("SELECT_NETWORK " .. tostring(id))
+            logger.dbg("Kobo password profile selected", "ssid=", network.ssid,
+                "profile_id=", id, "accepted=", reply ~= nil and reply:sub(1, 2) == "OK")
+            return reply, err
+        end
+        local ok, authenticated, err = pcall(NetworkMgr.authenticateNetwork, NetworkMgr, network)
+        methods.enableNetworkByID = enable
+        if auth_client then auth_client:close() end
+        if not ok then return false, tostring(authenticated) end
+        return authenticated, err
+    end
+
     function adapter.connect(network, use_password)
         local id = not use_password and
             (network.wpa_supplicant_id or adapter.profileId(network.ssid))
-        if not id then return NetworkMgr:authenticateNetwork(network) end
+        if not id then return authenticate_password(network) end
         local authenticated, err = use_profile(id, true)
         if authenticated then network.wpa_supplicant_id = id end
         logger.dbg("Kobo configured profile connection", "ssid=", network.ssid,

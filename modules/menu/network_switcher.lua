@@ -68,7 +68,7 @@ local function is_secured(network)
     return flags:find("WPA", 1, true) ~= nil or flags:find("SAE", 1, true) ~= nil
 end
 
-local function verify_connection(NetworkMgr, ssid, old_ip, address_released, ffiutil, get_ip)
+local function verify_connection(NetworkMgr, ssid, old_ip, address_released, ffiutil, get_ip, reconnecting)
     local saw_released_address = old_ip == nil or address_released
     local last_ip
     local last_ssid
@@ -85,6 +85,8 @@ local function verify_connection(NetworkMgr, ssid, old_ip, address_released, ffi
                 return ip
             end
             local ok_route, has_route = pcall(NetworkMgr.hasDefaultRoute, NetworkMgr)
+            -- Reconnecting can keep the same DHCP lease or static IP.
+            if reconnecting and ok_ip and ip and ok_route and has_route then return ip end
             if saw_released_address and ok_route and has_route then return true end
         end
         ffiutil.usleep(VERIFY_DELAY_US)
@@ -265,6 +267,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 "saved=", saved ~= nil,
                 "supplicant_id=", network.wpa_supplicant_id ~= nil)
         end
+        local kobo_removed
         if adapter then
             local deleted, delete_error = adapter.forgetNetwork(network)
             if not deleted then
@@ -273,7 +276,18 @@ function M.open(on_connected, settings_subpage, plugin)
                 show_status(_("Could not forget the Wi-Fi network."))
                 return false
             end
-        elseif network.connected and not disconnect_network(network, true) then
+        elseif kobo then
+            local deleted, delete_error
+            deleted, delete_error, kobo_removed = kobo_adapter.forgetNetwork(network)
+            if not deleted then
+                logger.warn("could not forget Kobo Wi-Fi profile",
+                    "ssid=", network.ssid, "error=", delete_error)
+                UIManager:show(InfoMessage:new{text = _("Could not forget the Wi-Fi network.")})
+                return false
+            end
+        end
+        if not adapter and network.connected
+                and not disconnect_network(network, true, kobo_removed) then
             return false
         end
         NetworkMgr:deleteNetwork(network)
@@ -307,7 +321,12 @@ function M.open(on_connected, settings_subpage, plugin)
         logger.dbg("restoring previous network", "ssid=", previous_network.ssid)
         show_status(T(_("Restoring %1…"), previous_network.ssid))
         UIManager:broadcastEvent(Event:new("NetworkConnecting"))
-        local authenticated = NetworkMgr:authenticateNetwork(previous_network)
+        local authenticated
+        if kobo_adapter then
+            authenticated = kobo_adapter.connect(previous_network)
+        else
+            authenticated = NetworkMgr:authenticateNetwork(previous_network)
+        end
         if authenticated then
             NetworkMgr:obtainIP()
             if type(NetworkMgr.scheduleConnectivityCheck) == "function" then
@@ -338,6 +357,8 @@ function M.open(on_connected, settings_subpage, plugin)
             show_status(power_error)
             return false
         end
+        local ok_active, active = pcall(NetworkMgr.getCurrentNetwork, NetworkMgr)
+        local reconnecting = ok_active and active and active.ssid == network.ssid
         local old_ip = previous_ip or get_ip()
         local address_released = get_ip() == nil
 
@@ -348,6 +369,7 @@ function M.open(on_connected, settings_subpage, plugin)
             NetworkMgr:releaseIP()
             NetworkMgr.lease_ssid = nil
             address_released = get_ip() == nil
+            reconnecting = false
             UIManager:broadcastEvent(Event:new("NetworkDisconnected"))
         end
 
@@ -366,7 +388,7 @@ function M.open(on_connected, settings_subpage, plugin)
         local connection, failure, actual_ssid, actual_ip
         if authenticated then
             connection, failure, actual_ssid, actual_ip = verify_connection(
-                NetworkMgr, network.ssid, old_ip, address_released, ffiutil, get_ip
+                NetworkMgr, network.ssid, old_ip, address_released, ffiutil, get_ip, reconnecting
             )
         else
             failure = "authentication"
@@ -453,7 +475,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 end,
             },
         }
-        if network.password ~= nil then
+        if network.password ~= nil or network.kobo_configured then
             buttons[#buttons + 1] = {
                 text = _("Forget"),
                 callback = function()
@@ -540,11 +562,13 @@ function M.open(on_connected, settings_subpage, plugin)
         UIManager:show(InfoMessage:new{text = table.concat(lines, "\n")})
     end
 
-    disconnect_network = function(network, quiet)
+    disconnect_network = function(network, quiet, profile_removed)
         UIManager:broadcastEvent(Event:new("NetworkDisconnecting"))
         local ok_disconnect, status, disconnect_error
         if adapter then
             ok_disconnect, status = adapter.disconnect(network)
+        elseif profile_removed then
+            ok_disconnect, status = true, true
         else
             ok_disconnect, status, disconnect_error = pcall(
                 disconnect_profile, network, not quiet)
@@ -606,7 +630,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 disconnect_network(network)
             end)
         end
-        if network.password ~= nil or network.saved then
+        if network.password ~= nil or network.saved or network.kobo_configured then
             add(icons.delete .. "  " .. _("Forget"), function()
                 UIManager:show(ConfirmBox:new{
                     text = T(_("Forget Wi-Fi network %1?"), network.ssid),
