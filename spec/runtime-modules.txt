@@ -186,6 +186,7 @@ modules/menu/app_launcher/store.lua|integration
 modules/menu/app_launcher/zenpm_pending.lua|integration
 modules/menu/menu.lua|integration
 modules/menu/network_adapters/kindle.lua|unit
+modules/menu/network_adapters/kobo.lua|unit
 modules/menu/network_switcher.lua|unit
 modules/menu/bluetooth_adapters/common.lua|unit
 modules/menu/bluetooth_adapters/kindle.lua|unit

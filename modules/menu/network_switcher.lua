@@ -7,13 +7,14 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
     local UIManager = require("ui/uimanager")
     local NetworkMgr = require("ui/network/manager")
     local KindleNetworkAdapter = require("modules/menu/network_adapters/kindle")
+    local KoboNetworkAdapter = require("modules/menu/network_adapters/kobo")
     local logger = require("common/zen_logger").new("network_switcher")
     local _ = require("gettext")
     local wifi_on = NetworkMgr:isWifiOn()
     local connected = wifi_on and NetworkMgr:isConnected()
     local Device = require("device")
     local kindle = KindleNetworkAdapter.isSupported(Device)
-    local kobo = Device.isKobo and Device:isKobo()
+    local kobo = KoboNetworkAdapter.isSupported(Device)
     if not connected then
         local no_saved = not kindle and not kobo and not wifi_on
             and next(NetworkMgr:getAllSavedNetworks().data) == nil
@@ -101,6 +102,7 @@ function M.open(on_connected, settings_subpage, plugin)
     local Menu = require("ui/widget/menu")
     local NetworkMgr = require("ui/network/manager")
     local KindleNetworkAdapter = require("modules/menu/network_adapters/kindle")
+    local KoboNetworkAdapter = require("modules/menu/network_adapters/kobo")
     local Size = require("ui/size")
     local UIManager = require("ui/uimanager")
     local IconItem = require("common/ui/icon_menu_item")
@@ -117,7 +119,9 @@ function M.open(on_connected, settings_subpage, plugin)
         "app_menu")
     local adapter = KindleNetworkAdapter.isSupported(Device)
         and KindleNetworkAdapter.new(NetworkMgr) or nil
-    local kobo = Device.isKobo and Device:isKobo()
+    local kobo_adapter = KoboNetworkAdapter.isSupported(Device)
+        and KoboNetworkAdapter.new(NetworkMgr, logger) or nil
+    local kobo = kobo_adapter ~= nil
     if kobo then
         logger.dbg("Kobo switcher opened", "wifi_on=", NetworkMgr:isWifiOn() == true,
             "connected=", NetworkMgr:isConnected() == true,
@@ -247,6 +251,11 @@ function M.open(on_connected, settings_subpage, plugin)
         return false, ok_turn_on and _("Could not turn on Wi-Fi.") or tostring(status)
     end
 
+    local function disconnect_profile(network, preserve)
+        if kobo_adapter then return kobo_adapter.disconnect(network, preserve) end
+        return NetworkMgr:disconnectNetwork(network)
+    end
+
     local disconnect_network
     local function forget_network(network)
         if kobo then
@@ -271,6 +280,7 @@ function M.open(on_connected, settings_subpage, plugin)
         network.password = nil
         network.psk = nil
         network.saved = nil
+        if kobo then network.kobo_configured = kobo_adapter.profileId(network.ssid) ~= nil end
         if previous_network and previous_network.ssid == network.ssid then
             previous_network = nil
         end
@@ -311,7 +321,7 @@ function M.open(on_connected, settings_subpage, plugin)
     end
 
     local prompt_password
-    local function connect(network)
+    local function connect(network, use_password)
         show_status(_("Connecting to ") .. network.ssid .. "…")
         logger.dbg("connection attempt", "ssid=", network.ssid,
             "saved_credentials=", network.password ~= nil)
@@ -334,7 +344,7 @@ function M.open(on_connected, settings_subpage, plugin)
         if not adapter and connected_network
                 and connected_network.ssid ~= network.ssid then
             UIManager:broadcastEvent(Event:new("NetworkDisconnecting"))
-            NetworkMgr:disconnectNetwork(connected_network)
+            disconnect_profile(connected_network, true)
             NetworkMgr:releaseIP()
             NetworkMgr.lease_ssid = nil
             address_released = get_ip() == nil
@@ -345,6 +355,8 @@ function M.open(on_connected, settings_subpage, plugin)
         local authenticated, auth_error
         if adapter then
             authenticated, auth_error = adapter.connect(network)
+        elseif kobo_adapter then
+            authenticated, auth_error = kobo_adapter.connect(network, use_password)
         else
             authenticated, auth_error = NetworkMgr:authenticateNetwork(network)
         end
@@ -479,7 +491,7 @@ function M.open(on_connected, settings_subpage, plugin)
                     end
                 end
                 UIManager:close(dialog)
-                connect(network)
+                connect(network, true)
             end,
         }
         dialog = InputDialog:new{
@@ -501,7 +513,8 @@ function M.open(on_connected, settings_subpage, plugin)
         local lines = {
             _("Network") .. ": " .. network.ssid,
             _("Status") .. ": " .. (network.connected and _("Connected")
-                or network.password ~= nil and _("Saved") or _("Available")),
+                or (network.password ~= nil or network.kobo_configured) and _("Saved")
+                or _("Available")),
             _("Signal") .. ": " .. (quality and tostring(math.floor(quality)) .. "%" or "—"),
             _("Security") .. ": " .. (flags ~= "" and flags or _("Open")),
         }
@@ -534,7 +547,7 @@ function M.open(on_connected, settings_subpage, plugin)
             ok_disconnect, status = adapter.disconnect(network)
         else
             ok_disconnect, status, disconnect_error = pcall(
-                NetworkMgr.disconnectNetwork, NetworkMgr, network)
+                disconnect_profile, network, not quiet)
         end
         if not ok_disconnect or status == false or disconnect_error then
             local reason = disconnect_error or (ok_disconnect and _("Could not disconnect from the Wi-Fi network."))
@@ -646,7 +659,7 @@ function M.open(on_connected, settings_subpage, plugin)
             if type(network.ssid) == "string" and network.ssid ~= "" then
                 local quality = tonumber(network.signal_quality)
                 local status = network.connected and _("Connected")
-                    or network.password ~= nil and _("Saved") or nil
+                    or (network.password ~= nil or network.kobo_configured) and _("Saved") or nil
                 local signal = quality and tostring(math.floor(quality)) .. "%" or nil
                 local item = {
                     text = network.ssid,
@@ -668,7 +681,8 @@ function M.open(on_connected, settings_subpage, plugin)
                             show_status(_("Networks with WEP encryption are not supported."))
                         elseif network.connected then
                             show_network_actions(network)
-                        elseif network.password == nil then
+                        elseif network.password == nil
+                                and not (kobo_adapter and kobo_adapter.profileId(network.ssid)) then
                             prompt_password(network)
                         else
                             connect(network)
@@ -728,14 +742,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 return (tonumber(left.signal_quality) or 0) > (tonumber(right.signal_quality) or 0)
             end)
             logger.dbg("scan complete", "networks=", #network_list)
-            if kobo then
-                local saved_count = 0
-                for _i, network in ipairs(network_list) do
-                    if network.password ~= nil then saved_count = saved_count + 1 end
-                end
-                logger.dbg("Kobo scan result", "networks=", #network_list,
-                    "saved_credentials=", saved_count)
-            end
+            if kobo_adapter then kobo_adapter.annotateScan(network_list) end
             render_networks()
         end
         if adapter then adapter.scan(load_results) else load_results(true) end
@@ -791,6 +798,7 @@ function M.open(on_connected, settings_subpage, plugin)
                         password = saved and saved.password or current.password,
                         psk = saved and saved.psk or current.psk,
                         saved = saved ~= nil,
+                        kobo_configured = kobo and kobo_adapter.profileId(current.ssid) ~= nil,
                         wpa_supplicant_id = current.wpa_supplicant_id or current.id,
                     }}
                     render_networks()
