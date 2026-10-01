@@ -278,8 +278,9 @@ local function apply_responsive_keyboard()
         end
     end
 
-    local function finish_cursor_move(key)
+    local function finish_cursor_move(key, ges)
         if not key or not key._zen_cursor_x then return false end
+        if ges and ges.ges == "hold_release" then key:onZenCursorHoldPan(nil, ges) end
         stop_cursor_repeat(key)
         cursor_key = nil
         key.keyboard._zen_cursor_key = nil
@@ -292,12 +293,33 @@ local function apply_responsive_keyboard()
         return true
     end
 
+    local function cursor_region(text_widget)
+        if not text_widget or not text_widget.dimen or not text_widget.cursor_line
+                or not text_widget.cursor_restore_x then return nil end
+        local size = text_widget.cursor_line.dimen
+        return Geom:new{
+            x = text_widget.dimen.x + text_widget.cursor_restore_x,
+            y = text_widget.dimen.y + text_widget.cursor_restore_y,
+            w = size.w,
+            h = size.h,
+        }
+    end
+
     local function move_cursor(key, chars)
         local inputbox = key.keyboard.inputbox
         local position = inputbox.charpos
         local target = math.max(1, math.min(#inputbox.charlist + 1, position + chars))
         if target == position then return false end
+        local text_widget = inputbox.text_widget
+        text_widget = text_widget and (text_widget.text_widget or text_widget)
+        local old_region = cursor_region(text_widget)
         inputbox:moveCursorToCharPos(target)
+        local region = cursor_region(text_widget)
+        if region then
+            if old_region then region = region:combine(old_region) end
+            -- Avoid overlapping e-ink updates leaving earlier cursor positions visible.
+            UIManager:setDirty(text_widget.dialog or "all", "[ui]", region)
+        end
         logger.dbg("Zen keyboard cursor move", "chars=", chars, "position=", target)
         return inputbox.charpos ~= position
     end
@@ -412,6 +434,7 @@ local function apply_responsive_keyboard()
             self.ges_events.ZenCursorHoldPan = {
                 GestureRange:new{
                     ges = "hold_pan",
+                    rate = Device:hasEinkScreen() and 10 or 30,
                 },
             }
             self.ges_events.ZenCursorRelease = {
@@ -434,7 +457,7 @@ local function apply_responsive_keyboard()
 
     function VirtualKey:onZenCursorHoldPan(_arg, ges)
         if not self._zen_cursor_x or not ges or not ges.pos then return false end
-        local step = math.max(1, math.floor(self.dimen.h * 0.125))
+        local step = math.max(1, math.floor(self.dimen.h * 0.15))
         local delta = ges.pos.x - self._zen_cursor_x
         if delta * self._zen_cursor_remainder < 0 then self._zen_cursor_remainder = 0 end
         delta = delta + self._zen_cursor_remainder
@@ -444,7 +467,7 @@ local function apply_responsive_keyboard()
         if chars ~= 0 then move_cursor(self, chars) end
 
         local bounds = self.keyboard.dimen
-        local edge = self.dimen.h * 0.5
+        local edge = math.min(self.dimen.h, bounds.w * 0.2)
         local direction
         if ges.pos.y >= bounds.y and ges.pos.y < bounds.y + bounds.h then
             if ges.pos.x <= bounds.x + edge then direction = -1
@@ -472,14 +495,14 @@ local function apply_responsive_keyboard()
         return true
     end
 
-    function VirtualKey:onZenCursorRelease()
-        return finish_cursor_move(self)
+    function VirtualKey:onZenCursorRelease(_arg, ges)
+        return finish_cursor_move(self, ges)
     end
 
     local original_hold_release = VirtualKey.onHoldReleaseKey
-    function VirtualKey:onHoldReleaseKey(...)
-        if finish_cursor_move(self.keyboard and self.keyboard._zen_cursor_key) then return true end
-        return original_hold_release(self, ...)
+    function VirtualKey:onHoldReleaseKey(arg, ges, ...)
+        if finish_cursor_move(self.keyboard and self.keyboard._zen_cursor_key, ges) then return true end
+        return original_hold_release(self, arg, ges, ...)
     end
 
     function VirtualKey:onSwipeKey(_arg, ges)

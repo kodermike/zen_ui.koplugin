@@ -11,6 +11,7 @@ describe("responsive keyboard patch", function()
     local VirtualKey
     local VirtualKeyboard
     local is_touch_device
+    local is_eink_screen
 
     before_each(function()
         require("ffi/loadlib")
@@ -20,6 +21,7 @@ describe("responsive keyboard patch", function()
         scheduled = {}
         cancelled = {}
         is_touch_device = true
+        is_eink_screen = true
         original_settings_is_false = G_reader_settings.isFalse
         G_reader_settings.isFalse = function() return false end
 
@@ -27,6 +29,7 @@ describe("responsive keyboard patch", function()
         ZenSpec.replace("device", {
             input = live_input,
             isTouchDevice = function() return is_touch_device end,
+            hasEinkScreen = function() return is_eink_screen end,
             performHapticFeedback = function(_, kind) haptics[#haptics + 1] = kind end,
         })
         UIManager = {
@@ -398,11 +401,13 @@ describe("responsive keyboard patch", function()
 
         key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 531, y = 450 } })
         assert.are.equal(5, inputbox.charpos)
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 533, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 534, y = 450 } })
+        assert.are.equal(5, inputbox.charpos)
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 535, y = 450 } })
         assert.are.equal(6, inputbox.charpos)
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 557, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 566, y = 450 } })
         assert.are.equal(8, inputbox.charpos)
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 545, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 551, y = 450 } })
         assert.are.equal(7, inputbox.charpos)
 
         local other_key = setmetatable({
@@ -413,6 +418,67 @@ describe("responsive keyboard patch", function()
         assert.is_false(key[1].invert)
         assert.are.equal(0, inserted)
         assert.are.equal(0, #scheduled)
+    end)
+
+    it("limits scrub redraws and applies the final finger position on release", function()
+        local Geom = require("ui/geometry")
+        local time = require("ui/time")
+        for index = 1, 2 do
+            is_eink_screen = index == 1
+            local key = cursor_key()
+            key:onHoldSelect(nil, { pos = Geom:new{ x = 520, y = 450 } })
+            local range = key.ges_events.ZenCursorHoldPan[1]
+            assert.are.equal(is_eink_screen and 10 or 30, range.rate)
+            local pan = { ges = "hold_pan", pos = Geom:new{ x = 535, y = 450 }, time = time.s(1) }
+            assert.is_true(range:match(pan))
+            key:onZenCursorHoldPan(nil, pan)
+            pan.pos.x, pan.time = 550, time.s(1) + time.ms(10)
+            assert.is_false(range:match(pan))
+            assert.are.equal(62, key.keyboard.inputbox.charpos)
+            local release = { ges = "hold_release", pos = pan.pos }
+            if index == 1 then
+                key:onZenCursorRelease(nil, release)
+            else
+                local other = setmetatable({ keyboard = key.keyboard }, { __index = VirtualKey })
+                other:onHoldReleaseKey(nil, release)
+            end
+            assert.are.equal(63, key.keyboard.inputbox.charpos)
+            assert.is_nil(key.keyboard._zen_cursor_key)
+        end
+    end)
+
+    it("refreshes the old and new cursor areas together without merging display updates", function()
+        local Geom = require("ui/geometry")
+        for index = 1, 2 do
+            local key = cursor_key()
+            local inputbox = key.keyboard.inputbox
+            local text_widget = {
+                dimen = Geom:new{ x = 100, y = 200, w = 600, h = 100 },
+                cursor_line = { dimen = Geom:new{ w = 2, h = 20 } },
+                cursor_restore_x = 10,
+                cursor_restore_y = 0,
+                dialog = {},
+            }
+            inputbox.text_widget = index == 1 and text_widget or { text_widget = text_widget }
+            function inputbox:moveCursorToCharPos(position)
+                self.charpos = position
+                text_widget.cursor_restore_x = text_widget.cursor_restore_x + 20
+                text_widget.cursor_restore_y = text_widget.cursor_restore_y + 20
+            end
+            key:onHoldSelect(nil, { pos = Geom:new{ x = 520, y = 450 } })
+            key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 535, y = 450 } })
+            local refresh = refreshes[#refreshes]
+            assert.are.equal(text_widget.dialog, refresh[1])
+            assert.are.equal("[ui]", refresh[2])
+            assert.are.same(Geom:new{ x = 110, y = 200, w = 22, h = 40 }, refresh[3])
+            key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 1019, y = 450 } })
+            local callback = scheduled[#scheduled].callback
+            callback()
+            refresh = refreshes[#refreshes]
+            assert.are.equal("[ui]", refresh[2])
+            assert.are.same(Geom:new{ x = 150, y = 240, w = 22, h = 40 }, refresh[3])
+            key:onZenCursorRelease()
+        end
     end)
 
     it("receives sub-threshold hold pans only in cursor mode, including return to the hold origin", function()
@@ -433,7 +499,7 @@ describe("responsive keyboard patch", function()
         detector:feedEvent{ touch }
         local hold = timers.hold()
         assert.are.equal("hold", hold.ges)
-        touch.x = 532
+        touch.x = 535
         assert.are.equal(0, #detector:feedEvent{ touch })
 
         local key = cursor_key()
@@ -456,33 +522,35 @@ describe("responsive keyboard patch", function()
         touch.id, touch.y, touch.timev = 2, 450, time.s(2)
         detector:feedEvent{ touch }
         timers.hold()
-        touch.x = 532
+        touch.x = 535
         assert.are.equal(0, #detector:feedEvent{ touch })
     end)
 
-    it("repeats at both keyboard edges, stops inward, and cancels on release or lifecycle changes", function()
+    it("repeats farther in from both keyboard edges, stops inward, and cancels on release or lifecycle changes", function()
         local Geom = require("ui/geometry")
         local key = cursor_key()
         local inputbox = key.keyboard.inputbox
         key:onHoldSelect(nil, { pos = Geom:new{ x = 520, y = 450 } })
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 1019, y = 450 } })
-        assert.are.equal(102, inputbox.charpos)
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 919, y = 450 } })
+        assert.are.equal(0, #scheduled)
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 920, y = 450 } })
+        assert.are.equal(87, inputbox.charpos)
         local repeat_right = scheduled[#scheduled].callback
         assert.are.equal(0.3, scheduled[#scheduled].delay)
         repeat_right()
-        assert.are.equal(103, inputbox.charpos)
+        assert.are.equal(88, inputbox.charpos)
         assert.are.equal(0.1, scheduled[#scheduled].delay)
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 1018, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 921, y = 450 } })
         assert.are.equal(repeat_right, scheduled[#scheduled].callback)
         repeat_right()
-        assert.are.equal(104, inputbox.charpos)
+        assert.are.equal(89, inputbox.charpos)
 
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 900, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 800, y = 450 } })
         assert.is_true(cancelled[repeat_right])
         local position = inputbox.charpos
         repeat_right()
         assert.are.equal(position, inputbox.charpos)
-        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 21, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 120, y = 450 } })
         local repeat_left = scheduled[#scheduled].callback
         position = inputbox.charpos
         repeat_left()
@@ -495,7 +563,7 @@ describe("responsive keyboard patch", function()
 
         for index = 1, 2 do
             key:onHoldSelect(nil, { pos = Geom:new{ x = 520, y = 450 } })
-            key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 1019, y = 450 } })
+            key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 920, y = 450 } })
             local callback = scheduled[#scheduled].callback
             if index == 1 then key.keyboard:addKeys() else key.keyboard:onCloseWidget() end
             assert.is_true(cancelled[callback])
@@ -505,6 +573,16 @@ describe("responsive keyboard patch", function()
             assert.are.equal(position, inputbox.charpos)
         end
         assert.is_true(key.keyboard.closed)
+    end)
+
+    it("keeps the middle of a narrow keyboard free of repeat zones", function()
+        local Geom = require("ui/geometry")
+        local key = cursor_key()
+        key.keyboard.dimen.w, key.dimen.x, key.dimen.w = 60, 20, 60
+        key:onHoldSelect(nil, { pos = Geom:new{ x = 50, y = 450 } })
+        key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 51, y = 450 } })
+        assert.are.equal(0, #scheduled)
+        key:onZenCursorRelease()
     end)
 
     it("stops edge repeats at text boundaries and when dragged outside the keyboard vertically", function()
