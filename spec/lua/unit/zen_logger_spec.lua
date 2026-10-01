@@ -41,10 +41,12 @@ describe("Zen logger branding", function()
     it("follows KOReader log-level changes made after installation", function()
         local logger = require("common/zen_logger").new("test")
 
+        assert.is_false(logger.isEnabled("dbg"))
         logger.dbg("hidden")
         assert.is_nil(captured)
 
         backend:setLevel(backend.levels.dbg)
+        assert.is_true(logger.isEnabled("dbg"))
         logger.dbg("visible")
         assert.are.equal("ZenOS: [zen_logger_spec] visible", captured[1])
     end)

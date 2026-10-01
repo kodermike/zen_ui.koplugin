@@ -17,6 +17,7 @@ describe("network switcher", function()
     local logs
     local scan_task
     local scheduled
+    local follow_up_checks
     local scan_handle_closes
     local kindle_disconnects
     local kindle_connects
@@ -73,6 +74,7 @@ describe("network switcher", function()
         button_dialog = nil
         scan_task = nil
         scheduled = {}
+        follow_up_checks = {}
         scan_handle_closes = 0
         kindle_disconnects = 0
         kindle_connects = 0
@@ -345,6 +347,10 @@ describe("network switcher", function()
             tickAfterNext = function(_self, action) scan_task = action end,
             nextTick = function(_self, action) action() end,
             scheduleIn = function(_self, delay, action)
+                if delay == 3 then
+                    follow_up_checks[#follow_up_checks + 1] = action
+                    return
+                end
                 assert.are.equal(0.25, delay)
                 scheduled[#scheduled + 1] = action
             end,
@@ -375,6 +381,7 @@ describe("network switcher", function()
                 return {
                     dbg = function(...) logs[#logs + 1] = { "dbg", ... } end,
                     warn = function(...) logs[#logs + 1] = { "warn", ... } end,
+                    isEnabled = function() return true end,
                 }
             end,
         })
@@ -797,6 +804,7 @@ describe("network switcher", function()
                 return saved_password and { password = saved_password } or nil
             end }
         end
+        NetworkMgr.isOnline = function() return true end
         local Switcher = require("modules/menu/network_switcher")
         assert.is_true(Switcher.open())
         scan_task()
@@ -818,6 +826,8 @@ describe("network switcher", function()
         network_menu.item_table[1].callback()
         assert.is_nil(password_dialog)
         assert.are.equal("Guest", NetworkMgr.authenticated.ssid)
+        assert.are.equal(2, #follow_up_checks)
+        follow_up_checks[2]()
 
         local messages = {}
         for _i, entry in ipairs(logs) do
@@ -829,7 +839,9 @@ describe("network switcher", function()
         local output = table.concat(messages, "\n")
         assert.is_truthy(output:find("Kobo scan result", 1, true))
         assert.is_truthy(output:find("Kobo credentials saved", 1, true))
+        assert.is_truthy(output:find("Kobo credentials before auth", 1, true))
         assert.is_truthy(output:find("Kobo connection result", 1, true))
+        assert.is_truthy(output:find("Kobo connection follow-up", 1, true))
     end)
 
     it("scans automatically when there is no current network", function()

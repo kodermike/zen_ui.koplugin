@@ -155,6 +155,7 @@ function M.new(feature)
     for _i, level in ipairs(LEVELS) do
         logger[level] = method(level)
     end
+    logger.isEnabled = function(level) return _enabled[level] == true end
     logger.perf = function(message, elapsed_ms, ...)
         local level = (tonumber(elapsed_ms) or 0) >= M.SLOW_THRESHOLD_MS
             and "warn" or "dbg"

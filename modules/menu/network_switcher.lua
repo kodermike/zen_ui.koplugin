@@ -315,6 +315,13 @@ function M.open(on_connected, settings_subpage, plugin)
         show_status(_("Connecting to ") .. network.ssid .. "…")
         logger.dbg("connection attempt", "ssid=", network.ssid,
             "saved_credentials=", network.password ~= nil)
+        if kobo then
+            local saved = NetworkMgr:getAllSavedNetworks():readSetting(network.ssid)
+            logger.dbg("Kobo credentials before auth", "ssid=", network.ssid,
+                "row_psk=", network.psk ~= nil,
+                "stored_password=", saved ~= nil and saved.password ~= nil,
+                "stored_psk=", saved ~= nil and saved.psk ~= nil)
+        end
         local powered_on, power_error = turn_on_wifi()
         if not powered_on then
             logger.warn("could not turn on Wi-Fi for connection", power_error)
@@ -388,7 +395,23 @@ function M.open(on_connected, settings_subpage, plugin)
             local saved = NetworkMgr:getAllSavedNetworks():readSetting(network.ssid)
             logger.dbg("Kobo connection result", "ssid=", network.ssid,
                 "saved=", saved ~= nil, "saved_password=", saved ~= nil and saved.password ~= nil,
+                "saved_psk=", saved ~= nil and saved.psk ~= nil,
                 "wifi_was_on=", G_reader_settings:isTrue("wifi_was_on"))
+            if logger.isEnabled("dbg") then
+                UIManager:scheduleIn(3, function()
+                    local ok_current, current = pcall(NetworkMgr.getCurrentNetwork, NetworkMgr)
+                    local ok_route, route = pcall(NetworkMgr.hasDefaultRoute, NetworkMgr)
+                    local ok_online, online = pcall(NetworkMgr.isOnline, NetworkMgr)
+                    logger.dbg("Kobo connection follow-up", "ssid=", network.ssid,
+                        "wifi_on=", NetworkMgr:isWifiOn() == true,
+                        "connected=", NetworkMgr:isConnected() == true,
+                        "current_ssid=", ok_current and current and current.ssid or "none",
+                        "ip=", get_ip() or "none",
+                        "route_check_ok=", ok_route, "default_route=", route == true,
+                        "dns_check_ok=", ok_online, "dns_resolves=", online == true,
+                        "lease_ssid=", NetworkMgr.lease_ssid or "none")
+                end)
+            end
         end
         for _i, candidate in ipairs(network_list) do
             candidate.connected = candidate.ssid == network.ssid
