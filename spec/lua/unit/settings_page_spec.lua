@@ -534,15 +534,30 @@ describe("Zen settings page", function()
         assert.are.equal(1, deferred_apply_flushes)
     end)
 
-    it("refreshes the visible status bar after closing settings", function()
+    it("refreshes the visible status bar and full screen after closing settings", function()
         local UIManager = require("ui/uimanager")
         local fm = require("apps/filemanager/filemanager").instance
+        local reader = {}
+        ZenSpec.replace("apps/reader/readerui", { instance = reader })
         local refreshes = 0
+        local full_refreshes = 0
+        UIManager.setDirty = function(_self, widget, refresh, region)
+            if widget == "all" then
+                assert.are.equal("full", refresh)
+                assert.is_nil(region)
+                full_refreshes = full_refreshes + 1
+            else
+                assert.are.equal(reader, widget)
+                assert.are.equal("ui", refresh)
+                refreshes = refreshes + 1
+            end
+        end
         fm._updateStatusBar = function() refreshes = refreshes + 1 end
 
         UIManager._window_stack = { { widget = fm } }
         make_page({}):onCloseWidget()
         assert.are.equal(1, refreshes)
+        assert.are.equal(1, full_refreshes)
 
         local group = { _zen_status_refresh = function()
             refreshes = refreshes + 1
@@ -550,17 +565,20 @@ describe("Zen settings page", function()
         UIManager._window_stack = { { widget = fm }, { widget = group } }
         make_page({}):onCloseWidget()
         assert.are.equal(2, refreshes)
+        assert.are.equal(2, full_refreshes)
 
-        local reader = {}
-        ZenSpec.replace("apps/reader/readerui", { instance = reader })
-        UIManager.setDirty = function(_, widget, refresh)
-            assert.are.equal(reader, widget)
-            assert.are.equal("ui", refresh)
+        local home = { _zen_home_refresh_clock_widgets = function()
             refreshes = refreshes + 1
-        end
-        UIManager._window_stack = { { widget = reader } }
+        end }
+        UIManager._window_stack = { { widget = fm }, { widget = home }, { widget = { toast = true } } }
         make_page({}):onCloseWidget()
         assert.are.equal(3, refreshes)
+        assert.are.equal(3, full_refreshes)
+
+        UIManager._window_stack = { { widget = reader } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(4, refreshes)
+        assert.are.equal(4, full_refreshes)
     end)
 
     it("restores the last page for six seconds after closing", function()

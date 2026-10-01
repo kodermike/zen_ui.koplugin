@@ -741,6 +741,7 @@ function ZenSettingsPage:onCloseWidget()
                 end
             end
         end
+        UIManager:setDirty("all", "full")
     end)
     return Menu.onCloseWidget(self)
 end
