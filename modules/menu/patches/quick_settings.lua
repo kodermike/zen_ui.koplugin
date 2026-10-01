@@ -575,13 +575,6 @@ local function apply_quick_settings()
             active_func = isWifiConnected,
             dim_func = isWifiConnecting,
             callback = function(touch_menu)
-                if isWifiConnecting() then
-                    require("common/zen_logger").new("quick_settings").dbg(
-                        "Wi-Fi tap ignored during connection",
-                        "pending_connection=", NetworkMgr.pending_connection,
-                        "pending_connectivity_check=", NetworkMgr.pending_connectivity_check)
-                    return
-                end
                 local refresh = function() refreshWifiQuickSettings(touch_menu) end
                 require("modules/menu/network_switcher").toggleWifi({
                     updateItems = refresh,

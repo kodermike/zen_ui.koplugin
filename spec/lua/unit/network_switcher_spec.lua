@@ -368,7 +368,7 @@ describe("network switcher", function()
                     follow_up_checks[#follow_up_checks + 1] = action
                     return
                 end
-                assert.are.equal(0.25, delay)
+                assert.is_true(delay == 0.25 or delay == 5 / 8)
                 scheduled[#scheduled + 1] = action
             end,
             unschedule = function(_self, action)
@@ -516,6 +516,10 @@ describe("network switcher", function()
     it("reconnects Kindle Wi-Fi from the title bar and updates the same switcher", function()
         local changed = 0
         local complete_connection
+        local name_ready = true
+        NetworkMgr.getCurrentNetwork = function(self)
+            return { ssid = name_ready and self.current_ssid or "" }
+        end
         NetworkMgr.toggleWifiOff = function(self, callback, interactive)
             assert.is_true(interactive)
             self:turnOffWifi()
@@ -550,13 +554,27 @@ describe("network switcher", function()
         assert.are.equal(0, kindle_scans)
         assert.are.equal("Turning on Wi-Fi…", network_menu.item_table[1].text)
         assert.is_function(complete_connection)
+        name_ready = false
         complete_connection()
+        assert.are.equal("Connected", network_menu.item_table[1].text)
+        assert.are.equal(1, #scheduled)
+        table.remove(scheduled, 1)()
+        assert.are.equal("Connected", network_menu.item_table[1].text)
+        assert.are.equal(1, #scheduled)
+        name_ready = true
+        table.remove(scheduled, 1)()
         assert.are.equal(original_menu, network_menu)
         assert.are.equal("Home", network_menu.item_table[1].text)
         assert.are.equal("Connected", network_menu.item_table[1]._zen_settings_breadcrumb)
         assert.are.equal("wifi-on", network_menu.item_table[1].icon_glyph)
+        assert.are.equal(0, #scheduled)
+        assert.are.equal(0, kindle_scans)
         assert.are.equal(2, changed)
         assert.are.equal(1, #shown)
+        network_menu.item_table[1].callback()
+        assert.are.equal("Home", button_dialog.title)
+        assert.is_truthy(button_dialog.buttons[3][1].text:find("Disconnect", 1, true))
+        assert.is_truthy(button_dialog.buttons[4][1].text:find("Forget", 1, true))
 
         toggle.callback()
         toggle.callback()
@@ -678,6 +696,56 @@ describe("network switcher", function()
         assert.is_false(NetworkMgr.wifi_on)
         assert.are.equal(0, #shown)
     end)
+
+    for _i, pending in ipairs({ "pending_connection", "pending_connectivity_check" }) do
+        for _j, wifi_on in ipairs({ false, true }) do
+            it("recovers Kobo Wi-Fi with " .. pending .. " and radio " .. (wifi_on and "on" or "off"), function()
+                ZenSpec.replace("device", {
+                    isKobo = function() return true end,
+                    isKindle = function() return false end,
+                })
+                NetworkMgr.wifi_on = wifi_on
+                NetworkMgr.current_ssid = nil
+                NetworkMgr.pending_connection = false
+                NetworkMgr.pending_connectivity_check = false
+                NetworkMgr[pending] = true
+                local updates, cancellations, connections = 0, 0, 0
+                NetworkMgr.disableWifi = function(self, callback, interactive)
+                    assert.is_true(interactive)
+                    cancellations = cancellations + 1
+                    self:turnOffWifi()
+                    self.pending_connection = false
+                    self.pending_connectivity_check = false
+                    if callback then callback() end
+                end
+                NetworkMgr.toggleWifiOff = NetworkMgr.disableWifi
+                NetworkMgr.getWifiMenuTable = function()
+                    return { callback = function(menu)
+                        assert.is_false(NetworkMgr.pending_connection)
+                        assert.is_false(NetworkMgr.pending_connectivity_check)
+                        connections = connections + 1
+                        NetworkMgr.wifi_on = true
+                        NetworkMgr.current_ssid = "Home"
+                        menu:updateItems()
+                    end }
+                end
+                local Switcher = require("modules/menu/network_switcher")
+                Switcher.open = function() error("Recovery should not open the network picker") end
+                local touch_menu = { updateItems = function() updates = updates + 1 end }
+
+                Switcher.toggleWifi(touch_menu)
+                assert.are.equal(1, cancellations)
+                assert.are.equal(wifi_on and 0 or 1, connections)
+                assert.are.equal(1, updates)
+                assert.are.equal(not wifi_on, NetworkMgr.wifi_on)
+                if wifi_on then
+                    Switcher.toggleWifi(touch_menu)
+                    assert.are.equal(1, connections)
+                    assert.is_true(NetworkMgr.wifi_on)
+                end
+            end)
+        end
+    end
 
     it("uses KOReader's Wi-Fi toggle on Kobo with no saved Zen networks", function()
         ZenSpec.replace("device", {
@@ -1555,14 +1623,55 @@ describe("network switcher", function()
         assert.are.equal(1, kindle_scans)
     end)
 
-    it("keeps an active connection when its network name is unavailable", function()
-        NetworkMgr.getCurrentNetwork = function() error("network name unavailable") end
+    it("limits network-name retries to eight over five seconds", function()
+        local reads = 0
+        local retry_time = 0
+        local UIManager = require("ui/uimanager")
+        local schedule_in = UIManager.scheduleIn
+        UIManager.scheduleIn = function(self, delay, action)
+            retry_time = retry_time + delay
+            schedule_in(self, delay, action)
+        end
+        NetworkMgr.getCurrentNetwork = function()
+            reads = reads + 1
+            error("network name unavailable")
+        end
         local Switcher = require("modules/menu/network_switcher")
         assert.is_true(Switcher.open())
         scan_task()
+        for _i = 1, 8 do
+            assert.are.equal(1, #scheduled)
+            table.remove(scheduled, 1)()
+        end
+        assert.are.equal(9, reads)
+        assert.are.equal(5, retry_time)
+        assert.are.equal(0, #scheduled)
         assert.are.equal(0, kindle_scans)
         assert.are.equal("Connected", network_menu.item_table[1].text)
     end)
+
+    for _i, action in ipairs({ "close", "off", "scan" }) do
+        it("cancels network-name retries on " .. action, function()
+            NetworkMgr.getCurrentNetwork = function() return { ssid = "" } end
+            NetworkMgr.toggleWifiOff = function(self, callback) self:turnOffWifi() callback() end
+            assert.is_true(require("modules/menu/network_switcher").open())
+            scan_task()
+            assert.are.equal(1, #scheduled)
+            local pending = scheduled[1]
+            if action == "close" then
+                network_menu:onClose()
+            elseif action == "off" then
+                network_menu.custom_title_bar.toggle.callback()
+            else
+                network_menu.custom_title_bar.action.callback()
+            end
+            for _j, task in ipairs(scheduled) do assert.not_equal(pending, task) end
+            while #scheduled > 0 do table.remove(scheduled, 1)() end
+            assert.are.equal(action == "scan" and 1 or 0, kindle_scans)
+            assert.are.equal(action == "scan" and "Home" or action == "off" and "Off" or "Connected",
+                network_menu.item_table[1].text)
+        end)
+    end
 
     it("cancels an active scan and accepts idle results after reopening", function()
         local Switcher = require("modules/menu/network_switcher")

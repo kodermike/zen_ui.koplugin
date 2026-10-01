@@ -283,12 +283,15 @@ describe("quick settings Wi-Fi", function()
         assert.are.equal(3, updates)
     end)
 
-    it("does not restart an active Wi-Fi connection attempt", function()
+    it("routes taps during on-demand Wi-Fi restores through the shared toggle", function()
         NetworkMgr.pending_connection = true
+        NetworkMgr.pending_connectivity_check = true
 
+        assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.isDimmed("wifi"))
+        assert.is_false(_G.__ZEN_UI_QUICK_SETTINGS.isDisabled("wifi"))
         assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.activate("wifi", {}))
 
-        assert.are.equal(0, toggle_calls)
+        assert.are.equal(1, toggle_calls)
     end)
 
     it("opens the Zen network switcher on hold", function()

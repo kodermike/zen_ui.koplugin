@@ -2,6 +2,7 @@ local M = {}
 
 local VERIFY_ATTEMPTS = 60
 local VERIFY_DELAY_US = 250 * 1000
+local NETWORK_NAME_RETRIES = 8
 
 function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin, show_networks)
     local UIManager = require("ui/uimanager")
@@ -17,6 +18,15 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin, show_n
     local kobo = KoboNetworkAdapter.isSupported(Device)
     show_networks = show_networks or function()
         return M.open(on_connected, settings_subpage, plugin)
+    end
+    if not connected and (NetworkMgr.pending_connection or NetworkMgr.pending_connectivity_check) then
+        logger.dbg("Wi-Fi toggle cancelling pending connection", "wifi_on=", wifi_on)
+        if wifi_on then
+            NetworkMgr:toggleWifiOff(function() touch_menu:updateItems() end, true)
+            return
+        end
+        -- Background shutdowns can leave KOReader's connection checks pending.
+        NetworkMgr:disableWifi(nil, true)
     end
     if not connected then
         local no_saved = not kindle and not kobo and not wifi_on
@@ -168,6 +178,7 @@ function M.open(on_connected, settings_subpage, plugin)
     local toggle_wifi
     local scanning = false
     local changing_power = false
+    local refresh_attempts = 0
     local settings_font_size = IconItem.getSettingsFontSize()
 
     local function status_items(text)
@@ -215,6 +226,7 @@ function M.open(on_connected, settings_subpage, plugin)
         close_callback = function()
             title_bar:clearStatusRefresh()
             closed = true
+            UIManager:unschedule(refresh_networks)
             if adapter then adapter.close() end
         end,
     }
@@ -790,6 +802,7 @@ function M.open(on_connected, settings_subpage, plugin)
 
     start_scan = function()
         if closed or scanning or changing_power then return end
+        UIManager:unschedule(refresh_networks)
         scanning = true
         if NetworkMgr:isWifiOn() then
             scan_networks()
@@ -810,6 +823,8 @@ function M.open(on_connected, settings_subpage, plugin)
 
     toggle_wifi = function()
         if closed or changing_power then return end
+        UIManager:unschedule(refresh_networks)
+        refresh_attempts = 0
         if not NetworkMgr:isWifiOn() then
             changing_power = true
             show_status(_("Turning on Wi-Fi…"))
@@ -850,7 +865,8 @@ function M.open(on_connected, settings_subpage, plugin)
     end
 
     refresh_networks = function()
-        if closed then return end
+        if closed or scanning or changing_power then return end
+        UIManager:unschedule(refresh_networks)
         if NetworkMgr:isWifiOn() then
             local has_connection_check = type(NetworkMgr.isConnected) == "function"
             local connected = has_connection_check and NetworkMgr:isConnected()
@@ -859,6 +875,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 and current.ssid ~= ""
             if connected or (not has_connection_check and has_ssid) then
                 if has_ssid then
+                    refresh_attempts = 0
                     if adapter then
                         previous_network = current
                         previous_ip = get_ip()
@@ -882,7 +899,12 @@ function M.open(on_connected, settings_subpage, plugin)
                     }}
                     render_networks()
                 else
-                    show_status(_("Connected"))
+                    if refresh_attempts == 0 then show_status(_("Connected")) end
+                    -- Kindle can report an address before wifid publishes the SSID.
+                    if adapter and refresh_attempts < NETWORK_NAME_RETRIES then
+                        refresh_attempts = refresh_attempts + 1
+                        UIManager:scheduleIn(5 / NETWORK_NAME_RETRIES, refresh_networks)
+                    end
                 end
                 return
             end
