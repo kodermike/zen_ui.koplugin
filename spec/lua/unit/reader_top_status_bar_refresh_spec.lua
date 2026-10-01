@@ -245,7 +245,10 @@ describe("reader top status bar refresh", function()
         })
 
         G_reader_settings = ZenSpec.memorySettings({ footer = {} })
+        ZenSpec.unload("common/reader_status_bar")
+        local get_horizontal_margins = require("common/reader_status_bar").getHorizontalMargins
         replace("common/reader_status_bar", {
+            getHorizontalMargins = get_horizontal_margins,
             disableKoreaderAltStatusBar = function(settings, reader)
                 settings = settings or G_reader_settings
                 settings:saveSetting("copt_status_line", 1)
@@ -515,7 +518,7 @@ describe("reader top status bar refresh", function()
         assert.is_nil(collect_item_texts({ "battery" })[1].color)
     end)
 
-    it("matches the left and right dogear spacing", function()
+    it("follows reader margins while keeping right items clear of the dogear", function()
         local cfg = _G.__ZEN_UI_PLUGIN.config.reader_top_status_bar
         for _i, name in ipairs({
             "ui/widget/container/centercontainer",
@@ -527,7 +530,9 @@ describe("reader top status bar refresh", function()
         }) do
             package.loaded[name].new = function(_self, values) return values or {} end
         end
-        assert.is_true(replace_upvalue(build_header, "buildGroupFromTexts", function(texts)
+        local caps = {}
+        assert.is_true(replace_upvalue(build_header, "buildGroupFromTexts", function(texts, _face, _sep, cap)
+            caps[#caps + 1] = cap
             if #texts == 0 then return nil, {} end
             return { getSize = function() return { w = 10, h = 18 } end }, {}
         end))
@@ -535,11 +540,34 @@ describe("reader top status bar refresh", function()
         for _i, center_order in ipairs({ {}, { "wifi" } }) do
             cfg.center_order = center_order
             local header, _, _, _, slots = build_header({
+                ui = { document = { configurable = { h_page_margins = { 30, 40 } } } },
                 dogear = { icon = { dimen = { x = 550, w = 50 } } },
             })
-            assert.are.equal(60, header[1][1][1].width)
+            assert.are.equal(30, header[1][1][1].width)
             assert.are.equal(60, header[#header][1][2].width)
-            assert.are.equal(slots.left.w, slots.right.w)
+            assert.are.equal(40, slots.left.w)
+            assert.are.equal(70, slots.right.w)
+
+            local wider_margin_header = build_header({
+                ui = { document = { configurable = { h_page_margins = { 30, 90 } } } },
+                dogear = { icon = { width = 50, dimen = { x = 530, w = 50 } } },
+            })
+            assert.are.equal(30, wider_margin_header[1][1][1].width)
+            assert.are.equal(90, wider_margin_header[#wider_margin_header][1][2].width)
+        end
+
+        assert.is_true(replace_upvalue(build_header, "measureTextsWidth", function(texts)
+            return #texts > 0 and 1000 or 0
+        end))
+        for _i, slot in ipairs({ "left", "center", "right" }) do
+            cfg.left_order, cfg.center_order, cfg.right_order = {}, {}, {}
+            cfg[slot .. "_order"] = { "wifi" }
+            caps = {}
+            build_header({
+                ui = { document = { configurable = { h_page_margins = { 30, 40 } } } },
+                dogear = { dogear_size = 50 },
+            })
+            assert.are.equal(510, caps[_i])
         end
     end)
 
@@ -637,6 +665,7 @@ describe("reader top status bar refresh", function()
             percent_finished = 0.5,
         }
         view.ui.document = {
+            configurable = { h_page_margins = { 30, 50 } },
             getPageCount = function() return 10 end,
             hasHiddenFlows = function() return false end,
         }
@@ -644,9 +673,9 @@ describe("reader top status bar refresh", function()
 
         ReaderView.paintTo(view, require("device").screen.bb, 0, 0)
 
-        assert.same({ x = 10, y = 20, w = 290, h = 1, color = "gray_5" }, paint_rects[2])
-        assert.same({ x = 126, y = 20, w = 2, h = 1, color = "black" }, paint_rects[3])
-        assert.same({ x = 474, y = 20, w = 2, h = 1, color = "black" }, paint_rects[4])
+        assert.same({ x = 30, y = 20, w = 260, h = 1, color = "gray_5" }, paint_rects[2])
+        assert.same({ x = 134, y = 20, w = 2, h = 1, color = "black" }, paint_rects[3])
+        assert.same({ x = 446, y = 20, w = 2, h = 1, color = "black" }, paint_rects[4])
     end)
 
     it("skips unchanged minute values and refreshes only changed slots", function()

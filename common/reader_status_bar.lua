@@ -1,5 +1,12 @@
 local M = {}
 
+function M.getHorizontalMargins(document, fallback)
+    local margins = document and document.configurable and document.configurable.h_page_margins
+    if not margins then return fallback, fallback end
+    local Screen = require("device").screen
+    return Screen:scaleBySize(margins[1]), Screen:scaleBySize(margins[2])
+end
+
 function M.disableKoreaderAltStatusBar(settings, reader)
     settings = settings or rawget(_G, "G_reader_settings")
     if settings and type(settings.saveSetting) == "function" then
