@@ -462,7 +462,7 @@ function M.open(on_connected, settings_subpage, plugin)
         dialog = InputDialog:new{
             title = network.ssid,
             description = reason,
-            input = "",
+            input = network.password or "",
             input_hint = _("password (leave empty for open networks)"),
             input_type = "text",
             text_type = "password",
@@ -531,6 +531,12 @@ function M.open(on_connected, settings_subpage, plugin)
         if type(NetworkMgr.queryNetworkState) == "function" then NetworkMgr:queryNetworkState() end
         UIManager:broadcastEvent(Event:new("NetworkDisconnected"))
         logger.dbg("Wi-Fi disconnected", "ssid=", network.ssid)
+        if kobo then
+            local saved = NetworkMgr:getAllSavedNetworks():readSetting(network.ssid)
+            logger.dbg("Kobo disconnect result", "ssid=", network.ssid,
+                "row_password=", network.password ~= nil,
+                "saved_password=", saved ~= nil and saved.password ~= nil)
+        end
         if not quiet then
             render_networks(network.ssid)
             if on_connected then on_connected() end

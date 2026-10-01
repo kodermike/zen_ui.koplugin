@@ -718,6 +718,11 @@ describe("network switcher", function()
         assert.are.equal(4, #button_dialog.buttons)
         button_dialog.buttons[3][1].callback()
         assert.are.equal(7, NetworkMgr.disconnected.wpa_supplicant_id)
+        assert.are.equal("saved", network_menu.item_table[1].network.password)
+        assert.are.equal("Saved", network_menu.item_table[1]._zen_settings_breadcrumb)
+        network_menu.item_table[1].callback()
+        assert.is_nil(password_dialog)
+        assert.are.equal("Home", NetworkMgr.authenticated.ssid)
 
         network_menu.custom_title_bar.action.callback()
         assert.are.equal(1, scans)
@@ -1046,6 +1051,7 @@ describe("network switcher", function()
         assert.are.equal(0, kindle_deletes)
         assert.is_nil(created_profile)
         assert.are.equal("Guest", password_dialog.title)
+        assert.are.equal("old-password", password_dialog.input)
         assert.are.equal(
             "Connected to Home instead of Guest. The password may be incorrect.",
             password_dialog.description

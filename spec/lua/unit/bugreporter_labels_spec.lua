@@ -126,20 +126,22 @@ describe("bug reporter labels", function()
         assert.are.equal(1, #payloads)
     end)
 
-    it("uploads only a bounded tail of a large crash log", function()
+    it("keeps earlier network diagnostics within a bounded crash log", function()
         local data_dir = os.tmpname()
         os.remove(data_dir)
         assert.is_true(lfs.mkdir(data_dir))
         local log_path = data_dir .. "/crash.log"
         local file = assert(io.open(log_path, "wb"))
-        file:write("old crash\n", string.rep("x", 600000), "recent crash\n")
+        file:write("old crash\n", "DEBUG ZenOS: [network_switcher] Kobo connection result\n",
+            string.rep("x", 600000), "recent crash\n")
         file:close()
         package.loaded.datastorage.getDataDir = function() return data_dir end
 
         submit()
 
         local uploaded = payloads[1].log
-        assert.is_true(uploaded:find("%[truncated %- showing last 512000 bytes", 1) == 1)
+        assert.is_true(uploaded:find("[earlier network diagnostics]", 1, true) == 1)
+        assert.is_truthy(uploaded:find("Kobo connection result", 1, true))
         assert.is_nil(uploaded:find("old crash", 1, true))
         assert.are.equal("recent crash\n", uploaded:sub(-13))
         assert.is_true(#uploaded < 512100)

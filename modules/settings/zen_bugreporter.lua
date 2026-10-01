@@ -16,6 +16,7 @@ local PROXY_URL       = "https://zen-reporter.misty-mud-afb2.workers.dev/"
 local UPLOAD_URL = PROXY_URL .. "upload"
 local MAX_CRASH_LOG = 60000
 local MAX_UPLOAD_LOG = 512000
+local MAX_NETWORK_LOG = 64000
 local MAX_TITLE     = 500
 local MAX_BODY      = 65536
 
@@ -60,18 +61,35 @@ local function upload_crash_log(log_data)
     return nil
 end
 
---- Read a bounded tail of the crash log.
+--- Read a bounded tail of the crash log, retaining earlier network diagnostics.
 local function read_file_content(path)
     local f = io.open(path, "rb")
     if not f then return nil end
     local size = f:seek("end")
-    f:seek("set", math.max(0, size - MAX_UPLOAD_LOG - 3))
-    local data = f:read(MAX_UPLOAD_LOG + 3)
+    local network_log = ""
+    if size > MAX_UPLOAD_LOG then
+        f:seek("set", 0)
+        while f:seek() < size - MAX_UPLOAD_LOG - 3 do
+            local line = f:read("*l")
+            if not line then break end
+            if line:find("ZenOS: [network_switcher]", 1, true)
+                    or line:find("NetworkMgr:", 1, true)
+                    or line:find("WpaSupplicant:", 1, true) then
+                network_log = zen_utils.utf8SafeSuffix(network_log .. line .. "\n", MAX_NETWORK_LOG)
+            end
+        end
+    end
+    local tail_size = MAX_UPLOAD_LOG - #network_log
+    f:seek("set", math.max(0, size - tail_size - 3))
+    local data = f:read(tail_size + 3)
     f:close()
     if not data or data == "" then return nil end
     if size > MAX_UPLOAD_LOG then
-        return "[truncated - showing last " .. MAX_UPLOAD_LOG .. " bytes of " .. size .. " total]\n"
-            .. zen_utils.utf8SafeSuffix(data, MAX_UPLOAD_LOG)
+        if network_log ~= "" then
+            network_log = "[earlier network diagnostics]\n" .. network_log .. "\n"
+        end
+        return network_log .. "[truncated - showing last " .. tail_size .. " bytes of " .. size .. " total]\n"
+            .. zen_utils.utf8SafeSuffix(data, tail_size)
     end
     return data
 end
