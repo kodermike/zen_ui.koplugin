@@ -147,9 +147,13 @@ function M.new(NetworkMgr, logger)
             auth_client = wcli
             close = wcli.close
             wcli.close = function() end -- Defer cleanup until the result is known.
-            local read_event = wcli.readEvent
+            local attach = wcli.attach
+            wcli.attach = function(self) return self.attached or attach(self) end
+            wcli:attach()
+            local events = {}
             wcli.readEvent = function(self)
-                local event = read_event(self)
+                if #events == 0 then self:readAllEvents(events) end
+                local event = table.remove(events, 1)
                 if event then
                     local failed, wrong_key = auth_failure(event)
                     event.isAuthFailed = function() return failed end
@@ -161,6 +165,18 @@ function M.new(NetworkMgr, logger)
                     end
                 end
                 return event
+            end
+            local get_connected = wcli.getConnectedNetwork
+            local last_state
+            wcli.getConnectedNetwork = function(self)
+                local current, state = get_connected(self)
+                local auth_state = current and "COMPLETED" or state
+                if auth_state ~= last_state then
+                    logger.dbg("Kobo authentication state", "ssid=", network.ssid,
+                        "profile_id=", id, "state=", auth_state)
+                    last_state = auth_state
+                end
+                return current, state
             end
             local reply, err = wcli:sendCtrlCmd("SELECT_NETWORK " .. tostring(id))
             logger.dbg("Kobo password profile selected", "ssid=", network.ssid,
@@ -188,6 +204,24 @@ function M.new(NetworkMgr, logger)
         return authenticated, err
     end
 
+    function adapter.getNetworkList()
+        local networks, err = NetworkMgr:getNetworkList()
+        if networks and #networks == 0 then
+            local wcli = require("lj-wpaclient/wpaclient").new(NetworkMgr.wpa_supplicant.ctrl_interface)
+            if wcli then
+                local status = wcli:getStatus()
+                if status and status.wpa_state == "DISCONNECTED" then
+                    local reply, reconnect_error = wcli:sendCtrlCmd("RECONNECT")
+                    logger.dbg("Kobo empty scan recovery", "accepted=",
+                        reply ~= nil and reply:sub(1, 2) == "OK", "error=", reconnect_error)
+                end
+                wcli:close()
+            end
+            networks, err = NetworkMgr:getNetworkList()
+        end
+        return networks, err
+    end
+
     function adapter.annotateScan(networks)
         local configured = type(NetworkMgr.getConfiguredNetworks) == "function"
             and NetworkMgr:getConfiguredNetworks() or {}
@@ -196,6 +230,7 @@ function M.new(NetworkMgr, logger)
             configured_ssids[profile.ssid] = true
         end
         local saved_count = 0
+        local unique, positions = {}, {}
         for _i, network in ipairs(networks) do
             network.kobo_configured = configured_ssids[network.ssid] == true
             if network.password ~= nil then saved_count = saved_count + 1 end
@@ -204,9 +239,19 @@ function M.new(NetworkMgr, logger)
                 "raw_signal=", network.signal_level or "none",
                 "frequency=", network.frequency or "none",
                 "configured=", network.kobo_configured)
+            if type(network.ssid) == "string" and network.ssid ~= "" then
+                local index = positions[network.ssid]
+                if not index then
+                    unique[#unique + 1] = network
+                    positions[network.ssid] = #unique
+                elseif network.connected and not unique[index].connected then
+                    unique[index] = network
+                end
+            end
         end
         logger.dbg("Kobo scan result", "networks=", #networks,
             "saved_credentials=", saved_count, "configured_profiles=", #configured)
+        return unique
     end
 
     return adapter

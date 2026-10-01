@@ -761,6 +761,8 @@ function M.open(on_connected, settings_subpage, plugin)
             local scanned_networks
             if adapter then
                 scanned_networks, scan_error = adapter.getNetworkList()
+            elseif kobo_adapter then
+                scanned_networks, scan_error = kobo_adapter.getNetworkList()
             else
                 scanned_networks, scan_error = NetworkMgr:getNetworkList()
             end
@@ -776,7 +778,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 return (tonumber(left.signal_quality) or 0) > (tonumber(right.signal_quality) or 0)
             end)
             logger.dbg("scan complete", "networks=", #network_list)
-            if kobo_adapter then kobo_adapter.annotateScan(network_list) end
+            if kobo_adapter then network_list = kobo_adapter.annotateScan(network_list) end
             render_networks()
         end
         if adapter then adapter.scan(load_results) else load_results(true) end

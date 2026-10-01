@@ -269,15 +269,61 @@ local function apply_responsive_keyboard()
         UIManager:scheduleIn(0.15, release)
     end
 
+    local cursor_key
+
+    local function stop_cursor_repeat(key)
+        if key._zen_cursor_repeat then
+            UIManager:unschedule(key._zen_cursor_repeat)
+            key._zen_cursor_repeat = nil
+        end
+    end
+
     local function finish_cursor_move(key)
         if not key or not key._zen_cursor_x then return false end
+        stop_cursor_repeat(key)
+        cursor_key = nil
         key.keyboard._zen_cursor_key = nil
         key._zen_cursor_x = nil
         key._zen_cursor_remainder = nil
+        key._zen_cursor_direction = nil
         key.ignore_key_release = nil
         logger.dbg("Zen keyboard cursor end")
         repaint(key, false)
         return true
+    end
+
+    local function move_cursor(key, chars)
+        local inputbox = key.keyboard.inputbox
+        local position = inputbox.charpos
+        local target = math.max(1, math.min(#inputbox.charlist + 1, position + chars))
+        if target == position then return false end
+        inputbox:moveCursorToCharPos(target)
+        logger.dbg("Zen keyboard cursor move", "chars=", chars, "position=", target)
+        return inputbox.charpos ~= position
+    end
+
+    local original_hold_state = Contact.holdState
+    function Contact:holdState(new_hold)
+        -- Cursor mode needs small pans, including movement back inside the usual dead zone.
+        if cursor_key and not new_hold and not self.buddy_contact
+                and self.down and self.current_tev.id ~= -1 then
+            local gesture = self:handlePan()
+            gesture.ges = "hold_pan"
+            return gesture
+        end
+        return original_hold_state(self, new_hold)
+    end
+
+    local original_add_keys = VirtualKeyboard.addKeys
+    function VirtualKeyboard:addKeys(...)
+        finish_cursor_move(self._zen_cursor_key)
+        return original_add_keys(self, ...)
+    end
+
+    local original_close_widget = VirtualKeyboard.onCloseWidget
+    function VirtualKeyboard:onCloseWidget(...)
+        finish_cursor_move(self._zen_cursor_key)
+        return original_close_widget(self, ...)
     end
 
     local function key_at(keyboard, pos)
@@ -292,6 +338,7 @@ local function apply_responsive_keyboard()
     end
 
     function VirtualKey:onTapSelect(skip_flash, ges)
+        finish_cursor_move(cursor_key)
         Device:performHapticFeedback("KEYBOARD_TAP")
         self.keyboard.ignore_first_hold_release = false
         self.keyboard._zen_double_space = nil
@@ -347,6 +394,7 @@ local function apply_responsive_keyboard()
     end
 
     function VirtualKey:onHoldSelect(_arg, ges)
+        finish_cursor_move(cursor_key)
         Device:performHapticFeedback("LONG_PRESS")
         self.keyboard._zen_space_tap = nil
         self.keyboard._zen_double_space = nil
@@ -357,20 +405,19 @@ local function apply_responsive_keyboard()
             end
             self.keyboard.ignore_first_hold_release = false
             self.keyboard._zen_cursor_key = self
+            cursor_key = self
             self.ignore_key_release = true
             self._zen_cursor_x = ges.pos.x
             self._zen_cursor_remainder = 0
             self.ges_events.ZenCursorHoldPan = {
                 GestureRange:new{
                     ges = "hold_pan",
-                    range = function() return self.keyboard.dimen end,
                 },
             }
             self.ges_events.ZenCursorRelease = {
-                GestureRange:new{
-                    ges = "hold_release",
-                    range = function() return self.keyboard.dimen end,
-                },
+                GestureRange:new{ ges = "hold_release" },
+                GestureRange:new{ ges = "two_finger_hold_release" },
+                GestureRange:new{ ges = "two_finger_hold_pan_release" },
             }
             logger.dbg("Zen keyboard cursor start", "x=", ges.pos.x)
             repaint(self, true)
@@ -387,18 +434,40 @@ local function apply_responsive_keyboard()
 
     function VirtualKey:onZenCursorHoldPan(_arg, ges)
         if not self._zen_cursor_x or not ges or not ges.pos then return false end
-        local step = math.max(1, math.floor(self.dimen.h * 0.25))
-        local delta = ges.pos.x - self._zen_cursor_x + self._zen_cursor_remainder
+        local step = math.max(1, math.floor(self.dimen.h * 0.125))
+        local delta = ges.pos.x - self._zen_cursor_x
+        if delta * self._zen_cursor_remainder < 0 then self._zen_cursor_remainder = 0 end
+        delta = delta + self._zen_cursor_remainder
         local chars = delta >= 0 and math.floor(delta / step) or math.ceil(delta / step)
         self._zen_cursor_x = ges.pos.x
         self._zen_cursor_remainder = delta - chars * step
-        if chars ~= 0 then
-            local inputbox = self.keyboard.inputbox
-            local target = math.max(1, math.min(#inputbox.charlist + 1, inputbox.charpos + chars))
-            if target ~= inputbox.charpos then
-                inputbox:moveCursorToCharPos(target)
-                logger.dbg("Zen keyboard cursor move", "chars=", chars, "position=", target)
+        if chars ~= 0 then move_cursor(self, chars) end
+
+        local bounds = self.keyboard.dimen
+        local edge = self.dimen.h * 0.5
+        local direction
+        if ges.pos.y >= bounds.y and ges.pos.y < bounds.y + bounds.h then
+            if ges.pos.x <= bounds.x + edge then direction = -1
+            elseif ges.pos.x >= bounds.x + bounds.w - edge then direction = 1 end
+        end
+        if direction == self._zen_cursor_direction then return true end
+        stop_cursor_repeat(self)
+        self._zen_cursor_direction = direction
+        if direction then
+            local function repeat_cursor()
+                if self._zen_cursor_repeat ~= repeat_cursor then return end
+                if type(self.keyboard.isVisible) == "function" and not self.keyboard:isVisible() then
+                    finish_cursor_move(self)
+                    return
+                end
+                if move_cursor(self, direction) then
+                    UIManager:scheduleIn(0.1, repeat_cursor)
+                else
+                    stop_cursor_repeat(self)
+                end
             end
+            self._zen_cursor_repeat = repeat_cursor
+            UIManager:scheduleIn(0.3, repeat_cursor)
         end
         return true
     end

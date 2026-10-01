@@ -1138,6 +1138,96 @@ describe("network switcher", function()
         end)
     end
 
+    it("shows one Kobo network across bands and clears its credentials on Forget", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.current_ssid = nil
+        NetworkMgr.getConfiguredNetworks = function() return {} end
+        local saved = ZenSpec.memorySettings()
+        NetworkMgr.getAllSavedNetworks = function() return saved end
+        NetworkMgr.saveNetwork = function(_self, network)
+            saved:saveSetting(network.ssid, { password = network.password, psk = network.psk })
+        end
+        NetworkMgr.deleteNetwork = function(_self, network) saved:delSetting(network.ssid) end
+        NetworkMgr.disconnectNetwork = function(self) self.current_ssid = nil end
+        local connected_band
+        NetworkMgr.getNetworkList = function()
+            local credentials = saved:readSetting("Home")
+            return {
+                { ssid = "Home", flags = "[WPA2]", bssid = "strong", signal_quality = 68,
+                    password = credentials and credentials.password },
+                { ssid = "Home", flags = "[WPA2]", bssid = "weak", signal_quality = 58,
+                    password = credentials and credentials.password, connected = connected_band },
+                { ssid = "Other", flags = "[WPA2]", signal_quality = 20 },
+            }
+        end
+        local Switcher = require("modules/menu/network_switcher")
+        assert.is_true(Switcher.open())
+        scan_task()
+        assert.are.equal(2, #network_menu.item_table)
+        assert.are.equal(68, network_menu.item_table[1].network.signal_quality)
+        network_menu.item_table[1].callback()
+        password_dialog.buttons[1][2].callback()
+        assert.are.equal("Connected · 68%", network_menu.item_table[1]._zen_settings_breadcrumb)
+        assert.is_false(network_menu.item_table[2].network.connected)
+
+        connected_band = true
+        network_menu.custom_title_bar.action.callback()
+        assert.are.equal(2, #network_menu.item_table)
+        assert.are.equal("Connected · 58%", network_menu.item_table[1]._zen_settings_breadcrumb)
+        network_menu.item_table[1].callback()
+        button_dialog.buttons[4][1].callback()
+        confirm_box.ok_callback()
+        assert.is_nil(saved:readSetting("Home"))
+        assert.are.equal("58%", network_menu.item_table[1]._zen_settings_breadcrumb)
+        password_dialog = nil
+        network_menu.item_table[1].callback()
+        assert.are.equal("", password_dialog.input)
+    end)
+
+    for _i, state in ipairs({ "DISCONNECTED", "INACTIVE" }) do
+        it("retries an empty Kobo scan in " .. state .. " state", function()
+            ZenSpec.replace("device", {
+                hasWifiManager = function() return true end,
+                isKobo = function() return true end,
+                isKindle = function() return false end,
+            })
+            NetworkMgr.current_ssid = nil
+            NetworkMgr.wpa_supplicant = { ctrl_interface = "/var/run/wpa_supplicant/wlan0" }
+            NetworkMgr.getConfiguredNetworks = function() return {} end
+            local scans = 0
+            local commands = {}
+            local resumed = state ~= "DISCONNECTED"
+            NetworkMgr.getNetworkList = function()
+                scans = scans + 1
+                if scans == 1 or not resumed then return {} end
+                return {{ ssid = "Home", flags = "[WPA2]", signal_quality = 68 }}
+            end
+            ZenSpec.replace("lj-wpaclient/wpaclient", {
+                new = function()
+                    return {
+                        getStatus = function() return { wpa_state = state } end,
+                        sendCtrlCmd = function(_self, command)
+                            commands[#commands + 1] = command
+                            resumed = true
+                            return "OK\n"
+                        end,
+                        close = function() scan_handle_closes = scan_handle_closes + 1 end,
+                    }
+                end,
+            })
+            assert.is_true(require("modules/menu/network_switcher").open())
+            scan_task()
+            assert.are.equal(2, scans)
+            assert.are.same(state == "DISCONNECTED" and { "RECONNECT" } or {}, commands)
+            assert.are.equal(1, scan_handle_closes)
+            assert.are.equal("Home", network_menu.item_table[1].text)
+        end)
+    end
+
     it("resumes Kobo password authentication after Disconnect and Forget", function()
         NetworkMgr.wpa_supplicant = { ctrl_interface = "/var/run/wpa_supplicant/wlan0" }
         local profiles = {{ ssid = "Home", id = "7" }, { ssid = "Other", id = "8" }}
@@ -1146,6 +1236,7 @@ describe("network switcher", function()
         local current_id = "7"
         local other_enabled = true
         local auth_client
+        local attached = false
         local WpaClient = { __index = {} }
         WpaClient.new = function()
             return setmetatable({}, WpaClient)
@@ -1158,6 +1249,7 @@ describe("network switcher", function()
             elseif command == "REMOVE_NETWORK 7" then
                 table.remove(profiles, 1)
             elseif command == "SELECT_NETWORK 9" then
+                assert.is_true(attached)
                 disconnected = false
                 other_enabled = false
                 current_id = "9"
@@ -1185,11 +1277,12 @@ describe("network switcher", function()
             if current_id then return { id = current_id, ssid = "Home" } end
             return nil, "DISCONNECTED"
         end
-        methods.attach = function() return true end
+        methods.attach = function() attached = true return true end
         methods.readEvent = function() end
+        methods.readAllEvents = function() return {} end
         methods.waitForEvent = function() end
         methods.removeNetwork = function() end
-        methods.close = function(self) self.closed = true end
+        methods.close = function(self) self.closed = true attached = false end
         ZenSpec.replace("lj-wpaclient/wpaclient", WpaClient)
         ZenSpec.replace("ffi/crypto", {
             pbkdf2_hmac_sha1 = function(password, ssid)
@@ -1220,8 +1313,11 @@ describe("network switcher", function()
         local failure_events = 0
         methods.getConnectedNetwork = function() return nil, "4WAY_HANDSHAKE" end
         methods.readEvent = function()
+            error("Password authentication should read events in order")
+        end
+        methods.readAllEvents = function(_self, queued)
             failure_events = failure_events + 1
-            return {
+            queued[1] = {
                 msg = failure_events == 1
                     and "CTRL-EVENT-DISCONNECTED reason=3 locally_generated=1"
                     or 'CTRL-EVENT-SSID-TEMP-DISABLED id=9 ssid="Home" reason=WRONG_KEY',
@@ -1231,6 +1327,7 @@ describe("network switcher", function()
                 isAuthSuccessful = function() return false end,
                 isScanEvent = function() return false end,
             }
+            return queued
         end
         local authenticated, err = adapter.connect(network, true)
         assert.is_false(authenticated)
