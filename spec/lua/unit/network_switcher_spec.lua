@@ -352,6 +352,13 @@ describe("network switcher", function()
         ZenSpec.replace("ui/uimanager", {
             show = function(_self, widget) shown[#shown + 1] = widget end,
             close = function(_self, widget) closed[#closed + 1] = widget end,
+            topdown_widgets_iter = function()
+                local index = #shown + 1
+                return function()
+                    index = index - 1
+                    return shown[index]
+                end
+            end,
             forceRePaint = function() end,
             broadcastEvent = function(_self, event) events[#events + 1] = event.name end,
             tickAfterNext = function(_self, action) scan_task = action end,
@@ -506,15 +513,28 @@ describe("network switcher", function()
         end)
     end
 
-    it("toggles Wi-Fi from the title bar and resumes scanning in the same switcher", function()
+    it("reconnects Kindle Wi-Fi from the title bar and updates the same switcher", function()
         local changed = 0
+        local complete_connection
         NetworkMgr.toggleWifiOff = function(self, callback, interactive)
             assert.is_true(interactive)
             self:turnOffWifi()
             callback()
         end
+        NetworkMgr.toggleWifiOn = function(self, callback, long_press, interactive)
+            assert.is_false(long_press)
+            assert.is_true(interactive)
+            self.wifi_on = true
+            self.pending_connection = true
+            complete_connection = function()
+                self.current_ssid = "Home"
+                self.pending_connection = false
+                callback()
+            end
+        end
         require("modules/menu/network_switcher").open(function() changed = changed + 1 end, true)
         scan_task()
+        local original_menu = network_menu
         local toggle = network_menu.custom_title_bar.toggle
         assert.is_true(toggle.value_func())
 
@@ -527,11 +547,118 @@ describe("network switcher", function()
 
         toggle.callback()
         assert.is_true(toggle.value_func())
-        assert.are.equal(1, kindle_scans)
-        while #scheduled > 0 do table.remove(scheduled, 1)() end
+        assert.are.equal(0, kindle_scans)
+        assert.are.equal("Turning on Wi-Fi…", network_menu.item_table[1].text)
+        assert.is_function(complete_connection)
+        complete_connection()
+        assert.are.equal(original_menu, network_menu)
         assert.are.equal("Home", network_menu.item_table[1].text)
+        assert.are.equal("Connected", network_menu.item_table[1]._zen_settings_breadcrumb)
+        assert.are.equal("wifi-on", network_menu.item_table[1].icon_glyph)
+        assert.are.equal(2, changed)
         assert.are.equal(1, #shown)
+
+        toggle.callback()
+        toggle.callback()
+        network_menu:onClose()
+        complete_connection()
+        assert.are.equal(3, changed)
+        assert.are.equal("Turning on Wi-Fi…", network_menu.item_table[1].text)
     end)
+
+    it("uses Kobo's saved-network reconnect from the title bar", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.getConfiguredNetworks = function() return {} end
+        NetworkMgr.getAllSavedNetworks = function()
+            return { readSetting = function() return { password = "saved", flags = "[WPA2]" } end }
+        end
+        local reconnects = 0
+        NetworkMgr.reconnectOrShowNetworkMenu = function(self, callback)
+            reconnects = reconnects + 1
+            self.current_ssid = "Home"
+            callback()
+            return true
+        end
+        NetworkMgr.turnOnWifi = function(self, callback)
+            self.wifi_on = true
+            return self:reconnectOrShowNetworkMenu(callback)
+        end
+        NetworkMgr.toggleWifiOn = function(self, callback) self:turnOnWifi(callback) end
+        NetworkMgr.toggleWifiOff = function(self, callback) self:turnOffWifi() callback() end
+        NetworkMgr.getWifiMenuTable = function(self)
+            return { callback = function(menu)
+                self:toggleWifiOn(function() menu:updateItems() end, false, true)
+            end }
+        end
+        NetworkMgr.getNetworkList = function() error("Saved Wi-Fi should reconnect before listing") end
+        local changed = 0
+        assert.is_true(require("modules/menu/network_switcher").open(function()
+            changed = changed + 1
+        end, true))
+        scan_task()
+        local original_menu = network_menu
+        local toggle = network_menu.custom_title_bar.toggle
+        toggle.callback()
+        assert.are.equal("Off", network_menu.item_table[1].text)
+        toggle.callback()
+        assert.are.equal(1, reconnects)
+        assert.are.equal(original_menu, network_menu)
+        assert.are.equal("Home", network_menu.item_table[1].text)
+        assert.are.equal("Connected", network_menu.item_table[1]._zen_settings_breadcrumb)
+        assert.are.equal("wifi-on", network_menu.item_table[1].icon_glyph)
+        assert.are.equal(2, changed)
+    end)
+
+    for _i, platform in ipairs({ "kindle", "kobo" }) do
+        it("keeps the " .. platform .. " switcher open when the header toggle cannot reconnect", function()
+            ZenSpec.replace("device", {
+                hasWifiManager = function() return true end,
+                isKobo = function() return platform == "kobo" end,
+                isKindle = function() return platform == "kindle" end,
+            })
+            NetworkMgr.getConfiguredNetworks = function() return {} end
+            local NetworkSetting = {}
+            ZenSpec.replace("ui/widget/networksetting", NetworkSetting)
+            local dialog = setmetatable({
+                onCloseWidget = function() NetworkMgr.pending_connection = false end,
+            }, NetworkSetting)
+            local UIManager = require("ui/uimanager")
+            local close_widget = UIManager.close
+            UIManager.close = function(self, widget)
+                close_widget(self, widget)
+                if widget.onCloseWidget then widget:onCloseWidget() end
+            end
+            local attempts = 0
+            NetworkMgr.toggleWifiOn = function(self)
+                attempts = attempts + 1
+                self.wifi_on = true
+                self.pending_connection = true
+                UIManager:show({ text = "Connection failed" })
+                UIManager:show(dialog)
+            end
+            NetworkMgr.getWifiMenuTable = function(self)
+                return { callback = function() self:toggleWifiOn() end }
+            end
+            NetworkMgr.toggleWifiOff = function(self, callback) self:turnOffWifi() callback() end
+            require("modules/menu/network_switcher").open()
+            scan_task()
+            local original_menu = network_menu
+            local toggle = network_menu.custom_title_bar.toggle
+            toggle.callback()
+            toggle.callback()
+            while #scheduled > 0 do table.remove(scheduled, 1)() end
+            assert.are.equal(1, attempts)
+            assert.are.equal(original_menu, network_menu)
+            assert.is_false(NetworkMgr.pending_connection)
+            assert.are.equal(2, #closed)
+            assert.are.equal("Home", network_menu.item_table[1].text)
+            assert.are.equal("Saved · 80%", network_menu.item_table[1]._zen_settings_breadcrumb)
+        end)
+    end
 
     it("still turns off a connected Kindle", function()
         local calls = 0

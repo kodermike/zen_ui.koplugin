@@ -3,7 +3,7 @@ local M = {}
 local VERIFY_ATTEMPTS = 60
 local VERIFY_DELAY_US = 250 * 1000
 
-function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
+function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin, show_networks)
     local UIManager = require("ui/uimanager")
     local NetworkMgr = require("ui/network/manager")
     local KindleNetworkAdapter = require("modules/menu/network_adapters/kindle")
@@ -15,6 +15,9 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
     local Device = require("device")
     local kindle = KindleNetworkAdapter.isSupported(Device)
     local kobo = KoboNetworkAdapter.isSupported(Device)
+    show_networks = show_networks or function()
+        return M.open(on_connected, settings_subpage, plugin)
+    end
     if not connected then
         local no_saved = not kindle and not kobo and not wifi_on
             and next(NetworkMgr:getAllSavedNetworks().data) == nil
@@ -22,7 +25,7 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
             "kindle=", kindle, "settings=", settings_subpage == true,
             "open_switcher=", no_saved)
         if no_saved then
-            return M.open(on_connected, settings_subpage, plugin)
+            return show_networks()
         end
     end
 
@@ -64,7 +67,7 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin)
         logger.dbg("Kobo picker replaced", "pending_connection=",
             NetworkMgr.pending_connection == true)
     end
-    return M.open(on_connected, settings_subpage, plugin)
+    return show_networks()
 end
 
 local function is_secured(network)
@@ -161,6 +164,7 @@ function M.open(on_connected, settings_subpage, plugin)
     local render_networks
     local show_network_actions
     local start_scan
+    local refresh_networks
     local toggle_wifi
     local scanning = false
     local changing_power = false
@@ -806,7 +810,24 @@ function M.open(on_connected, settings_subpage, plugin)
 
     toggle_wifi = function()
         if closed or changing_power then return end
-        if not NetworkMgr:isWifiOn() then start_scan(); return end
+        if not NetworkMgr:isWifiOn() then
+            changing_power = true
+            show_status(_("Turning on Wi-Fi…"))
+            local refreshed = false
+            local function refresh()
+                refreshed = true
+                changing_power = false
+                if closed then return end
+                refresh_networks()
+                if on_connected then on_connected() end
+            end
+            M.toggleWifi({ updateItems = refresh }, on_connected, settings_subpage, plugin, refresh)
+            changing_power = false
+            if not refreshed and not NetworkMgr.pending_connection then
+                if NetworkMgr:isWifiOn() then refresh() else show_status(_("Off")) end
+            end
+            return
+        end
         changing_power = true
         scanning = false
         if adapter then
@@ -828,9 +849,7 @@ function M.open(on_connected, settings_subpage, plugin)
         end, true)
     end
 
-    UIManager:show(menu)
-    UIManager:forceRePaint()
-    UIManager:tickAfterNext(function()
+    refresh_networks = function()
         if closed then return end
         if NetworkMgr:isWifiOn() then
             local has_connection_check = type(NetworkMgr.isConnected) == "function"
@@ -869,7 +888,10 @@ function M.open(on_connected, settings_subpage, plugin)
             end
         end
         start_scan()
-    end)
+    end
+    UIManager:show(menu)
+    UIManager:forceRePaint()
+    UIManager:tickAfterNext(refresh_networks)
     return true
 end
 
