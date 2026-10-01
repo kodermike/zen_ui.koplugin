@@ -8,6 +8,27 @@ function M.new(NetworkMgr, logger)
     local ffiutil = require("ffi/util")
     local _ = require("gettext")
     local adapter = { id = "kobo" }
+    local max_auth_failures = 4 -- Match KOReader's password authentication limit.
+
+    local function auth_failure(event)
+        local msg = event.msg or ""
+        local wrong_key = msg:find("reason=WRONG_KEY", 1, true) ~= nil
+            or msg:find("pre-shared key may be incorrect", 1, true) ~= nil
+        return wrong_key or event:isAuthFailed()
+            and not msg:find("locally_generated=1", 1, true), wrong_key
+    end
+
+    local function finish_auth(wcli, connected)
+        if not connected then
+            local reply, err = wcli:sendCtrlCmd("DISCONNECT")
+            logger.dbg("Kobo authentication stopped", "accepted=",
+                reply ~= nil and reply:sub(1, 2) == "OK", "error=", err)
+        end
+        local reply, err = wcli:sendCtrlCmd("ENABLE_NETWORK all")
+        if not reply or reply:sub(1, 2) ~= "OK" then
+            logger.warn("could not re-enable Kobo Wi-Fi profiles", err or reply)
+        end
+    end
 
     function adapter.profileId(ssid)
         if type(NetworkMgr.getConfiguredNetworks) ~= "function" then return end
@@ -21,9 +42,20 @@ function M.new(NetworkMgr, logger)
         local WpaClient = require("lj-wpaclient/wpaclient")
         local wcli, err = WpaClient.new(NetworkMgr.wpa_supplicant.ctrl_interface)
         if not wcli then return false, err end
+        if reconnect then
+            local attached
+            attached, err = wcli:attach()
+            if not attached then
+                wcli:close()
+                return false, err
+            end
+        end
         local reply
         reply, err = wcli:sendCtrlCmd(reconnect and "SELECT_NETWORK " .. tostring(id) or "DISCONNECT")
         local connected = false
+        local failures = 0
+        local rejected = false
+        local reason = _("Timed out")
         if reconnect and reply and reply:sub(1, 2) == "OK" then
             for _i = 1, 120 do
                 local current = wcli:getConnectedNetwork()
@@ -31,14 +63,29 @@ function M.new(NetworkMgr, logger)
                     connected = true
                     break
                 end
+                for _j, event in ipairs(wcli:readAllEvents() or {}) do
+                    local failed, wrong_key = auth_failure(event)
+                    if failed then
+                        failures = failures + 1
+                        logger.dbg("Kobo authentication failure", "profile_id=", id,
+                            "failures=", failures, "limit=", max_auth_failures,
+                            "wrong_key=", wrong_key)
+                        if wrong_key or failures >= max_auth_failures then
+                            rejected = true
+                            reason = _("Failed to authenticate")
+                            break
+                        end
+                    end
+                end
+                if rejected then break end
                 ffiutil.usleep(250 * 1000)
             end
         end
-        if reconnect then wcli:sendCtrlCmd("ENABLE_NETWORK all") end
+        if reconnect then finish_auth(wcli, connected) end
         wcli:close()
         if connected then return true, _("Authenticated") end
         if reply and reply:sub(1, 2) == "OK" then
-            if reconnect then return false, _("Timed out") end
+            if reconnect then return false, reason end
             return true
         end
         return false, err or reply
@@ -93,18 +140,27 @@ function M.new(NetworkMgr, logger)
     local function authenticate_password(network)
         local methods = require("lj-wpaclient/wpaclient").__index
         local enable = methods.enableNetworkByID
-        local auth_client
+        local auth_client, close
+        local failures = 0
         -- KOReader authenticates synchronously; SELECT_NETWORK clears an earlier DISCONNECT.
         methods.enableNetworkByID = function(wcli, id)
             auth_client = wcli
-            local close = wcli.close
-            wcli.close = function(self)
-                auth_client = nil
-                local reply, err = self:sendCtrlCmd("ENABLE_NETWORK all")
-                if not reply or reply:sub(1, 2) ~= "OK" then
-                    logger.warn("could not re-enable Kobo Wi-Fi profiles", err or reply)
+            close = wcli.close
+            wcli.close = function() end -- Defer cleanup until the result is known.
+            local read_event = wcli.readEvent
+            wcli.readEvent = function(self)
+                local event = read_event(self)
+                if event then
+                    local failed, wrong_key = auth_failure(event)
+                    event.isAuthFailed = function() return failed end
+                    if failed then
+                        failures = failures + 1
+                        logger.dbg("Kobo authentication failure", "profile_id=", id,
+                            "failures=", failures, "limit=", max_auth_failures,
+                            "wrong_key=", wrong_key)
+                    end
                 end
-                return close(self)
+                return event
             end
             local reply, err = wcli:sendCtrlCmd("SELECT_NETWORK " .. tostring(id))
             logger.dbg("Kobo password profile selected", "ssid=", network.ssid,
@@ -113,7 +169,10 @@ function M.new(NetworkMgr, logger)
         end
         local ok, authenticated, err = pcall(NetworkMgr.authenticateNetwork, NetworkMgr, network)
         methods.enableNetworkByID = enable
-        if auth_client then auth_client:close() end
+        if auth_client then
+            finish_auth(auth_client, ok and authenticated == true)
+            close(auth_client)
+        end
         if not ok then return false, tostring(authenticated) end
         return authenticated, err
     end

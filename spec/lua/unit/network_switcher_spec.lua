@@ -959,6 +959,8 @@ describe("network switcher", function()
                         if association_checks == 1 then return nil end
                         return NetworkMgr.current_ssid and { id = "7" } or nil
                     end,
+                    attach = function() return true end,
+                    readAllEvents = function() end,
                     close = function() end,
                 }
             end,
@@ -1010,6 +1012,8 @@ describe("network switcher", function()
                         return "OK\n"
                     end,
                     getConnectedNetwork = function() return nil end,
+                    attach = function() return true end,
+                    readAllEvents = function() end,
                     close = function() end,
                 }
             end,
@@ -1020,8 +1024,80 @@ describe("network switcher", function()
         assert.is_false(connected)
         assert.are.equal("Timed out", reason)
         assert.are.equal(120, verification_sleeps)
-        assert.are.same({ "SELECT_NETWORK 7", "ENABLE_NETWORK all" }, commands)
+        assert.are.same({ "SELECT_NETWORK 7", "DISCONNECT", "ENABLE_NETWORK all" }, commands)
     end)
+
+    for _i, case in ipairs({
+        { name = "stops Kobo reconnect after four failures", failures = 4,
+            message = "CTRL-EVENT-DISCONNECTED reason=15 locally_generated=0" },
+        { name = "stops Kobo reconnect on a rejected password", failures = 1,
+            message = 'CTRL-EVENT-SSID-TEMP-DISABLED id=7 ssid="Home" reason=WRONG_KEY' },
+    }) do
+        it(case.name .. " and asks for a new password", function()
+            ZenSpec.replace("device", {
+                hasWifiManager = function() return true end,
+                isKobo = function() return true end,
+                isKindle = function() return false end,
+            })
+            NetworkMgr.current_ssid = nil
+            NetworkMgr.wpa_supplicant = { ctrl_interface = "/var/run/wpa_supplicant/wlan0" }
+            NetworkMgr.getConfiguredNetworks = function()
+                return {{ ssid = "Home", id = "7" }}
+            end
+            NetworkMgr.getNetworkList = function()
+                return {{ ssid = "Home", flags = "[WPA2]", password = "saved", signal_quality = 80 }}
+            end
+            local commands = {}
+            local polls = 0
+            local attached = false
+            local client_closed = false
+            ZenSpec.replace("lj-wpaclient/wpaclient", {
+                __index = { enableNetworkByID = function() end },
+                new = function()
+                    return {
+                        attach = function() attached = true return true end,
+                        sendCtrlCmd = function(_self, command)
+                            assert.is_true(attached)
+                            commands[#commands + 1] = command
+                            return "OK\n"
+                        end,
+                        getConnectedNetwork = function() return nil end,
+                        readAllEvents = function()
+                            polls = polls + 1
+                            return {{
+                                msg = polls == 1
+                                    and "CTRL-EVENT-DISCONNECTED reason=3 locally_generated=1"
+                                    or case.message,
+                                isAuthFailed = function(self)
+                                    return self.msg:find("CTRL-EVENT-DISCONNECTED", 1, true) ~= nil
+                                end,
+                            }}
+                        end,
+                        close = function() client_closed = true end,
+                    }
+                end,
+            })
+
+            local Switcher = require("modules/menu/network_switcher")
+            assert.is_true(Switcher.open())
+            scan_task()
+            network_menu.item_table[1].callback()
+            assert.are.equal(case.failures + 1, polls)
+            assert.is_true(client_closed)
+            assert.are.same({ "SELECT_NETWORK 7", "DISCONNECT", "ENABLE_NETWORK all" }, commands)
+            assert.is_nil(NetworkMgr.deleted)
+            assert.is_nil(NetworkMgr.obtained)
+            assert.are.equal("Home", password_dialog.title)
+            assert.are.equal("Failed to authenticate", password_dialog.description)
+            assert.are.equal("saved", password_dialog.input)
+
+            ip_calls = 0
+            password_dialog.buttons[1][3].callback()
+            assert.are.equal("guest-password", NetworkMgr.authenticated.password)
+            assert.are.equal("Connected · 80%", network_menu.item_table[1]._zen_settings_breadcrumb)
+            assert.are.equal(case.failures + 1, polls)
+        end)
+    end
 
     it("resumes Kobo password authentication after Disconnect and Forget", function()
         NetworkMgr.wpa_supplicant = { ctrl_interface = "/var/run/wpa_supplicant/wlan0" }
@@ -1102,14 +1178,39 @@ describe("network switcher", function()
         assert.is_true(auth_client.closed)
         assert.are.equal(original_enable, methods.enableNetworkByID)
 
+        local failure_events = 0
+        methods.getConnectedNetwork = function() return nil, "4WAY_HANDSHAKE" end
+        methods.readEvent = function()
+            failure_events = failure_events + 1
+            return {
+                msg = failure_events == 1
+                    and "CTRL-EVENT-DISCONNECTED reason=3 locally_generated=1"
+                    or 'CTRL-EVENT-SSID-TEMP-DISABLED id=9 ssid="Home" reason=WRONG_KEY',
+                isAuthFailed = function(self)
+                    return self.msg:find("CTRL-EVENT-DISCONNECTED", 1, true) ~= nil
+                end,
+                isAuthSuccessful = function() return false end,
+                isScanEvent = function() return false end,
+            }
+        end
+        local authenticated, err = adapter.connect(network, true)
+        assert.is_false(authenticated)
+        assert.are.equal("Failed to authenticate", err)
+        assert.are.equal(5, failure_events)
+        assert.is_true(disconnected)
+        assert.is_true(other_enabled)
+        assert.is_true(auth_client.closed)
+        assert.are.equal(original_enable, methods.enableNetworkByID)
+
         NetworkMgr.authenticateNetwork = function()
             auth_client = WpaClient.new()
             auth_client:enableNetworkByID("9")
             error("authentication interrupted")
         end
-        local authenticated, err = adapter.connect(network, true)
+        authenticated, err = adapter.connect(network, true)
         assert.is_false(authenticated)
         assert.is_truthy(err:find("authentication interrupted", 1, true))
+        assert.is_true(disconnected)
         assert.is_true(other_enabled)
         assert.is_true(auth_client.closed)
         assert.are.equal(original_enable, methods.enableNetworkByID)
