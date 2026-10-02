@@ -1,6 +1,7 @@
 local function apply_nonblocking_wifi()
     local Device = require("device")
-    if not ((Device.isKobo and Device:isKobo()) or (Device.isKindle and Device:isKindle())) then return end
+    local pocketbook = Device.isPocketBook and Device:isPocketBook()
+    if not (pocketbook or (Device.isKobo and Device:isKobo()) or (Device.isKindle and Device:isKindle())) then return end
     local NetworkMgr = require("ui/network/manager")
     if NetworkMgr._zen_nonblocking_wifi then return end
 
@@ -19,6 +20,16 @@ local function apply_nonblocking_wifi()
     local queued = {}
     local start_next
     local reported_changing = false
+    local pocketbook_keepalive
+    if pocketbook then
+        local index = 1
+        while true do
+            local name, value = debug.getupvalue(NetworkMgr.turnOnWifi, index)
+            if not name then break end
+            if name == "keepWifiAlive" then pocketbook_keepalive = value; break end
+            index = index + 1
+        end
+    end
 
     local function address_error(self)
         if not self:ifHasAnAddress() then
@@ -82,6 +93,7 @@ local function apply_nonblocking_wifi()
             UIManager.close = function() end
             UIManager.forceRePaint = function() end
             UIManager.scheduleIn = function(_self, delay, callback, ...)
+                if callback == pocketbook_keepalive then return end
                 ffiutil.usleep(delay * 1000000)
                 callback(...)
             end
@@ -155,6 +167,7 @@ local function apply_nonblocking_wifi()
                 elseif result and not result.failed and not job.timed_out
                         and (not job.enabling or result.completed or result.show_menu) then
                     if job.enabling then NetworkMgr.lease_ssid = result.lease_ssid end
+                    if job.enabling and result.completed and pocketbook_keepalive then pocketbook_keepalive() end
                     if result.completed and job.complete_callback then
                         if job.enabling and not result.show_menu then connection_failure = job.on_failure end
                         job.complete_callback()
@@ -267,6 +280,7 @@ local function apply_nonblocking_wifi()
     local disableWifi = NetworkMgr.disableWifi
     NetworkMgr.disableWifi = function(self, ...)
         cancel()
+        if pocketbook_keepalive then UIManager:unschedule(pocketbook_keepalive) end
         return disableWifi(self, ...)
     end
     local abortWifiConnection = NetworkMgr._abortWifiConnection
@@ -297,6 +311,7 @@ local function apply_nonblocking_wifi()
         self.wifi_toggle_long_press = long_press
         local chooser_callback = complete_callback
         on_failure = interactive and (on_failure or function()
+            if pocketbook then return chooser_callback and chooser_callback() end
             require("modules/menu/network_switcher").open(chooser_callback)
         end) or nil
         if interactive ~= false then

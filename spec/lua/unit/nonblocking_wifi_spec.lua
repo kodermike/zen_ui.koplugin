@@ -10,6 +10,7 @@ describe("background Wi-Fi toggles", function()
         "ffi", "ffi/util", "common/zen_logger", "modules/global/patches/nonblocking_wifi",
         "lj-wpaclient/wpaclient", "ui/network/wpa_supplicant", "ffi/crypto", "ffi/sha2",
         "modules/menu/network_adapters/kobo", "modules/settings/zen_settings_utils",
+        "modules/menu/network_switcher",
     }
 
     local function snapshot(value)
@@ -291,6 +292,93 @@ describe("background Wi-Fi toggles", function()
         assert.are.same({ "onNetworkDisconnecting", "onNetworkStateChanged",
             "onNetworkDisconnected", "onNetworkStateChanged" }, events)
         assert.are.equal(0, notices)
+    end)
+
+    describe("PocketBook", function()
+        local pings
+
+        before_each(function()
+            pings = {}
+            Device.isKobo = function() return false end
+            Device.isPocketBook = function() return true end
+            Device.hasWifiManager = function() return false end
+            local init_network = Device.initNetworkManager
+            Device.initNetworkManager = function(self, manager)
+                init_network(self, manager)
+                local function keepWifiAlive()
+                    UIManager:unschedule(keepWifiAlive)
+                    if wifi_on then
+                        pings[#pings + 1] = { in_child = in_child }
+                        UIManager:scheduleIn(30, keepWifiAlive)
+                    end
+                end
+                manager.getCurrentNetwork = function() end
+                manager.turnOnWifi = function(_self, callback)
+                    assert.is_true(in_child, "PocketBook reconnect must not block the UI")
+                    wifi_on, connected = outcome == "connected", outcome == "connected"
+                    if connected then keepWifiAlive() end
+                    if callback then callback() end
+                end
+                manager.turnOffWifi = function(_self, callback)
+                    assert.is_true(in_child, "PocketBook shutdown must not block the UI")
+                    off_calls = off_calls + 1
+                    wifi_on, connected = false, false
+                    if callback then callback() end
+                end
+            end
+            UIManager.broadcastEvent = function(_self, event) events[#events + 1] = event.handler end
+            ZenSpec.unload("ui/network/manager")
+            NetworkMgr = require("ui/network/manager")
+            require("modules/global/patches/nonblocking_wifi")()
+            ZenSpec.replace("modules/menu/network_switcher", {
+                open = function() error("Power toggles must not open PocketBook settings") end,
+            })
+        end)
+
+        it("runs power changes in workers and keeps the native timer in the UI process", function()
+            local completed = 0
+            local refresh = function()
+                assert.is_false(in_child)
+                completed = completed + 1
+            end
+            NetworkMgr:toggleWifiOn(refresh, false, true)
+            assert.is_false(wifi_on)
+            assert.are.equal(1, #workers)
+            tick()
+            assert.are.equal(0, completed)
+            finish_worker()
+            local keepalive = table.remove(scheduled, 1)
+            assert.are.equal(30, keepalive.delay)
+            assert.are.same({ { in_child = true }, { in_child = false } }, pings)
+            assert.are.same({}, sleeps)
+            tick()
+            assert.are.equal(1, completed)
+            finish_worker() -- DNS check also stays off the UI thread.
+            assert.are.equal("Connected", shown[#shown].text)
+            keepalive.callback()
+            assert.is_false(pings[#pings].in_child)
+            NetworkMgr:toggleWifiOff(refresh, true)
+            assert.is_true(wifi_on)
+            assert.are.equal(0, off_calls)
+            finish_worker()
+            assert.is_false(wifi_on)
+            assert.are.equal(2, completed)
+            assert.are.equal(0, #scheduled)
+            assert.are.equal(0, standby)
+        end)
+
+        it("reports a failed reconnect without opening system settings", function()
+            outcome = "failed"
+            local refreshed = 0
+            NetworkMgr:toggleWifiOn(function() refreshed = refreshed + 1 end, false, true)
+            finish_worker()
+            for _i = 1, 180 do tick() end
+            finish_worker()
+            assert.are.equal(1, refreshed)
+            assert.is_false(NetworkMgr.pending_connection)
+            assert.are.equal("Error connecting to the network", shown[#shown].text)
+            assert.are.equal(0, standby)
+        end)
     end)
 
     it("queues a scan without cancelling authentication or clearing its pending state", function()
