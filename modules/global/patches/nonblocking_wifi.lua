@@ -21,7 +21,19 @@ local function apply_nonblocking_wifi()
     local start_next
     local reported_changing = false
     local pocketbook_keepalive
+    local pocketbook_turn_on
     if pocketbook then
+        local inkview = require("ffi/inkview")
+        ffi.cdef[[int NetConnectSilent(const char *name);]]
+        pocketbook_turn_on = function(_self, callback)
+            inkview.WiFiPower(1)
+            -- NetConnect() can wait for firmware UI inside a forked worker.
+            local status = tonumber(inkview.NetConnectSilent(nil))
+            logger.dbg("PocketBook silent reconnect result", "status=", status)
+            if status ~= ffi.C.NET_OK then return false end
+            if callback then callback() end
+            return true
+        end
         local index = 1
         while true do
             local name, value = debug.getupvalue(NetworkMgr.turnOnWifi, index)
@@ -195,7 +207,7 @@ local function apply_nonblocking_wifi()
         local method = self[method_name]
         self[method_name] = function(_self, complete_callback)
             queued[#queued + 1] = {
-                method = method,
+                method = pocketbook and method_name == "turnOnWifi" and pocketbook_turn_on or method,
                 method_name = method_name,
                 enabling = method_name == "turnOnWifi",
                 complete_callback = complete_callback or after,

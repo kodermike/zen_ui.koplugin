@@ -10,7 +10,7 @@ describe("background Wi-Fi toggles", function()
         "ffi", "ffi/util", "common/zen_logger", "modules/global/patches/nonblocking_wifi",
         "lj-wpaclient/wpaclient", "ui/network/wpa_supplicant", "ffi/crypto", "ffi/sha2",
         "modules/menu/network_adapters/kobo", "modules/settings/zen_settings_utils",
-        "modules/menu/network_switcher",
+        "modules/menu/network_switcher", "ffi/inkview",
     }
 
     local function snapshot(value)
@@ -295,13 +295,33 @@ describe("background Wi-Fi toggles", function()
     end)
 
     describe("PocketBook", function()
-        local pings
+        local pings, silent_calls
 
         before_each(function()
             pings = {}
+            silent_calls = 0
             Device.isKobo = function() return false end
             Device.isPocketBook = function() return true end
             Device.hasWifiManager = function() return false end
+            package.loaded["ffi"].cdef = function(declaration)
+                assert.is_truthy(declaration:find("NetConnectSilent", 1, true))
+            end
+            package.loaded["ffi"].C.NET_OK = 0
+            ZenSpec.replace("ffi/inkview", {
+                WiFiPower = function(value)
+                    assert.is_true(in_child, "PocketBook power changes must not block the UI")
+                    assert.are.equal(1, value)
+                    wifi_on = true
+                end,
+                NetConnect = function() error("Interactive NetConnect must not run in a worker") end,
+                NetConnectSilent = function(name)
+                    assert.is_true(in_child, "PocketBook reconnect must not block the UI")
+                    assert.is_nil(name, "Reconnect using firmware-saved networks")
+                    silent_calls = silent_calls + 1
+                    connected = outcome == "connected"
+                    return outcome == "failed" and -22 or 0
+                end,
+            })
             local init_network = Device.initNetworkManager
             Device.initNetworkManager = function(self, manager)
                 init_network(self, manager)
@@ -314,9 +334,9 @@ describe("background Wi-Fi toggles", function()
                 end
                 manager.getCurrentNetwork = function() end
                 manager.turnOnWifi = function(_self, callback)
-                    assert.is_true(in_child, "PocketBook reconnect must not block the UI")
-                    wifi_on, connected = outcome == "connected", outcome == "connected"
-                    if connected then keepWifiAlive() end
+                    local inkview = require("ffi/inkview")
+                    inkview.WiFiPower(1)
+                    if inkview.NetConnect(nil) == 0 then keepWifiAlive() end
                     if callback then callback() end
                 end
                 manager.turnOffWifi = function(_self, callback)
@@ -349,7 +369,8 @@ describe("background Wi-Fi toggles", function()
             finish_worker()
             local keepalive = table.remove(scheduled, 1)
             assert.are.equal(30, keepalive.delay)
-            assert.are.same({ { in_child = true }, { in_child = false } }, pings)
+            assert.are.same({ { in_child = false } }, pings)
+            assert.are.equal(1, silent_calls)
             assert.are.same({}, sleeps)
             tick()
             assert.are.equal(1, completed)
@@ -367,18 +388,25 @@ describe("background Wi-Fi toggles", function()
             assert.are.equal(0, standby)
         end)
 
-        it("reports a failed reconnect without opening system settings", function()
-            outcome = "failed"
-            local refreshed = 0
-            NetworkMgr:toggleWifiOn(function() refreshed = refreshed + 1 end, false, true)
-            finish_worker()
-            for _i = 1, 180 do tick() end
-            finish_worker()
-            assert.are.equal(1, refreshed)
-            assert.is_false(NetworkMgr.pending_connection)
-            assert.are.equal("Error connecting to the network", shown[#shown].text)
-            assert.are.equal(0, standby)
-        end)
+        for _i, result in ipairs({ "failed", "no_route" }) do
+            it("reports " .. result .. " without opening system settings", function()
+                outcome = result
+                local refreshed = 0
+                NetworkMgr:toggleWifiOn(function() refreshed = refreshed + 1 end, false, true)
+                finish_worker()
+                if result == "no_route" then
+                    assert.are.equal(30, table.remove(scheduled, 1).delay)
+                    for _j = 1, 180 do tick() end
+                end
+                finish_worker()
+                assert.are.equal(1, silent_calls)
+                assert.are.equal(1, refreshed)
+                assert.is_false(wifi_on)
+                assert.is_false(NetworkMgr.pending_connection)
+                assert.are.equal("Error connecting to the network", shown[#shown].text)
+                assert.are.equal(0, standby)
+            end)
+        end
     end)
 
     it("queues a scan without cancelling authentication or clearing its pending state", function()
