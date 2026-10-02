@@ -75,6 +75,7 @@ local defaults = {
         hide_grouped_series = false,
         partial_page_repaint = false,
         reader_top_status_bar = true,
+        reader_status_bar_margins = false,
         reader_themes = false,
         reader_bottom_menu = false,
         night_mode_schedule = false,
