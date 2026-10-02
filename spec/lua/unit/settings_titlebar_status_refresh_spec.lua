@@ -266,6 +266,51 @@ describe("settings title bar", function()
         assert.are.equal(3, refreshes())
     end)
 
+    it("rebuilds a covered settings status row before it is painted again", function()
+        local title_bar, refreshes, owner = make_title_bar()
+        local UIManager = require("ui/uimanager")
+        local InputContainer = require("ui/widget/container/inputcontainer")
+        local painted, builds = {}, 0
+        local changing = true
+        title_bar.width = 600
+        title_bar.status_widget = { solid_wifi = false }
+        title_bar._vertical_group = { [2] = title_bar.status_widget }
+        title_bar[1] = { getSize = function() return { w = 600, h = 80 } end }
+        title_bar.status_factory = function()
+            builds = builds + 1
+            return { solid_wifi = not changing }
+        end
+        setmetatable(title_bar, SettingsTitleBar)
+        require("common/widget_resources").replaceChild = function(container, index, widget)
+            container[index] = widget
+        end
+        InputContainer.paintTo = function(self)
+            painted[#painted + 1] = self.status_widget.solid_wifi
+        end
+        ZenSpec.replace("apps/filemanager/filemanager", {
+            instance = { _updateStatusBar = function() end },
+        })
+        UIManager._window_stack = { { widget = owner }, { widget = { covers_fullscreen = true } } }
+
+        changing = false
+        title_bar:onNetworkConnected()
+        title_bar:onNetworkStateChanged()
+        assert.are.equal(0, refreshes())
+        assert.are.equal(0, builds)
+
+        table.remove(UIManager._window_stack)
+        local paint = SettingsTitleBar.paintTo or InputContainer.paintTo
+        paint(title_bar)
+        paint(title_bar)
+        assert.are.same({ true, true }, painted)
+        assert.are.equal(1, builds)
+
+        title_bar:onNetworkDisconnected()
+        title_bar:refreshStatus()
+        paint(title_bar)
+        assert.are.equal(2, builds)
+    end)
+
     it("debounces charging changes and cancels the timer when cleared", function()
         local title_bar, refreshes, owner = make_title_bar()
 

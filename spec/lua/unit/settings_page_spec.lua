@@ -176,6 +176,41 @@ describe("Zen settings page", function()
         }
     end
 
+    it("repaints live Wi-Fi toggles on external network changes", function()
+        local wifi_on = false
+        local settings = make_page({{
+            text = "Wi-Fi", checked_func = function() return wifi_on end,
+        }})
+        local UIManager = require("ui/uimanager")
+        local top = settings
+        UIManager.topdown_widgets_iter = function()
+            local widgets = { top, { toast = true } }
+            return function() return table.remove(widgets) end
+        end
+        local painted_states = {}
+        UIManager.setDirty = function(_self, widget, refresh, region)
+            assert.are.equal(settings, widget)
+            assert.are.equal("ui", refresh)
+            assert.are.equal(settings.dimen, region)
+            painted_states[#painted_states + 1] = settings.item_table[1].checked_func()
+        end
+
+        wifi_on = true
+        settings:onNetworkConnected()
+        wifi_on = false
+        settings:onNetworkDisconnected()
+        wifi_on = true
+        settings:onNetworkStateChanged()
+        assert.are.same({ true, false, true }, painted_states)
+
+        top = { covers_fullscreen = true }
+        settings:onNetworkStateChanged()
+        top = settings
+        settings:closeMenu()
+        settings:onNetworkStateChanged()
+        assert.are.same({ true, false, true }, painted_states)
+    end)
+
     it("loads the settings builder only when opening Settings", function()
         local name = "modules/settings/zen_settings"
         local builder, preload = package.loaded[name], package.preload[name]

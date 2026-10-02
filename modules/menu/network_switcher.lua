@@ -932,7 +932,7 @@ function M.open(on_connected, settings_subpage, plugin)
         end, true)
     end
 
-    refresh_networks = function()
+    refresh_networks = function(external_change)
         if closed or scanning or changing_power then return end
         UIManager:unschedule(refresh_networks)
         if NetworkMgr:isWifiOn() then
@@ -947,6 +947,18 @@ function M.open(on_connected, settings_subpage, plugin)
                     if adapter then
                         previous_network = current
                         previous_ip = get_ip()
+                    end
+                    if external_change then
+                        restore_started = false
+                        local found = false
+                        for _i, network in ipairs(network_list) do
+                            network.connected = network.ssid == current.ssid
+                            found = found or network.connected
+                        end
+                        if found then
+                            render_networks(current.ssid)
+                            return
+                        end
                     end
                     local saved = adapter and adapter.getSavedNetwork(current.ssid)
                         or NetworkMgr:getAllSavedNetworks():readSetting(current.ssid)
@@ -977,8 +989,36 @@ function M.open(on_connected, settings_subpage, plugin)
                 return
             end
         end
+        if external_change then
+            previous_network, previous_ip, connected_network = nil, nil, nil
+            restore_started = true
+            if not NetworkMgr:isWifiOn() then
+                network_list = {}
+                show_status(_("Off"))
+            elseif #network_list > 0 then
+                for _i, network in ipairs(network_list) do network.connected = false end
+                render_networks()
+            else
+                menu:updateItems()
+            end
+            return
+        end
         start_scan()
     end
+    menu.onNetworkConnected = function()
+        if closed then return end
+        for widget in UIManager:topdown_widgets_iter() do
+            if not widget.toast and not widget.invisible then
+                if widget == menu then
+                    UIManager:setDirty(menu, "ui", menu.dimen)
+                    refresh_networks(true)
+                end
+                return
+            end
+        end
+    end
+    menu.onNetworkDisconnected = menu.onNetworkConnected
+    menu.onNetworkStateChanged = menu.onNetworkConnected
     UIManager:show(menu)
     UIManager:forceRePaint()
     UIManager:tickAfterNext(refresh_networks)

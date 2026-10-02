@@ -138,9 +138,13 @@ describe("network switcher", function()
         ZenSpec.replace("ui/widget/menu", {
             new = function(_self, options)
                 options.kind = "menu"
+                options.updateItems = function(self)
+                    self.updates = (self.updates or 0) + 1
+                end
                 options.switchItemTable = function(self, _title, items, selected_index)
                     self.item_table = items
                     self.selected_index = selected_index
+                    self:updateItems()
                 end
                 options.onMenuChoice = function(_menu, item)
                     if item.callback then return item.callback() end
@@ -361,6 +365,9 @@ describe("network switcher", function()
                 end
             end,
             forceRePaint = function() end,
+            setDirty = function(_self, widget)
+                widget.repainted_wifi = widget.custom_title_bar.toggle.value_func()
+            end,
             broadcastEvent = function(_self, event) events[#events + 1] = event.name end,
             tickAfterNext = function(_self, action) scan_task = action end,
             nextTick = function(_self, action) action() end,
@@ -722,6 +729,76 @@ describe("network switcher", function()
         complete_connection()
         assert.are.equal(3, changed)
         assert.are.equal("Turning on Wi-Fi…", network_menu.item_table[1].text)
+    end)
+
+    it("updates an open Kobo switcher when Wi-Fi restores externally", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.getConfiguredNetworks = function() return {} end
+        require("modules/menu/network_switcher").open(nil, true, {})
+        scan_task()
+        NetworkMgr.turnOnWifi = function() error("Events must not turn Wi-Fi on") end
+        NetworkMgr.getNetworkList = function() error("Events must not scan") end
+        local toggle = network_menu.custom_title_bar.toggle
+
+        NetworkMgr:turnOffWifi()
+        network_menu:onNetworkDisconnected()
+        assert.is_false(toggle.value_func())
+        assert.is_false(network_menu.repainted_wifi)
+        assert.are.equal("Off", network_menu.item_table[1].text)
+        local updates = network_menu.updates
+
+        NetworkMgr.wifi_on = true
+        network_menu:onNetworkStateChanged()
+        assert.is_true(toggle.value_func())
+        assert.is_true(network_menu.repainted_wifi)
+        assert.are.equal(updates + 1, network_menu.updates)
+
+        NetworkMgr.current_ssid = "Home"
+        network_menu:onNetworkConnected()
+        assert.are.equal("Home", network_menu.item_table[1].text)
+        assert.are.equal("Connected", network_menu.item_table[1]._zen_settings_breadcrumb)
+
+        local UIManager = require("ui/uimanager")
+        UIManager:show({ covers_fullscreen = true })
+        updates = network_menu.updates
+        network_menu:onNetworkStateChanged()
+        network_menu:onClose()
+        table.remove(shown)
+        network_menu:onNetworkStateChanged()
+        assert.are.equal(updates, network_menu.updates)
+    end)
+
+    it("keeps scan results and repaints the power toggle during external changes", function()
+        require("modules/menu/network_switcher").open()
+        finish_scan()
+        local scans = kindle_scans
+        NetworkMgr.current_ssid = "Guest"
+        network_menu:onNetworkConnected()
+        assert.are.equal(2, #network_menu.item_table)
+        assert.is_nil(network_menu.item_table[1].icon_glyph)
+        assert.are.equal("wifi-on", network_menu.item_table[2].icon_glyph)
+
+        NetworkMgr.current_ssid = nil
+        network_menu:onNetworkDisconnected()
+        assert.are.equal(2, #network_menu.item_table)
+        assert.is_nil(network_menu.item_table[2].icon_glyph)
+        assert.are.equal(scans, kindle_scans)
+
+        network_menu.custom_title_bar.action.callback()
+        local items = network_menu.item_table
+        NetworkMgr.wifi_on = false
+        network_menu:onNetworkStateChanged()
+        assert.is_false(network_menu.repainted_wifi)
+        assert.are.equal(items, network_menu.item_table)
+        NetworkMgr.wifi_on = true
+        network_menu:onNetworkStateChanged()
+        assert.is_true(network_menu.repainted_wifi)
+        assert.are.equal(items, network_menu.item_table)
+        network_menu:onClose()
     end)
 
     it("refreshes the Kobo status bar after the list toggle turns Wi-Fi off", function()
