@@ -313,12 +313,38 @@ local function apply_responsive_keyboard()
         local text_widget = inputbox.text_widget
         text_widget = text_widget and (text_widget.text_widget or text_widget)
         local old_region = cursor_region(text_widget)
-        inputbox:moveCursorToCharPos(target)
-        local region = cursor_region(text_widget)
+        local fast_cursor = Device:isKobo() and old_region ~= nil
+        local region
+        if fast_cursor then
+            local old_line = text_widget.virtual_line_num
+            local original_set_dirty = UIManager.setDirty
+            -- Stock cursor refreshes would otherwise promote our fast update back to ui.
+            UIManager.setDirty = function(ui, widget, mode, area, dither)
+                if widget == (text_widget.dialog or "all") then
+                    local refresh = mode
+                    mode = function()
+                        local kind, bounds, hint = refresh, area, dither
+                        if type(refresh) == "function" then kind, bounds, hint = refresh() end
+                        if fast_cursor and kind == "ui" and region and region:contains(bounds) then
+                            kind = "fast"
+                        end
+                        return kind, bounds, hint
+                    end
+                end
+                return original_set_dirty(ui, widget, mode, area, dither)
+            end
+            local ok, err = pcall(inputbox.moveCursorToCharPos, inputbox, target)
+            UIManager.setDirty = original_set_dirty
+            if not ok then error(err) end
+            fast_cursor = text_widget.virtual_line_num == old_line
+        else
+            inputbox:moveCursorToCharPos(target)
+        end
+        region = cursor_region(text_widget)
         if region then
             if old_region then region = region:combine(old_region) end
             -- Avoid overlapping e-ink updates leaving earlier cursor positions visible.
-            UIManager:setDirty(text_widget.dialog or "all", "[ui]", region)
+            UIManager:setDirty(text_widget.dialog or "all", fast_cursor and "fast" or "[ui]", region)
         end
         logger.dbg("Zen keyboard cursor move", "chars=", chars, "position=", target)
         return inputbox.charpos ~= position

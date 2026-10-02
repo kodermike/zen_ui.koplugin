@@ -1111,6 +1111,12 @@ msgid "Chapter marks"
 msgstr "Marcas de capítulo"
 
 #. Type: setting
+#. Context: row(_("Estimated time to full charge"), duration(stats.time_to_full)), row(_("Charged per hour"), rate(stats.charge_rate)), row(_("Total time to full charge"), duration(stats.full_charge_time)),
+#: battery_stats_menu.lua:38
+msgid "Charged per hour"
+msgstr "Carga por hora"
+
+#. Type: setting
 #. Context: { text = _("Time since last charge"), mandatory = stats.charging and _("Charging") or duration(stats.since_charge), keep_menu_open = true },
 #: battery_stats_menu.lua:73
 msgid "Charging"
@@ -1619,6 +1625,12 @@ msgstr "Livro atual"
 #: battery_stats_menu.lua:24
 msgid "Current capacity"
 msgstr "Capacidade atual"
+
+#. Type: setting
+#. Context: row(_("Battery health"), stats.health and string.format("%.0f%%", stats.health) or missing), row(_("Current charge"), stats.level and stats.level .. "%" or missing), row(_("Current capacity"), stats.current_mah and string.format("%.0f mA...
+#: battery_stats_menu.lua:24
+msgid "Current charge"
+msgstr "Carga atual"
 
 #. Type: title
 #. Context: local filemanagerutil = require("apps/filemanager/filemanagerutil") local title_header = _("Current home folder:") local current_path = paths.getHomeDir()
@@ -2323,10 +2335,16 @@ msgid "Enter your GitHub username to be tagged in the issue"
 msgstr "Introduza o seu nome de utilizador do GitHub para ser mencionado na issue"
 
 #. Type: setting
-#. Context: }, { text = _("Estimated time remaining"), mandatory = duration(stats.remaining), keep_menu_open = true }, { text = _("Time since last charge"),
-#: battery_stats_menu.lua:71
-msgid "Estimated time remaining"
-msgstr "Autonomia restante estimada"
+#. Context: }, { text = _("Estimated battery life"), mandatory = duration(stats.remaining), keep_menu_open = true }, { text = _("Settings"), sub_item_table = settings_items },
+#: battery_stats_menu.lua:83
+msgid "Estimated battery life"
+msgstr "Autonomia estimada"
+
+#. Type: setting
+#. Context: local charging_items = { row(_("Estimated time to full charge"), duration(stats.time_to_full)), row(_("Charged per hour"), rate(stats.charge_rate)),
+#: battery_stats_menu.lua:37
+msgid "Estimated time to full charge"
+msgstr "Tempo estimado até à carga completa"
 
 #. Type: label
 #. Context: parts[#parts + 1] = provider_label(work._provider) if work.exact_edition then parts[#parts + 1] = _("Exact ISBN match") end parts[#parts + 1] = table.concat(
@@ -6097,6 +6115,12 @@ msgid "Time since last charge"
 msgstr "Tempo desde a última carga"
 
 #. Type: setting
+#. Context: row(_("Time since last charge"), stats.charging and _("Charging") or duration(stats.since_charge)), row(_("Time since last full charge"), duration(stats.since_full_charge)), }
+#: battery_stats_menu.lua:41
+msgid "Time since last full charge"
+msgstr "Tempo desde a última carga completa"
+
+#. Type: setting
 #. Context: { id = "week_pages", text = _("Pages this week") }, { id = "week_duration", text = _("Time this week") }, }
 #: stats_triplet.lua:55 home_settings.lua:2214
 msgid "Time this week"
@@ -6227,6 +6251,12 @@ msgstr "Total de páginas"
 #: stats_page.lua:920 stats_page.lua:929 stats_page.lua:936 stats_page.lua:962
 msgid "Total time"
 msgstr "Tempo total"
+
+#. Type: setting
+#. Context: row(_("Charged per hour"), rate(stats.charge_rate)), row(_("Total time to full charge"), duration(stats.full_charge_time)), row(_("Time since last charge"), stats.charging and _("Charging") or duration(stats.since_charge)),
+#: battery_stats_menu.lua:39
+msgid "Total time to full charge"
+msgstr "Tempo total até à carga completa"
 
 #. Type: setting
 #. Context: local settings_items = { row(_("Tracked samples"), tostring(stats.samples)), {

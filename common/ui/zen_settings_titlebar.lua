@@ -151,6 +151,7 @@ function ZenSettingsTitleBar:onNetworkConnected()
 end
 
 ZenSettingsTitleBar.onNetworkDisconnected = ZenSettingsTitleBar.onNetworkConnected
+ZenSettingsTitleBar.onNetworkStateChanged = ZenSettingsTitleBar.onNetworkConnected
 
 function ZenSettingsTitleBar:onCharging()
     if file_manager_dispatches_status_refresh() then return end

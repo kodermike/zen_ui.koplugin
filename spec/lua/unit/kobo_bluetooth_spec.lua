@@ -287,6 +287,42 @@ describe("Kobo Bluetooth control", function()
             .. "/sys/devices/platform/bt/rfkill/rfkill0/state", 1, true) ~= nil)
     end)
 
+    it("restores Sage chip power after launcher shutdown and rolls back failed startup", function()
+        device.model = "Kobo_cadmus"
+        device.isMTK = function() return false end
+        local chip_powered, fail_attach = false, false
+        execute_stub:revert()
+        execute_stub = stub(os, "execute", function(command)
+            commands[#commands + 1] = command
+            if command:find("ntx_io.lua 126 1", 1, true) then chip_powered = true end
+            if command:find("ntx_io.lua 126 0", 1, true) then
+                chip_powered, owner, powered = false, false, false
+            end
+            if command:find("test -e /sys/class/bluetooth/hci0", 1, true) then
+                return chip_powered and not fail_attach and 0 or 1
+            end
+            if command:find("setsid /libexec/bluetooth/bluetoothd", 1, true) then owner = true end
+            if command:find("variant:boolean:true", 1, true) then powered = true end
+            if command:find("variant:boolean:false", 1, true) then powered = false end
+            return 0
+        end)
+
+        local results = {}
+        assert.is_true(bluetooth.setEnabled(true, function(ok) results[#results + 1] = ok end))
+        assert.is_true(chip_powered)
+        assert.is_true(bluetooth.getState())
+        assert.is_true(bluetooth.setEnabled(false, function(ok) results[#results + 1] = ok end))
+        assert.is_false(chip_powered)
+        assert.is_false(bluetooth.getState())
+
+        fail_attach = true
+        assert.is_false(bluetooth.setEnabled(true, function(ok) results[#results + 1] = ok end))
+        assert.is_false(chip_powered)
+        assert.is_false(bluetooth.getState())
+        assert.are.same({ true, true, false }, results)
+        assert.are.equal(1, allowed)
+    end)
+
     it("keeps the control off unsupported devices", function()
         device.isKobo = function() return false end
         assert.is_false(bluetooth.isAvailable())

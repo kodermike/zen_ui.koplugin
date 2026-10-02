@@ -12,6 +12,7 @@ describe("responsive keyboard patch", function()
     local VirtualKeyboard
     local is_touch_device
     local is_eink_screen
+    local is_kobo
 
     before_each(function()
         require("ffi/loadlib")
@@ -22,6 +23,7 @@ describe("responsive keyboard patch", function()
         cancelled = {}
         is_touch_device = true
         is_eink_screen = true
+        is_kobo = false
         original_settings_is_false = G_reader_settings.isFalse
         G_reader_settings.isFalse = function() return false end
 
@@ -30,6 +32,7 @@ describe("responsive keyboard patch", function()
             input = live_input,
             isTouchDevice = function() return is_touch_device end,
             hasEinkScreen = function() return is_eink_screen end,
+            isKobo = function() return is_kobo end,
             performHapticFeedback = function(_, kind) haptics[#haptics + 1] = kind end,
         })
         UIManager = {
@@ -37,8 +40,8 @@ describe("responsive keyboard patch", function()
             widgetRepaint = function(_, widget)
                 repaints[#repaints + 1] = widget
             end,
-            setDirty = function(_, widget, mode, region)
-                refreshes[#refreshes + 1] = { widget, mode, region }
+            setDirty = function(_, widget, mode, region, dither)
+                refreshes[#refreshes + 1] = { widget, mode, region, dither }
             end,
             scheduleIn = function(_, delay, callback)
                 scheduled[#scheduled + 1] = { delay = delay, callback = callback }
@@ -477,6 +480,64 @@ describe("responsive keyboard patch", function()
             refresh = refreshes[#refreshes]
             assert.are.equal("[ui]", refresh[2])
             assert.are.same(Geom:new{ x = 150, y = 240, w = 22, h = 40 }, refresh[3])
+            key:onZenCursorRelease()
+        end
+    end)
+
+    it("uses fast Kobo cursor refreshes without downgrading text scrolling or other regions", function()
+        local Geom = require("ui/geometry")
+        is_kobo = true
+        for index = 1, 4 do
+            local key = cursor_key()
+            local inputbox = key.keyboard.inputbox
+            local text_widget = {
+                dimen = Geom:new{ x = 100, y = 200, w = 600, h = 100 },
+                cursor_line = { dimen = Geom:new{ w = 2, h = 20 } },
+                cursor_restore_x = 10,
+                cursor_restore_y = 0,
+                virtual_line_num = 1,
+                dialog = {},
+            }
+            local scrolled = index > 2
+            local deferred = index % 2 == 1
+            local scrollbar = Geom:new{ x = 700, y = 200, w = 10, h = 100 }
+            inputbox.text_widget = { text_widget = text_widget }
+            local original_set_dirty = UIManager.setDirty
+            function inputbox:moveCursorToCharPos(position)
+                self.charpos = position
+                text_widget.cursor_restore_x = 30
+                if scrolled then text_widget.virtual_line_num = 2 end
+                local regions = scrolled and { text_widget.dimen } or {
+                    Geom:new{ x = 110, y = 200, w = 2, h = 20 },
+                    Geom:new{ x = 130, y = 200, w = 2, h = 20 },
+                }
+                regions[#regions + 1] = scrollbar
+                for region_index = 1, #regions do
+                    local region = regions[region_index]
+                    if deferred then
+                        UIManager:setDirty(text_widget.dialog, function() return "ui", region, true end)
+                    else
+                        UIManager:setDirty(text_widget.dialog, "ui", region, true)
+                    end
+                end
+            end
+            key:onHoldSelect(nil, { pos = Geom:new{ x = 520, y = 450 } })
+            refreshes = {}
+            key:onZenCursorHoldPan(nil, { pos = Geom:new{ x = 535, y = 450 } })
+            assert.are.equal(original_set_dirty, UIManager.setDirty)
+            for refresh_index = 1, #refreshes do
+                local refresh = refreshes[refresh_index]
+                local mode, region, dither = refresh[2], refresh[3], refresh[4]
+                if type(mode) == "function" then mode, region, dither = mode() end
+                if region == text_widget.dimen or region == scrollbar then
+                    assert.are.equal("ui", mode)
+                else
+                    assert.are.equal(scrolled and "[ui]" or "fast", mode)
+                end
+                if refresh_index < #refreshes then assert.is_true(dither) end
+            end
+            assert.are.same(Geom:new{ x = 110, y = 200, w = 22, h = 20 },
+                refreshes[#refreshes][3])
             key:onZenCursorRelease()
         end
     end)

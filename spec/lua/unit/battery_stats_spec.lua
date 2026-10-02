@@ -1,5 +1,5 @@
 describe("battery stats", function()
-    local originals, original_time, now, level, charging, stored, writes, scheduled, battery_path, log_path
+    local originals, original_time, now, level, charging, charged, stored, writes, scheduled, battery_path, log_path
     local BatteryStats
 
     before_each(function()
@@ -9,6 +9,7 @@ describe("battery stats", function()
         }) do originals[name] = { value = package.loaded[name] } end
         original_time = os.time
         now, level, charging, stored, writes, scheduled = 1000000, 100, false, { events = {} }, 0, {}
+        charged = false
         battery_path = nil
         log_path = os.tmpname()
         rawset(os, "time", function() return now end)
@@ -18,7 +19,7 @@ describe("battery stats", function()
                 return {
                     getCapacityHW = function() return level end,
                     isCharging = function() return charging end,
-                    isCharged = function() return false end,
+                    isCharged = function() return charged end,
                     batt_capacity_file = battery_path and battery_path .. "/capacity",
                 }
             end,
@@ -131,6 +132,155 @@ describe("battery stats", function()
         assert.are.equal(10, stats.awake)
     end)
 
+    it("measures charging progress and freezes the completed full-charge duration", function()
+        level = 20
+        BatteryStats.start()
+        charging = true
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().time_to_full)
+
+        now, level = now + 1800, 40
+        local before = writes
+        local stats = BatteryStats.snapshot()
+        assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(5400, stats.time_to_full)
+        assert.are.equal(before, writes)
+        assert.are.equal(20, stored.charge_session.level)
+        scheduled[#scheduled].callback()
+
+        now, level = now + 5400, 100
+        scheduled[#scheduled].callback()
+        stats = BatteryStats.snapshot()
+        assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(0, stats.time_to_full)
+        assert.are.equal(7200, stats.full_charge_time)
+        assert.are.equal(0, stats.since_full_charge)
+
+        now = now + 3600
+        scheduled[#scheduled].callback()
+        stats = BatteryStats.snapshot()
+        assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(7200, stats.full_charge_time)
+        assert.are.equal(3600, stats.since_full_charge)
+
+        charging = false
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        now, level = now + 3600, 95
+        BatteryStats.stop()
+        now = now + 3600
+        BatteryStats.start()
+        stats = BatteryStats.snapshot()
+        assert.is_nil(stats.time_to_full)
+        assert.are.equal(7200, stats.full_charge_time)
+        assert.are.equal(10800, stats.since_full_charge)
+        assert.are.equal(7200, stats.since_charge)
+    end)
+
+    it("keeps the rate of a partial charge and starts a fresh session on reconnect", function()
+        level = 20
+        BatteryStats.start()
+        charging = true
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        now, level, charging = now + 3600, 50, false
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        local stats = BatteryStats.snapshot()
+        assert.are.equal(30, stats.charge_rate)
+        assert.is_nil(stats.time_to_full)
+        assert.is_nil(stats.full_charge_time)
+        assert.is_nil(stats.since_full_charge)
+
+        now, level, charging = now + 3600, 45, true
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        now, level = now + 1800, 55
+        scheduled[#scheduled].callback()
+        assert.are.equal(20, BatteryStats.snapshot().charge_rate)
+        assert.are.equal(8100, BatteryStats.snapshot().time_to_full)
+    end)
+
+    it("does not estimate without a charge gain or across an unobserved unplug", function()
+        level, charging = 20, true
+        BatteryStats.start()
+        now = now + 1800
+        scheduled[#scheduled].callback()
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().time_to_full)
+        now, level = now + 1800, 40
+        scheduled[#scheduled].callback()
+        assert.are.equal(20, BatteryStats.snapshot().charge_rate)
+        now, level, charging = now + 1800, 50, false
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        scheduled[#scheduled].callback()
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().full_charge_time)
+    end)
+
+    it("recognizes the device full-charge state below 100 percent", function()
+        level, charging = 80, true
+        BatteryStats.start()
+        now, level = now + 3600, 97
+        scheduled[#scheduled].callback()
+        charged = true
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        local stats = BatteryStats.snapshot()
+        assert.are.equal(3600, stats.full_charge_time)
+        assert.are.equal(0, stats.time_to_full)
+        assert.are.equal(0, stats.since_full_charge)
+        now = now + 3600
+        scheduled[#scheduled].callback()
+        assert.are.equal(17, BatteryStats.snapshot().charge_rate)
+        assert.are.equal(3600, BatteryStats.snapshot().since_full_charge)
+    end)
+
+    it("does not estimate charging across restart gaps, failed reads, or falling levels", function()
+        level, charging = 20, true
+        BatteryStats.start()
+        now, level = now + 1800, 40
+        scheduled[#scheduled].callback()
+        assert.are.equal(40, BatteryStats.snapshot().charge_rate)
+
+        BatteryStats.stop()
+        now, level = now + 3600, 60
+        BatteryStats.start()
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        now, level = now + 1800, 70
+        scheduled[#scheduled].callback()
+        assert.are.equal(20, BatteryStats.snapshot().charge_rate)
+
+        level = nil
+        scheduled[#scheduled].callback()
+        now, level = now + 1800, 80
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        scheduled[#scheduled].callback()
+        now, level = now + 1800, 90
+        scheduled[#scheduled].callback()
+        assert.are.equal(20, BatteryStats.snapshot().charge_rate)
+        now, level = now + 1800, 85
+        scheduled[#scheduled].callback()
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().full_charge_time)
+    end)
+
+    it("measures charging during sleep without scheduling extra wakeups", function()
+        level, charging = 20, true
+        BatteryStats.start()
+        BatteryStats.suspend()
+        local before = #scheduled
+        now, level = now + 4 * 3600, 100
+        BatteryStats.resume()
+        assert.are.equal(before + 1, #scheduled)
+        local stats = BatteryStats.snapshot()
+        assert.are.equal(20, stats.charge_rate)
+        assert.are.equal(4 * 3600, stats.full_charge_time)
+    end)
+
     it("caps the log and does not write when statistics are viewed", function()
         for i = 1, 520 do
             stored.events[i] = { time = now - (521 - i) * 1800, level = 80,
@@ -156,11 +306,13 @@ describe("battery stats", function()
         assert.are.equal(10 * 3600 / (40 * 86400), stats.overall)
     end)
 
-    it("resets samples, unplug time, and the old log backup", function()
+    it("resets samples, charging measurements, unplug time, and the old log backup", function()
         BatteryStats.start()
         now, level = now + 1800, 95
         scheduled[#scheduled].callback()
         stored.last_unplug = now - 60
+        stored.charge_session = { start_time = now - 3600, start_level = 50, time = now, level = 100, full = true }
+        stored.last_full_charge = stored.charge_session
         local backup = assert(io.open(log_path .. ".old", "w"))
         backup:write("old battery log")
         backup:close()
@@ -170,6 +322,9 @@ describe("battery stats", function()
         assert.are.equal(0, BatteryStats.snapshot().awake_time)
         assert.are.equal(0, BatteryStats.snapshot().asleep_time)
         assert.is_nil(BatteryStats.snapshot().since_charge)
+        assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().full_charge_time)
+        assert.is_nil(BatteryStats.snapshot().since_full_charge)
         assert.is_nil(io.open(log_path .. ".old", "r"))
 
         now, level = now + 1800, 90

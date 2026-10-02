@@ -256,13 +256,14 @@ describe("settings title bar", function()
         assert.are.equal(1, holds)
     end)
 
-    it("refreshes immediately when the network connects or disconnects", function()
+    it("refreshes when the network connects, disconnects, or finishes changing", function()
         local title_bar, refreshes = make_title_bar()
 
         SettingsTitleBar.onNetworkConnected(title_bar)
         SettingsTitleBar.onNetworkDisconnected(title_bar)
+        SettingsTitleBar.onNetworkStateChanged(title_bar)
 
-        assert.are.equal(2, refreshes())
+        assert.are.equal(3, refreshes())
     end)
 
     it("debounces charging changes and cancels the timer when cleared", function()
@@ -295,6 +296,7 @@ describe("settings title bar", function()
         })
 
         SettingsTitleBar.onNetworkConnected(title_bar)
+        SettingsTitleBar.onNetworkStateChanged(title_bar)
         SettingsTitleBar.onCharging(title_bar)
 
         assert.are.equal(0, refreshes())

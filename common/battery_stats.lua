@@ -15,8 +15,9 @@ local pending_gap = false
 local function capture()
     local powerd = Device:getPowerDevice()
     if not powerd then return nil end
-    local ok, raw_level, charging = pcall(function()
-        return powerd:getCapacityHW(), powerd:isCharging() or powerd:isCharged()
+    local ok, raw_level, charging, charged = pcall(function()
+        local full = powerd:isCharged()
+        return powerd:getCapacityHW(), powerd:isCharging() or full, full
     end)
     if not ok then return nil end
     local level = tonumber(raw_level)
@@ -24,6 +25,7 @@ local function capture()
     return {
         time = os.time(), level = level,
         charging = charging,
+        charged = charged,
         sleeping = sleeping,
     }
 end
@@ -88,6 +90,21 @@ local function trim(events)
     end
 end
 
+local function charging_session(previous, event, session)
+    if event.gap or (previous and (event.time < previous.time
+        or (event.charging and event.level < previous.level))) then session = nil end
+    if event.charging and (not session or not previous or not previous.charging) then
+        return { start_time = event.time, start_level = event.level,
+            time = event.time, level = event.level, full = event.charged or event.level == 100 }
+    end
+    if session and previous and previous.charging and not session.full
+        and event.time >= session.time and event.level >= session.level then
+        return { start_time = session.start_time, start_level = session.start_level,
+            time = event.time, level = event.level, full = event.charged or event.level == 100 }
+    end
+    return session
+end
+
 local function sample(gap, charging_event)
     if not settings then return end
     local event = capture()
@@ -96,10 +113,16 @@ local function sample(gap, charging_event)
     local previous = events[#events]
     if previous and not gap and not pending_gap and previous.time == event.time
         and previous.level == event.level and previous.charging == event.charging
+        and previous.charged == event.charged
         and previous.sleeping == event.sleeping then return end
     event.gap = gap or pending_gap
         or (previous and previous.charging ~= event.charging and not charging_event) or nil
     pending_gap = false
+    local session = charging_session(previous, event, settings:readSetting("charge_session"))
+    settings:saveSetting("charge_session", session)
+    if session and session.full and session.time > session.start_time then
+        settings:saveSetting("last_full_charge", session)
+    end
     if previous and not previous.charging and event.level > previous.level then
         settings:saveSetting("last_unplug", nil)
     elseif previous and previous.charging and not event.charging then
@@ -193,6 +216,17 @@ function M.snapshot()
     if not settings then return nil end
     local events = settings:readSetting("events")
     local current = capture()
+    local previous = events[#events]
+    local session = settings:readSetting("charge_session")
+    if current then
+        current.gap = pending_gap or (previous and previous.charging ~= current.charging)
+        session = charging_session(previous, current, session)
+    end
+    local last_full = settings:readSetting("last_full_charge")
+    if session and session.full and session.time > session.start_time then last_full = session end
+    local charge_time = session and session.time - session.start_time or 0
+    local charge_gain = session and session.level - session.start_level or 0
+    local charge_rate = charge_time >= 60 and charge_gain > 0 and charge_gain * 3600 / charge_time or nil
     local awake, asleep, total = { loss = 0, time = 0, elapsed = 0 },
         { loss = 0, time = 0, elapsed = 0 }, { loss = 0, time = 0 }
     local function accumulate(first, second)
@@ -219,7 +253,6 @@ function M.snapshot()
     local full_mah, design_mah, health, current_mah = device_capacity()
     local unplug = settings:readSetting("last_unplug")
     if current and #events > 0 then
-        local previous = events[#events]
         if not previous.charging and current.level > previous.level then
             unplug = nil
         elseif previous.charging and not current.charging then
@@ -233,6 +266,13 @@ function M.snapshot()
         design_mah = design_mah,
         health = health,
         charging = current and current.charging,
+        charge_rate = charge_rate,
+        -- ponytail: linear estimate; use charge-level bands if taper accuracy matters.
+        time_to_full = current and current.charging and (session.full and 0
+            or charge_rate and (100 - current.level) * 3600 / charge_rate) or nil,
+        full_charge_time = last_full and last_full.time - last_full.start_time,
+        since_full_charge = last_full and current and current.time >= last_full.time
+            and current.time - last_full.time or nil,
         overall = overall,
         awake = rate(awake, 3600),
         asleep = rate(asleep),

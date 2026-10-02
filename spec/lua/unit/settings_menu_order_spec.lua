@@ -38,6 +38,7 @@ describe("settings menu organization", function()
                     awake_time = 7200, asleep_time = 14400,
                     current_mah = has_current_capacity and 600 or nil,
                     full_mah = 1200, design_mah = 1600, health = 75, remaining = 125100,
+                    charge_rate = 20, time_to_full = 3600, full_charge_time = 7200, since_full_charge = 14400,
                     since_charge = 3600, samples = reset_calls > 0 and 0 or 24 }
             end,
             reset = function() reset_calls = reset_calls + 1 end,
@@ -151,24 +152,27 @@ describe("settings menu organization", function()
             local battery_item = general[available and 5 or 4]
             assert.are.equal("battery_icon", battery_item.icon_glyph)
             local battery = battery_item.sub_item_table_func()
-            assert.are.same({ "Health", "Usage", "Estimated time remaining",
-                "Time since last charge", "Settings" }, labels(battery))
+            assert.are.same({ "Health", "Usage", "Charging", "Estimated battery life", "Settings" }, labels(battery))
             assert.are.equal("75%", battery[1].mandatory)
             assert.are.equal("0.50%/h", battery[2].mandatory)
-            assert.are.equal("1d 10h 45m", battery[3].mandatory)
-            assert.are.equal("1h 0m", battery[4].mandatory)
+            assert.are.equal("1h 0m", battery[3].mandatory)
+            assert.are.equal("1d 10h 45m", battery[4].mandatory)
             local health = battery[1].sub_item_table
             local usage = battery[2].sub_item_table
+            local charging = battery[3].sub_item_table
             local settings = battery[5].sub_item_table
-            assert.are.equal("Battery percentage: 80%", health[1].text)
-            assert.are.equal("Current capacity: 600 mAh", health[2].text)
+            assert.are.equal("Battery health: 75%", health[1].text)
+            assert.are.equal("Current charge: 80%", health[2].text)
+            assert.are.equal("Current capacity: 600 mAh", health[3].text)
             has_current_capacity = false
             assert.are.equal("Current capacity: -",
-                battery_item.sub_item_table_func()[1].sub_item_table[2].text)
+                battery_item.sub_item_table_func()[1].sub_item_table[3].text)
             has_current_capacity = true
-            assert.are.equal("Full capacity: 1200 mAh", health[3].text)
-            assert.are.equal("Design capacity: 1600 mAh", health[4].text)
-            assert.are.equal("Battery health: 75%", health[5].text)
+            assert.are.equal("Full capacity: 1200 mAh", health[4].text)
+            assert.are.equal("Design capacity: 1600 mAh", health[5].text)
+            assert.are.same({ "Estimated time to full charge: 1h 0m", "Charged per hour: 20.00%/h",
+                "Total time to full charge: 2h 0m", "Time since last charge: 1h 0m",
+                "Time since last full charge: 4h 0m" }, labels(charging))
             assert.are.equal("Used per hour: 0.50%/h", usage[1].text)
             assert.are.equal("While asleep: 0.10%/h", usage[3].text)
             assert.are.equal("Screen on time: 2h 0m", usage[4].text)
@@ -187,7 +191,12 @@ describe("settings menu organization", function()
             local missing_rows = battery_item.sub_item_table_func()
             assert.are.equal("-", missing_rows[1].mandatory)
             assert.are.equal("-", missing_rows[2].mandatory)
-            assert.are.equal("Battery percentage: -", missing_rows[1].sub_item_table[1].text)
+            assert.are.equal("Battery health: -", missing_rows[1].sub_item_table[1].text)
+            assert.are.equal("Current charge: -", missing_rows[1].sub_item_table[2].text)
+            assert.are.equal("-", missing_rows[3].mandatory)
+            assert.are.same({ "Estimated time to full charge: -", "Charged per hour: -",
+                "Total time to full charge: -", "Time since last charge: -",
+                "Time since last full charge: -" }, labels(missing_rows[3].sub_item_table))
             assert.are.equal("Used per hour: -", missing_rows[2].sub_item_table[1].text)
             missing_stats = "none"
             assert.are.same({ "-" }, labels(battery_item.sub_item_table_func()))

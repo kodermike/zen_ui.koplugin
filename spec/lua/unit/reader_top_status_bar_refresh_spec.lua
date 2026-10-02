@@ -500,7 +500,40 @@ describe("reader top status bar refresh", function()
         assert.is_nil(item_fetchers.wifi())
 
         NetworkMgr.wifi_on = true
+        NetworkMgr.pending_connection = true
         assert.are.equal("\u{ECA8}", item_fetchers.wifi())
+    end)
+
+    it("keeps both radios gray while changing, including before startup and during shutdown", function()
+        local changing = true
+        NetworkMgr.isWifiChanging = function() return changing end
+        package.loaded["modules/menu/bluetooth/bluetooth"].isChanging = function() return changing end
+        _G.__ZEN_UI_PLUGIN.config.reader_top_status_bar.wifi_hide_when_off = true
+        for _i, enabled in ipairs({ false, true }) do
+            NetworkMgr.wifi_on, NetworkMgr.connected = enabled, enabled
+            bluetooth_enabled = enabled
+            local wifi, _suffix, color, gray = item_fetchers.wifi()
+            assert.are.equal("\u{ECA8}", wifi)
+            assert.is_nil(_suffix)
+            assert.are.equal("dark_gray", color)
+            assert.is_true(gray)
+            local bluetooth
+            bluetooth, _suffix, color, gray = item_fetchers.bluetooth()
+            assert.are.equal("BT", bluetooth)
+            assert.is_nil(_suffix)
+            assert.are.equal("dark_gray", color)
+            assert.is_true(gray)
+        end
+        changing = false
+        NetworkMgr.connected, bluetooth_enabled = false, false
+        local wifi, _suffix, color, gray = item_fetchers.wifi()
+        assert.are.equal("\u{ECA8}", wifi)
+        assert.are.equal("dark_gray", color)
+        assert.is_true(gray)
+        NetworkMgr.wifi_on = false
+        assert.is_nil(item_fetchers.wifi())
+        assert.is_nil(item_fetchers.bluetooth())
+        assert.is_function(ReaderUI.onNetworkStateChanged)
     end)
 
     it("shows Bluetooth only while powered and refreshes its slot on state changes", function()

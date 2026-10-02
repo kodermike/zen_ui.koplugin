@@ -466,7 +466,8 @@ local function power(device_kind, enabled)
                 .. "killall bluetoothd 2>/dev/null; killall rtk_hciattach 2>/dev/null; "
                 .. "i=0; while [ $i -lt 30 ] && (pgrep bluetoothd >/dev/null"
                 .. " || pgrep rtk_hciattach >/dev/null); do sleep 0.1; i=$((i+1)); done; "
-                .. "echo 0 > " .. SAGE_RFKILL, operation)
+                .. "echo 0 > " .. SAGE_RFKILL
+                .. " && ./luajit frontend/device/kobo/ntx_io.lua 126 0", operation)
         end
         local function start_step(command, operation)
             if command_ok(command, operation) then return true end
@@ -474,9 +475,9 @@ local function power(device_kind, enabled)
             return false
         end
         if enabled then
-            if not start_step("killall rtk_hciattach 2>/dev/null; killall bluetoothd 2>/dev/null; "
-                    .. "hciconfig hci0 down 2>/dev/null; true", "sage-stack-reset") then return false end
-            if not start_step("echo 0 > " .. SAGE_RFKILL .. " && sleep 1 && echo 1 > "
+            if not stop_stack("sage-stack-reset") then return false end
+            -- KOReader's launcher also cuts chip power via ntx_io (126).
+            if not start_step("./luajit frontend/device/kobo/ntx_io.lua 126 1 && sleep 1 && echo 1 > "
                     .. SAGE_RFKILL, "sage-radio-power-cycle") then return false end
             if not start_step("/sbin/rtk_hciattach -n -s 115200 /dev/ttyS1 rtk_h5"
                     .. " > " .. SAGE_HCI_LOG .. " 2>&1 &", "sage-hci-attach") then return false end
