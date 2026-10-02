@@ -105,6 +105,12 @@ describe("background Wi-Fi toggles", function()
             initNetworkManager = function(_self, manager)
                 manager.isWifiOn = function() return wifi_on end
                 manager.isConnected = function() return connected end
+                manager.ifHasAnAddress = function() return connected end
+                manager.hasDefaultRoute = function() return connected end
+                manager.canResolveHostnames = function()
+                    assert.is_true(in_child, "DNS must not block the UI")
+                    return true
+                end
                 manager.getNetworkInterfaceName = function() return "wlan0" end
                 manager.getCurrentNetwork = function() return connected and { ssid = "Home" } end
                 manager.getConfiguredNetworks = function() return {} end
@@ -175,6 +181,61 @@ describe("background Wi-Fi toggles", function()
         _G.G_defaults = defaults
     end)
 
+    it("reports IP, route, DNS and check failures without disconnecting Wi-Fi", function()
+        wifi_on, connected = true, true
+        local cases = {
+            { ip = false, route = true, dns = true, text = "no IP address" },
+            { ip = true, route = false, dns = true, text = "no default route" },
+            { ip = true, route = true, dns = false, text = "DNS lookup failed" },
+            { ip = true, route = true, dns = "error", text = "connection check failed" },
+            { ip = true, route = true, dns = true, text = "Connected to Home" },
+        }
+        for _i, case in ipairs(cases) do
+            NetworkMgr.ifHasAnAddress = function() return case.ip end
+            NetworkMgr.hasDefaultRoute = function() return case.route end
+            NetworkMgr.canResolveHostnames = function()
+                assert.is_true(in_child)
+                assert.is_true(case.ip and case.route)
+                if case.dns == "error" then error("lookup error") end
+                return case.dns
+            end
+            local before = #shown
+            NetworkMgr:showWifiConnected("Home")
+            assert.are.equal(before, #shown)
+            assert.is_false(NetworkMgr:isWifiChanging())
+            finish_worker()
+            assert.is_truthy(shown[#shown].text:find(case.text, 1, true))
+            assert.are.equal(_i == #cases and 2 or 8, shown[#shown].timeout)
+            assert.is_true(wifi_on)
+            assert.are.equal(0, off_calls)
+            assert.are.equal(0, standby)
+        end
+    end)
+
+    it("bounds a DNS stall and suppresses notices after disconnecting or switching", function()
+        wifi_on, connected = true, true
+        NetworkMgr:showWifiConnected("Home")
+        for _i = 1, 61 do tick() end
+        assert.is_truthy(shown[#shown].text:find("timed out", 1, true))
+        assert.are.equal(0, standby)
+        for _i, action in ipairs({ "off", "switch", "notice" }) do
+            wifi_on, connected = true, true
+            NetworkMgr.getCurrentNetwork = function() return { ssid = "Home" } end
+            NetworkMgr:showWifiConnected("Home")
+            local before = #shown
+            if action == "off" then
+                wifi_on = false
+            elseif action == "switch" then
+                NetworkMgr.getCurrentNetwork = function() return { ssid = "Guest" } end
+            else
+                NetworkMgr:showWifiStarting()
+                before = #shown
+            end
+            finish_worker()
+            assert.are.equal(before, #shown)
+        end
+    end)
+
     it("keeps the UI usable and runs the complete callback through KOReader's connectivity check", function()
         local completed = 0
         NetworkMgr:toggleWifiOn(function()
@@ -200,6 +261,8 @@ describe("background Wi-Fi toggles", function()
         assert.is_true(G_reader_settings:isTrue("wifi_was_on"))
         assert.are.same({ "onNetworkConnecting", "onNetworkStateChanged",
             "onNetworkConnected", "onNetworkStateChanged" }, events)
+        assert.are.equal(1, notices)
+        finish_worker() -- Verify DNS before announcing success.
         assert.are.equal(2, notices)
         assert.are.equal("Connected to Home", shown[2].text)
         assert.is_true(shown[1].toast)
@@ -208,8 +271,8 @@ describe("background Wi-Fi toggles", function()
         assert.is_true(shown[2].dismissable)
         assert.are.same({ shown[1] }, closed_notices)
         assert.are.equal(0, standby)
-        assert.are.equal(1, closed_fds)
-        assert.are.equal(1, inherited_flags)
+        assert.are.equal(2, closed_fds)
+        assert.are.equal(2, inherited_flags)
     end)
 
     it("turns off Kindle Wi-Fi in the worker and preserves its delayed completion callback", function()
@@ -252,6 +315,7 @@ describe("background Wi-Fi toggles", function()
         finish_worker(2)
         assert.is_true(scanned)
         assert.is_false(NetworkMgr.pending_connection)
+        finish_worker() -- The connection check was queued behind the scan.
         assert.are.equal(0, standby)
     end)
 
@@ -323,6 +387,7 @@ describe("background Wi-Fi toggles", function()
         assert.are.equal(1, dhcp_calls)
         assert.are.equal(NetworkMgr.hasLeaseForCurrentNetwork and ssid, NetworkMgr.lease_ssid)
         assert.is_false(NetworkMgr.pending_connection)
+        finish_worker()
         assert.are.equal("Connected to " .. ssid, shown[2].text)
     end)
 
@@ -331,6 +396,7 @@ describe("background Wi-Fi toggles", function()
         NetworkMgr:toggleWifiOn(nil, false, true)
         finish_worker()
         tick()
+        finish_worker()
         assert.are.equal("Connected", shown[2].text)
     end)
 
@@ -351,6 +417,7 @@ describe("background Wi-Fi toggles", function()
             assert.are.equal(1, #scheduled)
             ssid = "Home."
             tick()
+            finish_worker()
             assert.are.equal("Connected to Home.", shown[2].text)
             assert.are.equal(0, #scheduled)
             assert.are.equal(1, completed)
@@ -371,6 +438,7 @@ describe("background Wi-Fi toggles", function()
             tick()
         end
         assert.are.equal(5, retry_time)
+        finish_worker()
         assert.are.equal("Connected", shown[2].text)
         assert.are.equal(0, #scheduled)
     end)
@@ -516,6 +584,7 @@ describe("background Wi-Fi toggles", function()
             if succeeded then
                 assert.are.equal(1, notices)
                 tick()
+                finish_worker()
             end
             assert.are.equal(succeeded and 1 or 0, completed)
             assert.are.equal(succeeded and 0 or 1, failed)
@@ -613,6 +682,19 @@ describe("background Wi-Fi toggles", function()
         assert.are.equal(1, opened)
         assert.is_false(NetworkMgr.pending_connection)
         assert.are.equal(2, notices)
+    end)
+
+    it("explains an associated network with no IP when the toggle times out", function()
+        NetworkMgr:toggleWifiOn(nil, false, true, function() end)
+        finish_worker()
+        connected = false
+        NetworkMgr.getCurrentNetwork = function() return { ssid = "Home" } end
+        for _i = 1, 180 do tick() end
+        finish_worker()
+        assert.is_truthy(shown[#shown].text:find("no IP address", 1, true))
+        assert.are.equal(8, shown[#shown].timeout)
+        assert.is_false(NetworkMgr.pending_connection)
+        assert.are.equal(0, standby)
     end)
 
     it("keeps duplicate enable requests quiet", function()

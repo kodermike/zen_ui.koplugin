@@ -476,6 +476,9 @@ describe("network switcher", function()
                 local work, complete, reported_network
                 local notices = {}
                 NetworkMgr.showWifiNotice = function(_self, text) notices[#notices + 1] = text end
+                NetworkMgr.showWifiConnected = function(_self, ssid)
+                    notices[#notices + 1] = "Checking " .. ssid
+                end
                 NetworkMgr.runWifiAsync = function(_self, action, callback, queued_only)
                     if queued_only then return callback(action()) end
                     work, complete = action, callback
@@ -502,7 +505,7 @@ describe("network switcher", function()
                 assert.are.equal(item.network.ssid, NetworkMgr.lease_ssid)
                 assert.is_true(NetworkMgr.obtained)
                 assert.are.same({ "NetworkConnecting", "NetworkConnected" }, events)
-                assert.are.same({ "Connected to " .. item.network.ssid }, notices)
+                assert.are.same({ "Checking " .. item.network.ssid }, notices)
             end)
         end
     end
@@ -522,10 +525,14 @@ describe("network switcher", function()
         complete({ failure = "authentication", auth_error = "Wrong password" })
         assert.are.equal("Home", password_dialog.title)
         assert.are.equal("Wrong password", password_dialog.description)
-        assert.are.equal("Error connecting to the network", shown[#shown].text)
+        assert.are.equal("Wrong password", shown[#shown].text)
     end)
 
     it("reports Kobo DHCP failure instead of the successful authentication message", function()
+        local notice, notice_timeout
+        NetworkMgr.showWifiNotice = function(_self, text, timeout)
+            notice, notice_timeout = text, timeout
+        end
         ZenSpec.replace("device", {
             hasWifiManager = function() return true end,
             isKobo = function() return true end,
@@ -547,6 +554,8 @@ describe("network switcher", function()
         assert.is_nil(password_dialog)
         assert.are.equal("Connected to Home, but no IP address or default route was assigned.",
             network_menu.item_table[1].text)
+        assert.are.equal(network_menu.item_table[1].text, notice)
+        assert.are.equal(8, notice_timeout)
         assert.are.same({ "NetworkConnecting" }, events)
     end)
 

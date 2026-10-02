@@ -9,14 +9,25 @@ local function apply_nonblocking_wifi()
     local ffi = require("ffi")
     local ffiutil = require("ffi/util")
     local buffer = require("string.buffer")
+    local _ = require("gettext")
     local logger = require("common/zen_logger").new("nonblocking_wifi")
     local active
     local connection_failure
     local wifi_notice
     local connection_notice
+    local connection_check
     local queued = {}
     local start_next
     local reported_changing = false
+
+    local function address_error(self)
+        if not self:ifHasAnAddress() then
+            return _("Wi-Fi connected, but no IP address was assigned. Try reconnecting.")
+        end
+        if not self:hasDefaultRoute() then
+            return _("Wi-Fi connected, but no default route is available. Check your router or try reconnecting.")
+        end
+    end
 
     NetworkMgr.isWifiChanging = function(self)
         if self.pending_connection or self.pending_connectivity_check then return true end
@@ -37,6 +48,7 @@ local function apply_nonblocking_wifi()
     local function cancel()
         if connection_notice then UIManager:unschedule(connection_notice) end
         connection_notice = nil
+        connection_check = nil
         queued = {}
         connection_failure = nil
         if active and not active.cancelled then
@@ -110,7 +122,8 @@ local function apply_nonblocking_wifi()
         local function poll()
             polls = polls + 1
             if not ffiutil.isSubProcessDone(pid) then
-                if polls == 480 then -- ponytail: 120 s total; split deadlines if many saved networks exceed it.
+                -- ponytail: connection work caps at 120 s; split deadlines if many saved networks exceed it.
+                if polls == (job.timeout or 120) * 4 then
                     job.timed_out = true
                     ffi.C.kill(-pid, 9)
                     ffi.C.kill(pid, 9)
@@ -137,6 +150,7 @@ local function apply_nonblocking_wifi()
                 if job.action then
                     local value, err
                     if result and not job.timed_out then value, err = result.value, result.error end
+                    if job.timed_out then err = "timeout" end
                     job.complete_callback(value, err)
                 elseif result and not result.failed and not job.timed_out
                         and (not job.enabling or result.completed or result.show_menu) then
@@ -185,14 +199,15 @@ local function apply_nonblocking_wifi()
     end
 
     NetworkMgr._zen_nonblocking_wifi = true
-    NetworkMgr.showWifiNotice = function(_self, text)
+    NetworkMgr.showWifiNotice = function(_self, text, timeout)
         if connection_notice then UIManager:unschedule(connection_notice) end
         connection_notice = nil
+        connection_check = nil
         if wifi_notice then UIManager:close(wifi_notice) end
         wifi_notice = require("ui/widget/infomessage"):new{
             text = text,
             toast = true,
-            timeout = 2,
+            timeout = timeout or 2,
             dismissable = true,
             dismiss_callback = function() wifi_notice = nil end,
         }
@@ -201,7 +216,7 @@ local function apply_nonblocking_wifi()
     NetworkMgr.showWifiStarting = function(self)
         self:showWifiNotice(require("gettext")("Turning on Wi-Fi…"))
     end
-    NetworkMgr.runWifiAsync = function(self, action, complete_callback, queued_only)
+    NetworkMgr.runWifiAsync = function(self, action, complete_callback, queued_only, timeout)
         if not queued_only then
             cancel()
             self:unscheduleConnectivityCheck()
@@ -210,12 +225,44 @@ local function apply_nonblocking_wifi()
         queued[#queued + 1] = {
             action = action,
             queued_only = queued_only,
+            timeout = timeout,
             complete_callback = function(...)
                 if not queued_only then self.pending_connection = false end
                 complete_callback(...)
             end,
         }
         start_next()
+    end
+    NetworkMgr.showWifiConnected = function(self, ssid)
+        local check = {}
+        connection_check = check
+        self:runWifiAsync(function()
+            local problem = address_error(self)
+            if problem then return problem end
+            if not self:canResolveHostnames() then
+                return _("Wi-Fi connected, but DNS lookup failed. Internet access may be unavailable. Try reconnecting.")
+            end
+            return ""
+        end, function(problem, err)
+            if connection_check ~= check or not self:isWifiOn() then return end
+            local current = self:getCurrentNetwork()
+            if ssid and ssid ~= "" and current and current.ssid and current.ssid ~= ""
+                    and current.ssid ~= ssid then return end
+            if problem == nil then
+                problem = err == "timeout"
+                    and _("Wi-Fi connected, but the connection check timed out. Internet access may be unavailable.")
+                    or _("Wi-Fi connected, but the connection check failed. Try reconnecting.")
+            end
+            if problem ~= "" then
+                logger.warn("Wi-Fi connection check failed", problem)
+                self:showWifiNotice(problem, 8)
+                return
+            end
+            logger.dbg("Wi-Fi address, route and DNS checks passed")
+            self:showWifiNotice(ssid and ssid ~= ""
+                and ffiutil.template(_("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), ssid)
+                or _("Connected."):gsub("%.$", ""):gsub("。$", ""))
+        end, true, 15)
     end
     local disableWifi = NetworkMgr.disableWifi
     NetworkMgr.disableWifi = function(self, ...)
@@ -231,8 +278,16 @@ local function apply_nonblocking_wifi()
         end, false, after, after)
     end
     local connectivityCheck = NetworkMgr.connectivityCheck
-    NetworkMgr.connectivityCheck = function(self, ...)
-        local result = connectivityCheck(self, ...)
+    NetworkMgr.connectivityCheck = function(self, iter, ...)
+        if iter >= 180 and connection_failure and self:isWifiOn() then
+            local current = self:getCurrentNetwork()
+            local problem = current and current.ssid and current.ssid ~= "" and address_error(self)
+            if problem then
+                local after_failed = connection_failure
+                connection_failure = function() after_failed(false, problem) end
+            end
+        end
+        local result = connectivityCheck(self, iter, ...)
         if not self.pending_connection then connection_failure = nil end
         if not self.pending_connection then notify_state() end
         return result
@@ -264,17 +319,15 @@ local function apply_nonblocking_wifi()
                         UIManager:scheduleIn(5 / 8, show_connected)
                         return
                     end
-                    self:showWifiNotice(has_ssid
-                        and ffiutil.template(require("gettext")("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), ssid)
-                        or require("gettext")("Connected."):gsub("%.$", ""):gsub("。$", ""))
+                    self:showWifiConnected(ssid)
                 end
                 connection_notice = show_connected
                 show_connected()
             end
-            on_failure = function(no_known_networks)
+            on_failure = function(no_known_networks, problem)
                 if after_failed then after_failed() end
                 if not no_known_networks then
-                    self:showWifiNotice(require("gettext")("Error connecting to the network"))
+                    self:showWifiNotice(problem or _("Error connecting to the network"), problem and 8 or 2)
                 end
             end
         end

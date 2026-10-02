@@ -428,12 +428,14 @@ function M.open(on_connected, settings_subpage, plugin)
 
     local function complete_connection(network, switching, result, worker_error)
         if not result or result.power_error then
-            show_status(worker_error or result and result.power_error or _("Connection failed"))
-            return false
+            local reason = worker_error or result and result.power_error or _("Connection failed")
+            show_status(reason)
+            return false, reason
         end
         if result.profile_error then
-            if not closed then prompt_password(network, _("Could not replace the saved Wi-Fi password.")) end
-            return false
+            local reason = _("Could not replace the saved Wi-Fi password.")
+            if not closed then prompt_password(network, reason) end
+            return false, reason
         end
         if switching then
             UIManager:broadcastEvent(Event:new("NetworkDisconnected"))
@@ -467,7 +469,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 restore_previous_network()
                 show_status(reason)
             end
-            return false
+            return false, reason
         end
 
         NetworkMgr.lease_ssid = network.ssid
@@ -486,14 +488,12 @@ function M.open(on_connected, settings_subpage, plugin)
                 UIManager:scheduleIn(3, function()
                     local ok_current, current = pcall(NetworkMgr.getCurrentNetwork, NetworkMgr)
                     local ok_route, route = pcall(NetworkMgr.hasDefaultRoute, NetworkMgr)
-                    local ok_online, online = pcall(NetworkMgr.isOnline, NetworkMgr)
                     logger.dbg("Kobo connection follow-up",
                         "wifi_on=", NetworkMgr:isWifiOn() == true,
                         "connected=", NetworkMgr:isConnected() == true,
                         "target_matched=", ok_current and current ~= nil and current.ssid == network.ssid,
                         "ip_assigned=", get_ip() ~= nil,
                         "route_check_ok=", ok_route, "default_route=", route == true,
-                        "dns_check_ok=", ok_online, "dns_resolves=", online == true,
                         "lease_matched=", NetworkMgr.lease_ssid == network.ssid)
                 end)
             end
@@ -534,10 +534,12 @@ function M.open(on_connected, settings_subpage, plugin)
         return run_async(function()
             return perform_connection(network, use_password, switching)
         end, function(result, worker_error)
-            local connected = complete_connection(network, switching, result, worker_error)
-            if NetworkMgr.showWifiNotice then
+            local connected, reason = complete_connection(network, switching, result, worker_error)
+            if connected and NetworkMgr.showWifiConnected then
+                NetworkMgr:showWifiConnected(network.ssid)
+            elseif NetworkMgr.showWifiNotice then
                 NetworkMgr:showWifiNotice(connected and T(_("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), network.ssid)
-                    or _("Error connecting to the network"))
+                    or reason or _("Error connecting to the network"), reason and 8 or 2)
             end
             return connected
         end)
