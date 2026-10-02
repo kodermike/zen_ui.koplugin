@@ -308,7 +308,7 @@ describe("reader footer patches", function()
         assert.are.equal(0, refreshes)
     end)
 
-    it("aligns footer contents with scaled reader margins and follows margin changes", function()
+    it("opts into book margins without changing saved footer spacing and restores it when disabled", function()
         saved_modules = {}
         for _i, name in ipairs({
             "apps/reader/modules/readerfooter", "apps/reader/readerui",
@@ -317,7 +317,7 @@ describe("reader footer patches", function()
         }) do
             saved_modules[name] = package.loaded[name] or false
         end
-        local painted_x, builds, resets = nil, 0, 0
+        local painted_x, text_margin, layout_margin, builds, resets = nil, nil, nil, 0, 0
         local ReaderFooter = {
             textGeneratorMap = {
                 battery = function() return "" end,
@@ -331,11 +331,15 @@ describe("reader footer patches", function()
                 builds = builds + 1
                 self.vertical_frame = { paintTo = function(_frame, _bb, x) painted_x = x end }
             end,
-            resetLayout = function(_self, force)
+            resetLayout = function(self, force)
                 assert.is_true(force)
+                layout_margin = self.settings.progress_margin_width
                 resets = resets + 1
             end,
-            _updateFooterText = function() return "updated" end,
+            _updateFooterText = function(self)
+                text_margin = self.settings.progress_margin_width
+                return "updated"
+            end,
             genAllFooterText = function() return "" end,
         }
         ZenSpec.replace("apps/reader/modules/readerfooter", ReaderFooter)
@@ -350,33 +354,60 @@ describe("reader footer patches", function()
         ZenSpec.replace("ui/widget/container/leftcontainer", {})
         ZenSpec.replace("ui/widget/textwidget", {})
         ZenSpec.unload("common/reader_status_bar")
+        _G.__ZEN_UI_PLUGIN = { config = { features = {} } }
         apply_patch("modules/reader/patches/reader_footer")
 
         local document = { configurable = { h_page_margins = { 30, 50 } } }
         local footer = setmetatable({
             ui = { document = document },
-            settings = { disable_progress_bar = true, progress_margin_width = 10 },
+            settings = { disable_progress_bar = true, progress_margin = false, progress_margin_width = 10 },
             horizontal_margin = 3,
         }, { __index = ReaderFooter })
         footer:updateFooterContainer()
+        footer.vertical_frame:paintTo({}, 100, 0)
+        assert.are.equal(100, painted_x)
+        assert.are.equal("updated", footer:_updateFooterText())
+        assert.are.equal(10, text_margin)
+        assert.are.equal(3, footer.horizontal_margin)
+        assert.are.equal(1, builds)
+        assert.are.equal(0, resets)
+
+        _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = true
+        footer:updateFooterContainer()
         assert.are.equal(80, footer.horizontal_margin)
-        assert.are.equal(40, footer.settings.progress_margin_width)
-        assert.is_true(footer.settings.progress_margin)
+        assert.are.equal(10, footer.settings.progress_margin_width)
+        assert.is_false(footer.settings.progress_margin)
         footer.vertical_frame:paintTo({}, 100, 0)
         assert.are.equal(80, painted_x)
 
         assert.are.equal("updated", footer:_updateFooterText())
-        assert.are.equal(1, builds)
+        assert.are.equal(40, text_margin)
+        assert.are.equal(10, footer.settings.progress_margin_width)
+        assert.are.equal(2, builds)
         document.configurable.h_page_margins = { 40, 40 }
         footer.vertical_frame:paintTo({}, 100, 0)
         assert.are.equal(100, painted_x)
         document.configurable.h_page_margins = { 50, 70 }
         footer:_updateFooterText()
         assert.are.equal(120, footer.horizontal_margin)
-        assert.are.equal(60, footer.settings.progress_margin_width)
-        assert.are.equal(2, builds)
+        assert.are.equal(60, text_margin)
+        assert.are.equal(60, layout_margin)
+        assert.are.equal(10, footer.settings.progress_margin_width)
+        assert.are.equal(3, builds)
         assert.are.equal(1, resets)
 
+        _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = false
+        footer:_updateFooterText()
+        assert.are.equal(3, footer.horizontal_margin)
+        assert.are.equal(10, text_margin)
+        assert.are.equal(10, layout_margin)
+        assert.is_false(footer.settings.progress_margin)
+        assert.are.equal(4, builds)
+        assert.are.equal(2, resets)
+        footer.vertical_frame:paintTo({}, 100, 0)
+        assert.are.equal(100, painted_x)
+
+        _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = true
         local fixed_footer = setmetatable({
             ui = { document = {} },
             settings = { disable_progress_bar = true, progress_margin_width = 10 },

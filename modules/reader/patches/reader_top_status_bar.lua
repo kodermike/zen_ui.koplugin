@@ -556,7 +556,7 @@ local function apply_reader_top_status_bar()
 
     local function paintBottomBorder(bb, x, y, width, cfg, doc_ctx)
         local document = doc_ctx and doc_ctx.ui and doc_ctx.ui.document
-        local left_margin, right_margin = ReaderStatusBar.getHorizontalMargins(document, Screen:scaleBySize(10))
+        local left_margin, right_margin = ReaderStatusBar.getHorizontalMargins(document, Screen:scaleBySize(10), zen_plugin)
         local line_w = math.max(0, width - left_margin - right_margin)
         if line_w <= 0 then return end
         local line_h = Size.line.medium
@@ -670,8 +670,9 @@ local function apply_reader_top_status_bar()
 
         local top_pad = Size.padding.small
         local h_pad   = Screen:scaleBySize(10)
+        local align_margins = ReaderStatusBar.isMarginAlignmentEnabled(zen_plugin)
         local document = doc_ctx and doc_ctx.ui and doc_ctx.ui.document
-        local left_pad, right_pad = ReaderStatusBar.getHorizontalMargins(document, h_pad)
+        local left_pad, right_pad = ReaderStatusBar.getHorizontalMargins(document, h_pad, zen_plugin)
         -- Include custom dogear sizing and right offsets from companion plugins.
         local dogear = doc_ctx and doc_ctx.dogear
         local dogear_icon = dogear and dogear.icon
@@ -733,6 +734,11 @@ local function apply_reader_top_status_bar()
         local center_nat = measureTextsWidth(center_texts, face, center_sep)
         local right_nat = measureTextsWidth(right_texts, face, right_sep)
 
+        if not align_margins then
+            left_pad = left_has and h_pad + right_inset or 0
+            right_pad = right_has and h_pad + right_inset or 0
+        end
+
         local left_cap = 0
         local center_cap = 0
         local right_cap = 0
@@ -746,8 +752,8 @@ local function apply_reader_top_status_bar()
             center_cap = math.min(center_nat, max_center)
             center_w = center_cap
 
-            local side_total = max_center - center_w
-            left_w = left_pad + math.floor(side_total / 2)
+            local side_total = (align_margins and max_center or screen_width) - center_w
+            left_w = (align_margins and left_pad or 0) + math.floor(side_total / 2)
             right_w = screen_width - center_w - left_w
 
             left_cap = left_has and math.max(0, left_w - left_pad) or 0
@@ -766,10 +772,10 @@ local function apply_reader_top_status_bar()
                 right_w = right_pad + right_cap
                 middle_w = math.max(0, screen_width - left_w - right_w)
             elseif left_has then
-                left_cap = side_content_space
+                left_cap = align_margins and side_content_space or math.max(0, screen_width - left_pad)
                 left_w = screen_width
             elseif right_has then
-                right_cap = side_content_space
+                right_cap = align_margins and side_content_space or math.max(0, screen_width - right_pad)
                 right_w = screen_width
             end
         end

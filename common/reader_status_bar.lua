@@ -1,6 +1,12 @@
 local M = {}
 
-function M.getHorizontalMargins(document, fallback)
+function M.isMarginAlignmentEnabled(plugin)
+    local features = plugin and plugin.config and plugin.config.features
+    return features and features.reader_status_bar_margins == true or false
+end
+
+function M.getHorizontalMargins(document, fallback, plugin)
+    if not M.isMarginAlignmentEnabled(plugin) then return fallback, fallback end
     local margins = document and document.configurable and document.configurable.h_page_margins
     if not margins then return fallback, fallback end
     local Screen = require("device").screen

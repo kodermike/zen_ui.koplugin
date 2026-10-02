@@ -246,9 +246,10 @@ describe("reader top status bar refresh", function()
 
         G_reader_settings = ZenSpec.memorySettings({ footer = {} })
         ZenSpec.unload("common/reader_status_bar")
-        local get_horizontal_margins = require("common/reader_status_bar").getHorizontalMargins
+        local reader_status_bar = require("common/reader_status_bar")
         replace("common/reader_status_bar", {
-            getHorizontalMargins = get_horizontal_margins,
+            getHorizontalMargins = reader_status_bar.getHorizontalMargins,
+            isMarginAlignmentEnabled = reader_status_bar.isMarginAlignmentEnabled,
             disableKoreaderAltStatusBar = function(settings, reader)
                 settings = settings or G_reader_settings
                 settings:saveSetting("copt_status_line", 1)
@@ -593,14 +594,25 @@ describe("reader top status bar refresh", function()
 
         for _i, center_order in ipairs({ {}, { "wifi" } }) do
             cfg.center_order = center_order
-            local header, _, _, _, slots = build_header({
+            local view = {
                 ui = { document = { configurable = { h_page_margins = { 30, 40 } } } },
                 dogear = { icon = { dimen = { x = 550, w = 50 } } },
-            })
+            }
+            _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = nil
+            local original_header, _, _, _, original_slots = build_header(view)
+            assert.are.equal(60, original_header[1][1][1].width)
+            assert.are.equal(60, original_header[#original_header][1][2].width)
+            assert.are.equal(70, original_slots.left.w)
+            assert.are.equal(70, original_slots.right.w)
+            if #center_order > 0 then assert.are.equal(295, original_slots.center.x) end
+
+            _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = true
+            local header, _, _, _, slots = build_header(view)
             assert.are.equal(30, header[1][1][1].width)
             assert.are.equal(60, header[#header][1][2].width)
             assert.are.equal(40, slots.left.w)
             assert.are.equal(70, slots.right.w)
+            if #center_order > 0 then assert.are.equal(280, slots.center.x) end
 
             local wider_margin_header = build_header({
                 ui = { document = { configurable = { h_page_margins = { 30, 90 } } } },
@@ -608,6 +620,12 @@ describe("reader top status bar refresh", function()
             })
             assert.are.equal(30, wider_margin_header[1][1][1].width)
             assert.are.equal(90, wider_margin_header[#wider_margin_header][1][2].width)
+
+            _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = false
+            local restored_header, _, _, _, restored_slots = build_header(view)
+            assert.are.equal(60, restored_header[1][1][1].width)
+            assert.are.equal(60, restored_header[#restored_header][1][2].width)
+            assert.same(original_slots, restored_slots)
         end
 
         assert.is_true(replace_upvalue(build_header, "measureTextsWidth", function(texts)
@@ -616,11 +634,17 @@ describe("reader top status bar refresh", function()
         for _i, slot in ipairs({ "left", "center", "right" }) do
             cfg.left_order, cfg.center_order, cfg.right_order = {}, {}, {}
             cfg[slot .. "_order"] = { "wifi" }
-            caps = {}
-            build_header({
+            local view = {
                 ui = { document = { configurable = { h_page_margins = { 30, 40 } } } },
                 dogear = { dogear_size = 50 },
-            })
+            }
+            _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = false
+            caps = {}
+            build_header(view)
+            assert.are.equal(slot == "center" and 600 or 540, caps[_i])
+            _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = true
+            caps = {}
+            build_header(view)
             assert.are.equal(510, caps[_i])
         end
     end)
@@ -725,6 +749,14 @@ describe("reader top status bar refresh", function()
         }
         view.ui.toc = { getTocTicksFlattened = function() return { 2, 8 } end }
 
+        ReaderView.paintTo(view, require("device").screen.bb, 0, 0)
+
+        assert.same({ x = 10, y = 20, w = 290, h = 1, color = "gray_5" }, paint_rects[2])
+        assert.same({ x = 126, y = 20, w = 2, h = 1, color = "black" }, paint_rects[3])
+        assert.same({ x = 474, y = 20, w = 2, h = 1, color = "black" }, paint_rects[4])
+
+        _G.__ZEN_UI_PLUGIN.config.features.reader_status_bar_margins = true
+        reset_paint_log()
         ReaderView.paintTo(view, require("device").screen.bb, 0, 0)
 
         assert.same({ x = 30, y = 20, w = 260, h = 1, color = "gray_5" }, paint_rects[2])
