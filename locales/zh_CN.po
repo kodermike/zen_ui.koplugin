@@ -414,6 +414,12 @@ msgstr "添加到合集"
 msgid "Add to vocabulary builder"
 msgstr "添加到生词本"
 
+#. Type: setting
+#. Context: table.insert(items, { text = _("Align status bars with book margins"), checked_func = function()
+#: reader_settings.lua:1523
+msgid "Align status bars with book margins"
+msgstr "将状态栏与书籍页边距对齐"
+
 #. Type: label
 #. Context: .. (already_in and " \u{2713}" or ""), mandatory = already_in and _("added") or nil, dim = already_in,
 #: context_menu.lua:541
