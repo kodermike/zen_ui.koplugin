@@ -147,6 +147,7 @@ function ZenSettingsTitleBar:clearStatusRefresh()
 end
 
 function ZenSettingsTitleBar:onNetworkConnected()
+    if self.status_widget then self._zen_status_needs_refresh = true end
     refresh_status_on_device_event(self)
 end
 
@@ -175,6 +176,7 @@ function ZenSettingsTitleBar:onSuspend()
 end
 
 function ZenSettingsTitleBar:init()
+    self._zen_status_needs_refresh = nil
     self.width = self.width or Screen:getWidth()
     self.show_parent = self.show_parent or self
     self:clearStatusRefresh()
@@ -743,7 +745,13 @@ function ZenSettingsTitleBar:setAction(action)
     self:init()
 end
 
+function ZenSettingsTitleBar:paintTo(bb, x, y)
+    if self._zen_status_needs_refresh then self:refreshStatus() end
+    InputContainer.paintTo(self, bb, x, y)
+end
+
 function ZenSettingsTitleBar:refreshStatus()
+    self._zen_status_needs_refresh = nil
     if type(self.status_factory) ~= "function" then return false end
     local ok, status_widget = pcall(self.status_factory, self.width)
     if not (ok and status_widget) then
