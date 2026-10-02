@@ -89,7 +89,7 @@ describe("settings menu organization", function()
                 return { sub_item_table = items({ "Blur menu background" }) }
             end,
         })
-        local font_item, wallpaper_item
+        local font_item, wallpaper_item, status_bar_item
         replace("modules/settings/sections/library_settings", {
             build = function()
                 font_item = {
@@ -98,7 +98,8 @@ describe("settings menu organization", function()
                     sub_item_table = items({ "Font size", "Font", "Reset font" }),
                 }
                 wallpaper_item = { text = "Wallpaper" }
-                return { { text = "Original control" }, font_item, wallpaper_item }
+                status_bar_item = { text = "Status bar", sub_item_table = items({ "Left items", "Right items" }) }
+                return { { text = "Original control" }, font_item, wallpaper_item, status_bar_item }
             end,
         })
         for _i, section in ipairs({ "reader_settings", "updates_settings" }) do
@@ -139,12 +140,14 @@ describe("settings menu organization", function()
             local interface = root[4].sub_item_table
             assert.are.equal("interface", root[4]._zen_settings_root)
             assert.are.equal(interface_icon, root[4].icon_glyph)
-            assert.are.same({ "Controls", "Launcher", "Navbar", "Font", "Zen Keyboard", "Zen Search", "Wallpaper", "Blur menu background", "Custom icons" }, labels(interface))
+            assert.are.same({ "Controls", "Launcher", "Navbar", "Status bar", "Font", "Zen Keyboard", "Wallpaper", "Custom icons", "Blur menu background", "Zen Search" }, labels(interface))
             assert.are.equal("launcher", interface[2]._zen_settings_root)
-            assert.are.equal(font_item, interface[4])
+            assert.are.equal(status_bar_item, interface[4])
+            assert.are.same({ "Left items", "Right items" }, labels(interface[4].sub_item_table))
+            assert.are.equal(font_item, interface[5])
             assert.are.equal(wallpaper_item, interface[7])
-            assert.are.equal("Font: Hyperreadable, 24", interface[4].text_func())
-            assert.are.same({ "Font size", "Font", "Reset font" }, labels(interface[4].sub_item_table))
+            assert.are.equal("Font: Hyperreadable, 24", interface[5].text_func())
+            assert.are.same({ "Font size", "Font", "Reset font" }, labels(interface[5].sub_item_table))
             assert.are.equal("gear", root[6].icon_glyph)
             local general = root[6].sub_item_table
             local expected = { "Wi-Fi", "Schedules", "Sleep", "Battery", "Language", "Time and date", "Advanced", "Updates" }
