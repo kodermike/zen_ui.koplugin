@@ -126,14 +126,13 @@ local function apply_reader_top_status_bar()
     local function getWifiItem()
         local ok, NetworkMgr = pcall(require, "ui/network/manager")
         if not ok then return nil end
-        if NetworkMgr:isWifiOn() then
-            -- Gray while Wi-Fi is on but has no IP yet (searching); gate on
-            -- isConnected() -- the same signal that fires onNetworkConnected ->
-            -- header refresh. ssid presence lags that event, leaving a stuck icon.
-            if NetworkMgr:isConnected() then
-                return "\u{ECA8}", nil, colors.wifi_on
-            end
+        if NetworkMgr.isWifiChanging and NetworkMgr:isWifiChanging()
+                or not NetworkMgr:isConnected()
+                    and (NetworkMgr:isWifiOn() or NetworkMgr.pending_connection or NetworkMgr.pending_connectivity_check) then
             return "\u{ECA8}", nil, colors.wifi_searching, true
+        end
+        if NetworkMgr:isWifiOn() then
+            return "\u{ECA8}", nil, colors.wifi_on
         end
         local cfg = zen_plugin and zen_plugin.config and zen_plugin.config.reader_top_status_bar
         if type(cfg) == "table" and cfg.wifi_hide_when_off == true then return nil end
@@ -141,6 +140,9 @@ local function apply_reader_top_status_bar()
     end
 
     local function getBluetoothItem()
+        if Bluetooth.isChanging and Bluetooth.isChanging() then
+            return inline_icons.bluetooth_on, nil, colors.wifi_searching, true
+        end
         local get_state = Bluetooth.getCachedState or Bluetooth.getState
         if get_state() then
             return inline_icons.bluetooth_on, nil, colors.wifi_on
@@ -615,7 +617,7 @@ local function apply_reader_top_status_bar()
             and ((footer_settings and footer_settings.text_font_face) or "NotoSans-Regular.ttf")
             or face_cfg
         local font_size = type(cfg) == "table" and cfg.font_size or 14
-        return Font:getFace(font_name, font_size)
+        return Font:getFace(font_name, font_size) or Font:getFace("cfont", font_size)
     end
 
     local function getReservedHeaderHeight(view)
@@ -1115,6 +1117,12 @@ local function apply_reader_top_status_bar()
         local orig_onNetworkDisconnected = ReaderUI.onNetworkDisconnected
         ReaderUI.onNetworkDisconnected = function(rui, ...)
             if orig_onNetworkDisconnected then orig_onNetworkDisconnected(rui, ...) end
+            repaintActiveHeaderSlots({ "wifi" }, rui)
+        end
+
+        local orig_onNetworkStateChanged = ReaderUI.onNetworkStateChanged
+        ReaderUI.onNetworkStateChanged = function(rui, ...)
+            if orig_onNetworkStateChanged then orig_onNetworkStateChanged(rui, ...) end
             repaintActiveHeaderSlots({ "wifi" }, rui)
         end
 

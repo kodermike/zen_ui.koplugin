@@ -468,6 +468,27 @@ describe("quick settings plugin controls", function()
         assert.is_false(slider_options.show_warmth)
     end)
 
+    it("renders pending Wi-Fi gray even when the radio is still connected", function()
+        local Blitbuffer = require("ffi/blitbuffer")
+        Blitbuffer.COLOR_GRAY, Blitbuffer.COLOR_BLACK = "gray", "black"
+        NetworkMgr.isWifiChanging = function() return true end
+        local config = _G.__ZEN_UI_PLUGIN.config.quick_settings
+        config.button_order = { "wifi" }
+        config.show_buttons.wifi = true
+        local menu, touch_menu = {}, { item_width = 600 }
+        FileManagerMenu.setUpdateItemTable(menu)
+        menu.tab_item_table[1].panel(touch_menu)
+        assert.are.equal("gray", touch_menu._zen_panel_refs.buttons[1].widget.background)
+
+        NetworkMgr.isWifiChanging = function() return false end
+        menu.tab_item_table[1].panel(touch_menu)
+        assert.are.equal("black", touch_menu._zen_panel_refs.buttons[1].widget.background)
+
+        NetworkMgr.connected = false
+        menu.tab_item_table[1].panel(touch_menu)
+        assert.are.equal("gray", touch_menu._zen_panel_refs.buttons[1].widget.background)
+    end)
+
     it("uses configured labels and icons", function()
         local config = _G.__ZEN_UI_PLUGIN.config.quick_settings
         config.gyro_label = "Turn with device"

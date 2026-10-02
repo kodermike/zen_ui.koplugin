@@ -589,6 +589,15 @@ local function apply_cover_preload()
         return region, grid
     end
 
+    local function cover_refresh_mode(mode, dither)
+        -- Color REAGL without UIManager's periodic full-flash promotion.
+        if (mode == "ui" or mode == "flashui") and dither and Device.isKobo and Device:isKobo()
+                and Device.hasColorScreen and Device:hasColorScreen() then
+            return "[partial]"
+        end
+        return mode
+    end
+
     local function call_with_scoped_dirty(menu, region, reveal, fn, ...)
         local args = { ... }
         local original_setDirty = UIManager.setDirty
@@ -600,7 +609,7 @@ local function apply_cover_preload()
                     local original_refresh = refreshtype
                     refreshtype = function()
                         local refresh = { original_refresh() }
-                        return refresh[1], region, refresh[3]
+                        return cover_refresh_mode(refresh[1], refresh[3]), region, refresh[3]
                     end
                 end
                 if reveal then
@@ -625,8 +634,9 @@ local function apply_cover_preload()
         fast = 1,
         partial = 2,
         ui = 3,
-        flashui = 4,
-        full = 5,
+        ["[partial]"] = 4,
+        flashui = 5,
+        full = 6,
     }
 
     local function flush_reveal(menu, reveal, reason, hydrated, failed)
@@ -665,8 +675,8 @@ local function apply_cover_preload()
             local final_region = copy_region(reveal.refresh_region)
             if not final_region and not full_region then final_region = refresh_region end
             UIManager:setDirty(menu.show_parent, function()
-                return refresh_mode or "ui", final_region,
-                    refresh_dither or hydrated > 0
+                local dither = refresh_dither or hydrated > 0 or menu.show_parent.dithered == true
+                return cover_refresh_mode(refresh_mode or "ui", dither), final_region, dither
             end)
         end
         local revealed_at = now()
@@ -735,12 +745,13 @@ local function apply_cover_preload()
         if hydrated > 0 then menu.show_parent.dithered = true end
         local full_color_refresh = hydrated > 0
             and Device.hasColorScreen and Device:hasColorScreen()
+            and not (Device.isKobo and Device:isKobo())
         local refresh_region = region
         if full_color_refresh then refresh_region = nil end
         UIManager:setDirty(menu.show_parent, function()
             local refreshtype = BookInfoManager:getSetting("flash_ui_cover_images")
                 and "flashui" or "ui"
-            return refreshtype, refresh_region, hydrated > 0
+            return cover_refresh_mode(refreshtype, hydrated > 0), refresh_region, hydrated > 0
         end)
         local full_area = menu.dimen and menu.dimen.w and menu.dimen.h
             and menu.dimen.w * menu.dimen.h or 0
@@ -2105,12 +2116,6 @@ local function apply_cover_preload()
 
     local function measured_updateItems(menu, original, ...)
         if menu._zen_cover_measure_active then return original(menu, ...) end
-        cancel_cover_page_warm(menu, "page_update")
-        cancel(menu)
-        cancel_hydration(menu)
-        cancel_extraction_launch(menu)
-        menu._zen_cover_hydration_generation =
-            (menu._zen_cover_hydration_generation or 0) + 1
         menu._zen_request_cover_hydration = schedule_hydration
         menu._zen_resume_visible_cover_work = resume_visible_cover_work
         menu._zen_start_hidden_folder_prewarm = start_hidden_folder_prewarm
@@ -2331,16 +2336,64 @@ local function apply_cover_preload()
         return result
     end
 
+    local function cancel_page_update(menu)
+        if menu._zen_cover_page_update_fn then
+            UIManager:unschedule(menu._zen_cover_page_update_fn)
+            menu._zen_cover_page_update_fn = nil
+        end
+    end
+
+    local function updateItems(menu, original, ...)
+        if menu._zen_cover_measure_active then return original(menu, ...) end
+        cancel_page_update(menu)
+        cancel_cover_page_warm(menu, "page_update")
+        cancel(menu)
+        cancel_hydration(menu)
+        cancel_extraction_launch(menu)
+        menu._zen_cover_hydration_generation =
+            (menu._zen_cover_hydration_generation or 0) + 1
+        if not (menu._zen_cover_turn_active and menu.display_mode_type == "mosaic"
+                and menu.show_parent and not cover_work_block_reason(menu)) then
+            return measured_updateItems(menu, original, ...)
+        end
+        -- Coalesce this input batch without delaying a single page turn.
+        local args = table.pack(...)
+        local turn_measure = menu._zen_cover_turn_measure
+        local direct_jump = menu._zen_cover_direct_jump_active
+        local update
+        update = function()
+            if menu._zen_cover_page_update_fn ~= update then return end
+            local input = Device.input
+            local detector = input and input.gesture_detector
+            for _k, contact in pairs(detector and detector.active_contacts or {}) do
+                if contact.down then
+                    -- Let the next tap/swipe finish before committing this page.
+                    UIManager:scheduleIn(0.05, update)
+                    return
+                end
+            end
+            menu._zen_cover_page_update_fn = nil
+            menu._zen_cover_turn_active = true
+            menu._zen_cover_direct_jump_active = direct_jump
+            menu._zen_cover_turn_measure = turn_measure
+            measured_updateItems(menu, original, unpack(args, 1, args.n))
+            menu._zen_cover_direct_jump_active = nil
+            menu._zen_cover_turn_active = nil
+        end
+        menu._zen_cover_page_update_fn = update
+        UIManager:scheduleIn(0, update)
+    end
+
     local original_updateItems = CoverMenu.updateItems
     CoverMenu.updateItems = function(menu, ...)
-        return measured_updateItems(menu, original_updateItems, ...)
+        return updateItems(menu, original_updateItems, ...)
     end
 
     local original_filechooser_updateItems = FileChooser.updateItems
     if original_filechooser_updateItems ~= original_updateItems then
         FileChooser.updateItems = function(menu, ...)
             if menu._updateItemsBuildUI and menu.display_mode_type then
-                return measured_updateItems(menu, original_filechooser_updateItems, ...)
+                return updateItems(menu, original_filechooser_updateItems, ...)
             end
             return original_filechooser_updateItems(menu, ...)
         end
@@ -2414,6 +2467,7 @@ local function apply_cover_preload()
 
     local original_onCloseWidget = CoverMenu.onCloseWidget
     local function onCloseWidget(menu, ...)
+        cancel_page_update(menu)
         cancel_cover_page_warm(menu, "menu_closed")
         cancel(menu)
         cancel_hydration(menu)

@@ -172,6 +172,7 @@ local AUTO_DISABLE_PATCHES = {
     "2-filemanager-titlebar.lua",
     "2-menu-size.lua",
     "2-new-status-icons.lua",
+    "2-non-blocking-wifi.lua",
     "2-screensaver-chapter.lua",
     "2-screensaver-cover.lua",
     "2-series-badge-numbered.lua",

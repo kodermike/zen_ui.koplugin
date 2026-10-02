@@ -165,12 +165,13 @@ function M.build(plugin)
         app_launcher_item,
         IconItem.decorate(navbar_item, icons.settings_navbar),
     }
+    move_item(filebrowser_items, _("Status bar"), interface_items)
     move_item(filebrowser_items, _("Font"), interface_items)
     move_item(extras_items, _("Zen Keyboard"), interface_items)
-    move_item(extras_items, _("Zen Search"), interface_items)
     move_item(filebrowser_items, _("Wallpaper"), interface_items)
-    move_item(quick_settings_item.sub_item_table, _("Blur menu background"), interface_items)
     move_item(extras_items, _("Custom icons"), interface_items)
+    move_item(quick_settings_item.sub_item_table, _("Blur menu background"), interface_items)
+    move_item(extras_items, _("Zen Search"), interface_items)
 
     local library_item = IconItem.decorate({
         text = _("Library"),

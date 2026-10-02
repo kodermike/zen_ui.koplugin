@@ -176,6 +176,41 @@ describe("Zen settings page", function()
         }
     end
 
+    it("repaints live Wi-Fi toggles on external network changes", function()
+        local wifi_on = false
+        local settings = make_page({{
+            text = "Wi-Fi", checked_func = function() return wifi_on end,
+        }})
+        local UIManager = require("ui/uimanager")
+        local top = settings
+        UIManager.topdown_widgets_iter = function()
+            local widgets = { top, { toast = true } }
+            return function() return table.remove(widgets) end
+        end
+        local painted_states = {}
+        UIManager.setDirty = function(_self, widget, refresh, region)
+            assert.are.equal(settings, widget)
+            assert.are.equal("ui", refresh)
+            assert.are.equal(settings.dimen, region)
+            painted_states[#painted_states + 1] = settings.item_table[1].checked_func()
+        end
+
+        wifi_on = true
+        settings:onNetworkConnected()
+        wifi_on = false
+        settings:onNetworkDisconnected()
+        wifi_on = true
+        settings:onNetworkStateChanged()
+        assert.are.same({ true, false, true }, painted_states)
+
+        top = { covers_fullscreen = true }
+        settings:onNetworkStateChanged()
+        top = settings
+        settings:closeMenu()
+        settings:onNetworkStateChanged()
+        assert.are.same({ true, false, true }, painted_states)
+    end)
+
     it("loads the settings builder only when opening Settings", function()
         local name = "modules/settings/zen_settings"
         local builder, preload = package.loaded[name], package.preload[name]
@@ -290,7 +325,7 @@ describe("Zen settings page", function()
         assert.are.equal("Date", settings.title_bar.title)
     end)
 
-    it("returns to the settings root when the header Back button is held", function()
+    it("returns to the settings root on Back hold without forcing row focus", function()
         local detail = { text = "Detail", sub_item_table = {{ text = "Option" }} }
         local library = { text = "Library >", sub_item_table = { detail } }
         local settings = make_page({ library })
@@ -300,12 +335,14 @@ describe("Zen settings page", function()
         assert.are.equal("Detail", settings.title_bar.title)
         assert.is_function(settings.title_bar.back_hold_callback)
 
+        settings.itemnumber = 2
         settings.title_bar.back_hold_callback()
 
         assert.are.equal("Settings", settings.title_bar.title)
         assert.are.equal(settings._root_items, settings.item_table)
         assert.are.equal(0, #settings.item_table_stack)
         assert.is_false(settings.title_bar.back_visible)
+        assert.is_nil(settings.itemnumber)
     end)
 
     it("goes back from submenus on an east swipe starting in the west 33 percent", function()

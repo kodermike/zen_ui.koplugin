@@ -1483,7 +1483,7 @@ local function apply_navbar()
         end)
     end
 
-    local function onTabHome(refresh_type)
+    local function onTabHome()
         if resetHomeStripPages() then return end
         local Home = get_shared("home")
         if not Home then return end
@@ -1505,10 +1505,10 @@ local function apply_navbar()
             local strips_reset = type(Home.resetStripPages) == "function"
                 and Home.resetStripPages() == true
             local resumed, resume_mode = true, "reused"
-            if can_resume then resumed, resume_mode = Home.resumeActive(refresh_type) end
+            if can_resume then resumed, resume_mode = Home.resumeActive() end
             if not resumed then
                 if type(Home.closeAll) == "function" then Home.closeAll() end
-                Home.showHomeView(injectStandaloneNavbar, refresh_type)
+                Home.showHomeView(injectStandaloneNavbar)
                 measureLibraryToHomeReveal(fm, "rebuilt", false)
             else
                 local rebuilt = resume_mode == "rebuilt" or strips_reset
@@ -1517,7 +1517,7 @@ local function apply_navbar()
             if not scheduleHiddenLibraryWarm(fm) then scheduleGroupPrewarm() end
             return
         end
-        Home.showHomeView(injectStandaloneNavbar, refresh_type)
+        Home.showHomeView(injectStandaloneNavbar)
         measureLibraryToHomeReveal(fm, "rebuilt", false)
         if not scheduleHiddenLibraryWarm(fm) then scheduleGroupPrewarm() end
     end
@@ -1717,33 +1717,25 @@ local function apply_navbar()
         end)
     end
 
-    local function runTabCallback(tab_id)
+    local function runTabCallback(tab_id, source_tab_id)
         local cb = tab_callbacks[tab_id]
         if not cb then return end
         local stack = UIManager._window_stack
         local top = stack and stack[#stack]
         local top_widget = top and top.widget
-        if tab_id ~= "home"
-                and top_widget
-                and top_widget._zen_navbar_tab_id == tab_id then
+        local source = source_tab_id or (top_widget and top_widget._zen_navbar_tab_id)
+        local same_page = source == tab_id
+        if tab_id ~= "home" and same_page then
             return
         end
         if shouldTrackActiveTab(tab_id) then
-            local fm = FileManager.instance
-            local flash_library_home = fm and (
-                (tab_id == "home" and fm._zen_library_to_home_started_at)
-                or (tab_id == "books" and fm._zen_home_to_library_started_at))
-            cb(flash_library_home and tab_id == "home" and "flashui" or nil)
-            if flash_library_home and tab_id == "books" then
-                UIManager:nextTick(function() UIManager:setDirty(nil, "flashui") end)
-            end
-            if tab_id ~= "home" and not tabStaysInFileManager(tab_id) then
-                refreshAfterNavbarPageSwitch()
-            end
+            cb()
+            if not same_page then refreshAfterNavbarPageSwitch() end
             return
         end
         local saved_active = active_tab
         cb()
+        if tab_id == "stats" then refreshAfterNavbarPageSwitch() end
         if active_tab ~= saved_active then
             active_tab = saved_active
             syncActiveTabLabel()
@@ -2979,6 +2971,7 @@ local function apply_navbar()
                     or menu.name == "languages_detail"
                     or menu.name == "tags_detail"
                     or is_collection_detail
+                local page_changed = is_detail or (menu.page or 1) ~= 1
                 if is_collection_detail and type(menu.onReturn) == "function" then
                     menu:onReturn()
                     local features = zen_plugin.config and zen_plugin.config.features
@@ -3002,6 +2995,7 @@ local function apply_navbar()
                     menu.page = 1
                     menu:updateItems()
                 end
+                if page_changed then refreshAfterNavbarPageSwitch() end
                 return true
             end
 
@@ -3009,7 +3003,7 @@ local function apply_navbar()
                 if shouldCloseStandaloneBeforeAction(menu, tapped_id) then
                     closeStandaloneView(menu)
                 end
-                runTabCallback(tapped_id)
+                runTabCallback(tapped_id, view_tab_id)
                 return true
             end
 
@@ -3020,7 +3014,7 @@ local function apply_navbar()
                         or not retainHomeBelowFileManager(FileManager.instance, menu) then
                     closeStandaloneView(menu)
                 end
-                runTabCallback(tapped_id)
+                runTabCallback(tapped_id, view_tab_id)
                 return true
             end
 
@@ -3034,7 +3028,7 @@ local function apply_navbar()
             end
 
             -- Execute the tapped tab's callback
-            runTabCallback(tapped_id)
+            runTabCallback(tapped_id, view_tab_id)
 
             return true
         end
@@ -3246,13 +3240,16 @@ local function apply_navbar()
                 if not tab then return end
                 local tapped_id = tab.id
                 if tapped_id == view_tab_id then
-                    menu.page = 1; menu:updateItems(); return
+                    local page_changed = (menu.page or 1) ~= 1
+                    menu.page = 1; menu:updateItems()
+                    if page_changed then refreshAfterNavbarPageSwitch() end
+                    return
                 end
                 if not shouldTrackActiveTab(tapped_id) then
                     if shouldCloseStandaloneBeforeAction(menu, tapped_id) then
                         closeStandaloneView(menu)
                     end
-                    runTabCallback(tapped_id)
+                    runTabCallback(tapped_id, view_tab_id)
                     return
                 end
                 if tapped_id == "books" then
@@ -3261,14 +3258,14 @@ local function apply_navbar()
                             or not retainHomeBelowFileManager(FileManager.instance, menu) then
                         closeStandaloneView(menu)
                     end
-                    runTabCallback(tapped_id)
+                    runTabCallback(tapped_id, view_tab_id)
                     return
                 end
                 closeStandaloneView(menu)
                 if shouldTrackActiveTab(tapped_id) then
                     setActiveTab(tapped_id)
                 end
-                runTabCallback(tapped_id)
+                runTabCallback(tapped_id, view_tab_id)
             end
 
             local function moveStandaloneNavbar(m, dx, dy)
@@ -3379,7 +3376,7 @@ local function apply_navbar()
                     if not retainHomeBelowFileManager(fm, m) then
                         closeStandaloneView(m)
                     end
-                    runTabCallback("books")
+                    runTabCallback("books", view_tab_id)
                     return true
                 end
                 if m.close_callback then m.close_callback()
@@ -3397,7 +3394,7 @@ local function apply_navbar()
                     if not retainHomeBelowFileManager(fm, m) then
                         closeStandaloneView(m)
                     end
-                    runTabCallback("books")
+                    runTabCallback("books", view_tab_id)
                     return true
                 end
                 if m.close_callback then m.close_callback()
@@ -4063,14 +4060,14 @@ local function apply_navbar()
                 if not tapped_id then return false end
                 if tapped_id == "news" then return true end
                 if not shouldTrackActiveTab(tapped_id) then
-                    runTabCallback(tapped_id)
+                    runTabCallback(tapped_id, "news")
                     return true
                 end
                 self:onClose()
                 if shouldTrackActiveTab(tapped_id) then
                     setActiveTab(tapped_id)
                 end
-                runTabCallback(tapped_id)
+                runTabCallback(tapped_id, "news")
                 return true
             end
 

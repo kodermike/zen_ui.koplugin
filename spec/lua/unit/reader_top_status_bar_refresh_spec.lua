@@ -337,6 +337,27 @@ describe("reader top status bar refresh", function()
         assert.same({ "clear", "header", "dogear", "dirty" }, paint_order)
     end
 
+    it("uses the default header face when the selected or inherited font is unavailable", function()
+        local get_header_face = get_upvalue(build_header, "getHeaderFace")
+        local Font = get_upvalue(get_header_face, "Font")
+        local fallback = {}
+        local calls = {}
+        Font.getFace = function(_self, name, size)
+            calls[#calls + 1] = { name, size }
+            if name == "cfont" then return fallback end
+        end
+        local missing = "/missing/Hyperreadable-SemiBold.ttf"
+
+        assert.are.equal(fallback, get_header_face({ font_face = missing, font_size = 14 }))
+        local footer = _G.G_reader_settings:readSetting("footer")
+        _G.G_reader_settings:saveSetting("footer", { text_font_face = missing })
+        local inherited = get_header_face({ font_face = "default", font_size = 14 })
+        _G.G_reader_settings:saveSetting("footer", footer)
+        assert.are.equal(fallback, inherited)
+        assert.same({ { missing, 14 }, { "cfont", 14 },
+            { missing, 14 }, { "cfont", 14 } }, calls)
+    end)
+
     local function make_typeset(view_mode)
         local document = {}
         local typeset = setmetatable({
@@ -482,7 +503,40 @@ describe("reader top status bar refresh", function()
         assert.is_nil(item_fetchers.wifi())
 
         NetworkMgr.wifi_on = true
+        NetworkMgr.pending_connection = true
         assert.are.equal("\u{ECA8}", item_fetchers.wifi())
+    end)
+
+    it("keeps both radios gray while changing, including before startup and during shutdown", function()
+        local changing = true
+        NetworkMgr.isWifiChanging = function() return changing end
+        package.loaded["modules/menu/bluetooth/bluetooth"].isChanging = function() return changing end
+        _G.__ZEN_UI_PLUGIN.config.reader_top_status_bar.wifi_hide_when_off = true
+        for _i, enabled in ipairs({ false, true }) do
+            NetworkMgr.wifi_on, NetworkMgr.connected = enabled, enabled
+            bluetooth_enabled = enabled
+            local wifi, _suffix, color, gray = item_fetchers.wifi()
+            assert.are.equal("\u{ECA8}", wifi)
+            assert.is_nil(_suffix)
+            assert.are.equal("dark_gray", color)
+            assert.is_true(gray)
+            local bluetooth
+            bluetooth, _suffix, color, gray = item_fetchers.bluetooth()
+            assert.are.equal("BT", bluetooth)
+            assert.is_nil(_suffix)
+            assert.are.equal("dark_gray", color)
+            assert.is_true(gray)
+        end
+        changing = false
+        NetworkMgr.connected, bluetooth_enabled = false, false
+        local wifi, _suffix, color, gray = item_fetchers.wifi()
+        assert.are.equal("\u{ECA8}", wifi)
+        assert.are.equal("dark_gray", color)
+        assert.is_true(gray)
+        NetworkMgr.wifi_on = false
+        assert.is_nil(item_fetchers.wifi())
+        assert.is_nil(item_fetchers.bluetooth())
+        assert.is_function(ReaderUI.onNetworkStateChanged)
     end)
 
     it("shows Bluetooth only while powered and refreshes its slot on state changes", function()
