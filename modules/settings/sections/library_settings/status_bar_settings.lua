@@ -8,7 +8,7 @@ local UIManager = require("ui/uimanager")
 local constants = require("common/constants")
 local icons = require("common/inline_icon_map")
 local IconItem = require("common/ui/icon_menu_item")
-local Bluetooth = require("common/bluetooth")
+local Bluetooth = require("modules/menu/bluetooth/bluetooth")
 local DateFormat = require("common/date_format")
 
 local M = {}
@@ -245,7 +245,7 @@ function M.build(ctx)
             else
                 config.status_bar.left_order = { "time" }
                 config.status_bar.center_order = {}
-                config.status_bar.right_order = { "wifi", "battery" }
+                config.status_bar.right_order = { "bluetooth", "wifi", "battery" }
             end
             config.features.status_bar = true
             save_and_apply("status_bar")

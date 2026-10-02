@@ -15,6 +15,8 @@ local updater = require("modules/settings/zen_updater")
 local PROXY_URL       = "https://zen-reporter.misty-mud-afb2.workers.dev/"
 local UPLOAD_URL = PROXY_URL .. "upload"
 local MAX_CRASH_LOG = 60000
+local MAX_UPLOAD_LOG = 512000
+local MAX_NETWORK_LOG = 64000
 local MAX_TITLE     = 500
 local MAX_BODY      = 65536
 
@@ -59,13 +61,37 @@ local function upload_crash_log(log_data)
     return nil
 end
 
---- Read the full content of a file. Returns string or nil.
+--- Read a bounded tail of the crash log, retaining earlier network diagnostics.
 local function read_file_content(path)
     local f = io.open(path, "rb")
     if not f then return nil end
-    local data = f:read("*a")
+    local size = f:seek("end")
+    local network_log = ""
+    if size > MAX_UPLOAD_LOG then
+        f:seek("set", 0)
+        while f:seek() < size - MAX_UPLOAD_LOG - 3 do
+            local line = f:read("*l")
+            if not line then break end
+            if line:find("ZenOS: [network_switcher]", 1, true)
+                    or line:find("NetworkMgr:", 1, true)
+                    or line:find("WpaSupplicant:", 1, true) then
+                network_log = zen_utils.utf8SafeSuffix(network_log .. line .. "\n", MAX_NETWORK_LOG)
+            end
+        end
+    end
+    local tail_size = MAX_UPLOAD_LOG - #network_log
+    f:seek("set", math.max(0, size - tail_size - 3))
+    local data = f:read(tail_size + 3)
     f:close()
-    return (data and data ~= "") and data or nil
+    if not data or data == "" then return nil end
+    if size > MAX_UPLOAD_LOG then
+        if network_log ~= "" then
+            network_log = "[earlier network diagnostics]\n" .. network_log .. "\n"
+        end
+        return network_log .. "[truncated - showing last " .. tail_size .. " bytes of " .. size .. " total]\n"
+            .. zen_utils.utf8SafeSuffix(data, tail_size)
+    end
+    return data
 end
 
 -- ---------------------------------------------------------------------------
@@ -321,7 +347,7 @@ function M._do_submit(ctx, bug_title, description, github_username)
         local data_dir = ok_ds and DataStorage:getDataDir() or nil
         local crash_log_full = data_dir and read_file_content(data_dir .. "/crash.log")
 
-        -- Upload the full log; only truncate if upload fails and we need inline embedding.
+        -- Upload the bounded log; shorten it further for inline fallback.
         local log_url = crash_log_full and upload_crash_log(crash_log_full)
         local crash_log_inline
         if not log_url and crash_log_full then

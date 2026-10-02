@@ -10,6 +10,7 @@ local Registry = require("modules/filebrowser/patches/home/components/registry")
 local library_font = require("modules/filebrowser/patches/library_font")
 local ReadingGoals = require("common/reading_goals")
 local icons = require("common/inline_icon_map")
+local plugin_root = require("common/plugin_root")
 local IconItem = require("common/ui/icon_menu_item")
 local ButtonModel = require("common/nav_button_model")
 local Destination = require("common/library_destination")
@@ -19,7 +20,9 @@ local PluginScan = require("modules/menu/app_launcher/plugin_scan")
 local Kindle = require("modules/filebrowser/patches/kindle_virtual_library")
 
 local M = {}
+local MIN_GOALS_FONT_SIZE = 10
 local DEFAULT_GOALS_FONT_SIZE = 11
+local MAX_GOALS_FONT_SIZE = 16
 local DEFAULT_DATETIME_MAX_FONT_SIZE = 36
 local MAX_DATETIME_FONT_SIZE = 160
 local DEFAULT_STATS_FONT_SIZE = 16
@@ -197,6 +200,7 @@ local function ensure_strip_cfg(dcfg)
     end
     if mcfg.show_strip_titles == nil then mcfg.show_strip_titles = false end
     if mcfg.show_badges == nil then mcfg.show_badges = false end
+    if mcfg.show_page_indicator == nil then mcfg.show_page_indicator = true end
     if mcfg.center_books == nil then mcfg.center_books = false end
     if type(mcfg.controls) ~= "table" then mcfg.controls = {} end
     if type(mcfg.controls.text_style) ~= "table" then
@@ -234,11 +238,14 @@ local function ensure_home_widget_cfg(dcfg)
     stats_triplet.font_scale = nil
     local reading_goals = ensure_module_cfg(dcfg, "reading_goals")
     local goals_font_size = tonumber(reading_goals.font_size)
-    reading_goals.font_size = goals_font_size and math.max(8, math.min(32, math.floor(goals_font_size + 0.5))) or nil
+    reading_goals.font_size = goals_font_size
+        and math.max(MIN_GOALS_FONT_SIZE,
+            math.min(MAX_GOALS_FONT_SIZE, math.floor(goals_font_size + 0.5))) or nil
     reading_goals.automatic_font_size = reading_goals.automatic_font_size ~= false
-    reading_goals.max_font_size = math.max(8, math.min(64, math.floor(
-        (tonumber(reading_goals.max_font_size) or 32) + 0.5
-    )))
+    reading_goals.max_font_size = math.max(MIN_GOALS_FONT_SIZE,
+        math.min(MAX_GOALS_FONT_SIZE, math.floor(
+            (tonumber(reading_goals.max_font_size) or MAX_GOALS_FONT_SIZE) + 0.5
+        )))
     ensure_module_cfg(dcfg, "quotes")
     ensure_strip_cfg(dcfg)
 end
@@ -258,7 +265,7 @@ local function ensure_cfg(_config)
     dcfg.rows = Registry.normalizeRows(dcfg.rows, DEFAULT_ORDER, DEFAULT_ENABLED)
 
     if dcfg.show_status_bar == nil then dcfg.show_status_bar = true end
-    dcfg.edit_mode = dcfg.edit_mode == true
+    dcfg.edit_mode = dcfg.edit_mode ~= false
     dcfg.font_size = nil
     dcfg.font_size_override = nil
 
@@ -316,8 +323,6 @@ function M.build(ctx)
     local dcfg = ensure_cfg(config)
     local capacity_units = type(Registry.capacityUnits) == "function"
         and Registry.capacityUnits() or Registry.CAPACITY_UNITS
-    local home_rebuild_pending = false
-    local home_rebuild_poll_active = false
     local schedule_home_rebuild_on_menu_close
 
     local function unique_user_preset_name(base)
@@ -357,7 +362,6 @@ function M.build(ctx)
             make_builtin_editable()
         end
         PresetStore.saveSettings("home", dcfg)
-        home_rebuild_pending = true
         schedule_home_rebuild_on_menu_close()
     end
 
@@ -368,54 +372,21 @@ function M.build(ctx)
         if ctx.plugin and type(ctx.plugin.saveConfig) == "function" then
             ctx.plugin:saveConfig()
         end
-        home_rebuild_pending = true
         schedule_home_rebuild_on_menu_close()
     end
 
-    local function is_filemanager_menu_open()
-        local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
-        if not ok_fm or not FileManager or not FileManager.instance then return false end
-        local fm = FileManager.instance
-        local menu = fm.menu
-        if not menu then return false end
-        local menu_container = menu.menu_container
-        local stack = UIManager._window_stack
-        if not stack then return false end
-        for _i, entry in ipairs(stack) do
-            local widget = entry and entry.widget
-            if widget == menu or (menu_container and widget == menu_container) then return true end
-        end
-        return false
-    end
-
     schedule_home_rebuild_on_menu_close = function()
-        if home_rebuild_poll_active then return end
-        home_rebuild_poll_active = true
-        local function tick()
+        local settings_apply = ctx.settings_apply
+        if not (settings_apply and settings_apply.defer_until_settings_close) then return end
+        settings_apply.defer_until_settings_close("home_rebuild", function()
             local plugin = ctx.plugin or rawget(_G, "__ZEN_UI_PLUGIN")
-            local settings_apply = ctx.settings_apply
             local home = settings_apply
                 and settings_apply.get_shared
                 and settings_apply.get_shared(plugin, "home")
-            local home_waiting = home
-                and home.hasActive
-                and home.hasActive()
-                and home.isActiveOnTop
-                and not home.isActiveOnTop()
-            if is_filemanager_menu_open() or home_waiting then
-                UIManager:scheduleIn(0.25, tick)
-                return
-            end
-            home_rebuild_poll_active = false
-            if not home_rebuild_pending then return end
-            home_rebuild_pending = false
             if home and home.rebuildActive then
-                UIManager:scheduleIn(0, function()
-                    home.rebuildActive()
-                end)
+                home.rebuildActive()
             end
-        end
-        UIManager:scheduleIn(0.25, tick)
+        end)
     end
 
     local function component_label(id)
@@ -572,6 +543,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     return string.format("%s %s", _("Font:"),
                         font_label(ensure_datetime_text_style(mcfg, key).font_face))
@@ -666,12 +638,14 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Time"),
                 text_func = function()
                     return _("Time") .. ": " .. datetime_style_summary(mcfg, "time")
                 end,
                 sub_item_table = build_datetime_text_style_items(mcfg, "time", _("Time")),
             },
             {
+                _zen_search_text = _("Date"),
                 text_func = function()
                     return _("Date") .. ": " .. datetime_style_summary(mcfg, "date")
                 end,
@@ -717,6 +691,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local style = ensure_featured_text_style(mcfg, key)
                     return string.format("%s %s", _("Font:"), font_label(style.font_face))
@@ -809,6 +784,7 @@ function M.build(ctx)
     local function featured_text_style_item(mcfg, key, label, show_key)
         local item = {
             sub_title = label,
+            _zen_search_text = label,
             text_func = function()
                 return label .. ": " .. featured_text_style_summary(mcfg, key)
             end,
@@ -1430,7 +1406,7 @@ function M.build(ctx)
         if not ok_dispatcher or not Dispatcher then return end
         local entry = { type = "action", action = {} }
         local items, caller = {}, {}
-        Dispatcher:addSubMenu(caller, items, entry, "action")
+        DispatcherMenu.addSubMenu(Dispatcher, caller, items, entry, "action")
         DispatcherMenu.wrap(items, caller, function()
             if entry.action and next(entry.action) then
                 local label = Dispatcher:menuTextFunc(entry.action)
@@ -1491,11 +1467,12 @@ function M.build(ctx)
                 keep_menu_open = true,
                 callback = function() add_strip_plugin(controls) end,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = function() add_strip_menu(controls) end,
-            }, icons.open_menu),
+            },
         }
         return items
     end
@@ -1690,6 +1667,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local style = ensure_strip_cfg(dcfg).controls.text_style
                     return string.format("%s %s", _("Font:"), font_label(style.font_face))
@@ -1771,6 +1749,7 @@ function M.build(ctx)
                             end,
                         }, icons.navbar_tabs),
                         IconItem.decorate({
+                            _zen_search_text = _("Font"),
                             text_func = function()
                                 return _("Font") .. ": " .. strip_control_style_summary(mcfg)
                             end,
@@ -1813,6 +1792,14 @@ function M.build(ctx)
                 checked_func = function() return mcfg.show_badges == true end,
                 callback = function()
                     mcfg.show_badges = mcfg.show_badges ~= true
+                    save_home("reinit")
+                end,
+            },
+            {
+                text = _("Show page dots"),
+                checked_func = function() return mcfg.show_page_indicator ~= false end,
+                callback = function()
+                    mcfg.show_page_indicator = mcfg.show_page_indicator == false
                     save_home("reinit")
                 end,
             },
@@ -2198,8 +2185,8 @@ function M.build(ctx)
                 UIManager:show(SpinWidget:new{
                     title_text = _("Reading goals font size"),
                     value = goals_cfg.font_size or DEFAULT_GOALS_FONT_SIZE,
-                    value_min = 8,
-                    value_max = 32,
+                    value_min = MIN_GOALS_FONT_SIZE,
+                    value_max = MAX_GOALS_FONT_SIZE,
                     default_value = DEFAULT_GOALS_FONT_SIZE,
                     callback = function(spin)
                         goals_cfg.font_size = spin.value

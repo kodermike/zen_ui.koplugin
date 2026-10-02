@@ -7,7 +7,6 @@ local T = require("ffi/util").template
 local UIManager = require("ui/uimanager")
 local utils = require("modules/settings/zen_settings_utils")
 local bugreporter = require("modules/settings/zen_bugreporter")
-local advanced_section = require("modules/settings/sections/advanced_settings")
 local icons = require("common/inline_icon_map")
 local IconItem = require("common/ui/icon_menu_item")
 
@@ -90,15 +89,6 @@ function M.build(ctx)
         end,
     })
 
-    local language_setting = require("ui/language"):getLangMenuTable()
-    table.insert(items, {
-        text = language_setting.text,
-        sub_item_table = language_setting.sub_item_table,
-    })
-
-    local time_setting = require("ui/elements/common_settings_menu_table").time
-    table.insert(items, time_setting)
-
     table.insert(items, {
         text      = _("Report a Bug"),
         callback  = function()
@@ -107,18 +97,10 @@ function M.build(ctx)
         keep_menu_open = true,
     })
 
-    table.insert(items, {
-        text = _("Advanced"),
-        sub_item_table = advanced_section.build(ctx),
-    })
-
     IconItem.decorate(items[1], icons.details)
     IconItem.decorate(items[2], icons.settings_device)
     IconItem.decorate(items[3], icons.settings_setup)
-    IconItem.decorate(items[4], icons.language)
-    IconItem.decorate(items[5], icons.tbr)
-    IconItem.decorate(items[6], icons.settings_bug)
-    IconItem.decorate(items[7], icons.settings_advanced)
+    IconItem.decorate(items[4], icons.settings_bug)
 
     return items
 end

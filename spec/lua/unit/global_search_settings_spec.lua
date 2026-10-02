@@ -25,9 +25,12 @@ describe("global search settings", function()
         ZenSpec.replace("common/restart", {})
         ZenSpec.replace("config/preset_store", {})
         ZenSpec.replace("modules/settings/zen_settings_utils", {})
-        ZenSpec.replace("common/inline_icon_map", {})
+        ZenSpec.replace("common/inline_icon_map", { keyboard = "keyboard-icon" })
         ZenSpec.replace("common/ui/icon_menu_item", {
-            decorate = function(item) return item end,
+            decorate = function(item, glyph)
+                item.icon_glyph = glyph
+                return item
+            end,
         })
         ZenSpec.replace("common/plugin_root", "/missing")
         ZenSpec.replace("libs/libkoreader-lfs", {
@@ -42,6 +45,40 @@ describe("global search settings", function()
     end)
 
     it("defaults Zen Search on and prompts for restart when toggled", function()
+        local saved, restart_prompts, updates = 0, 0, 0
+        local config = { features = {} }
+        local items = require("modules/settings/sections/global_settings").build_extras_items({
+            config = config,
+            plugin = { saveConfig = function() saved = saved + 1 end },
+            settings_apply = {
+                prompt_restart = function() restart_prompts = restart_prompts + 1 end,
+            },
+        })
+        local search_toggle = items[1]
+
+        assert.are.equal("Zen Search", search_toggle.text)
+        assert.are.equal(search_toggle.callback, search_toggle.checkmark_callback)
+        assert.are.equal(1, #search_toggle.sub_item_table)
+        assert.are.equal("Match whole words", search_toggle.sub_item_table[1].text)
+        assert.is_true(search_toggle.checked_func())
+        local touch_menu = { updateItems = function() updates = updates + 1 end }
+        search_toggle.checkmark_callback(touch_menu)
+        assert.is_false(search_toggle.checked_func())
+        assert.is_false(search_toggle.sub_item_table[1].enabled_func())
+        assert.are.equal(1, saved)
+        assert.are.equal(1, restart_prompts)
+        assert.are.equal(1, updates)
+
+        search_toggle.checkmark_callback(touch_menu)
+        assert.is_true(search_toggle.checked_func())
+        assert.is_true(search_toggle.sub_item_table[1].enabled_func())
+        search_toggle.sub_item_table[1].callback()
+        assert.is_true(search_toggle.sub_item_table[1].checked_func())
+        assert.are.equal(3, saved)
+        assert.are.equal(2, restart_prompts)
+    end)
+
+    it("defaults Zen Keyboard on and prompts for restart when toggled", function()
         local saved, restart_prompts = 0, 0
         local config = { features = {} }
         local items = require("modules/settings/sections/global_settings").build_extras_items({
@@ -51,13 +88,16 @@ describe("global search settings", function()
                 prompt_restart = function() restart_prompts = restart_prompts + 1 end,
             },
         })
-        local search_toggle = items[1].sub_item_table[1]
+        local keyboard_toggle
+        for _i, item in ipairs(items) do
+            if item.text == "Zen Keyboard" then keyboard_toggle = item end
+        end
 
-        assert.are.equal("Enable Zen Search", search_toggle.text)
-        assert.is_true(search_toggle.checked_func())
-        search_toggle.callback()
-        assert.is_false(search_toggle.checked_func())
-        assert.is_false(items[1].sub_item_table[2].enabled_func())
+        assert.is_not_nil(keyboard_toggle)
+        assert.are.equal("keyboard-icon", keyboard_toggle.icon_glyph)
+        assert.is_true(keyboard_toggle.checked_func())
+        keyboard_toggle.callback()
+        assert.is_false(keyboard_toggle.checked_func())
         assert.are.equal(1, saved)
         assert.are.equal(1, restart_prompts)
     end)

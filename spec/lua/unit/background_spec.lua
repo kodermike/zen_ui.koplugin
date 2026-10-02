@@ -39,9 +39,13 @@ describe("library background cleanup", function()
             getHeight = function() return 600 end,
         }
         local buffers = {}
+        local file_checks = 0
         ZenSpec.replace("device", { screen = screen })
         ZenSpec.replace("libs/libkoreader-lfs", {
-            attributes = function() return "file" end,
+            attributes = function()
+                file_checks = file_checks + 1
+                return "file"
+            end,
         })
         ZenSpec.replace("ui/widget/imagewidget", {
             new = function(_class, options)
@@ -53,6 +57,9 @@ describe("library background cleanup", function()
                         assert.is_true(options.alpha)
                         assert.are.equal("white", buffer.fill_color)
                         buffer.image_paints = buffer.image_paints + 1
+                        if screen.night_mode and options.original_in_nightmode ~= false then
+                            buffer:invertRect()
+                        end
                     end,
                     free = function() end,
                 }
@@ -102,8 +109,10 @@ describe("library background cleanup", function()
 
         assert.is_true(Background.paintScreenRegion(destination,
             0, 0, 0, 0, 800, 600, "/library/background.png"))
+        local checks_after_first_paint = file_checks
         assert.is_true(Background.paintScreenRegion(destination,
             0, 0, 0, 0, 800, 600, "/library/background.png"))
+        assert.are.equal(checks_after_first_paint, file_checks)
         assert.are.equal(1, #buffers)
         assert.are.equal(1, buffers[1].image_paints)
         assert.are.equal(0, buffers[1].inversions)
@@ -115,10 +124,18 @@ describe("library background cleanup", function()
         assert.is_true(Background.paintScreenRegion(destination,
             0, 0, 0, 0, 800, 600, "/library/background.png"))
         assert.are.equal(2, #buffers)
-        assert.are.equal(1, buffers[2].inversions)
-        assert.are.equal(0.75, buffers[2].darkened)
-        assert.is_nil(buffers[2].lightened)
-        assert.are.equal(3, copies)
+        assert.are.equal(0, buffers[2].inversions)
+        assert.are.equal(0.75, buffers[2].lightened)
+        assert.is_nil(buffers[2].darkened)
+
+        _G.__ZEN_UI_PLUGIN.config.library_background.invert_with_dark_mode = false
+        assert.is_true(Background.paintScreenRegion(destination,
+            0, 0, 0, 0, 800, 600, "/library/background.png"))
+        assert.are.equal(3, #buffers)
+        assert.are.equal(1, buffers[3].inversions)
+        assert.are.equal(0.75, buffers[3].darkened)
+        assert.is_nil(buffers[3].lightened)
+        assert.are.equal(4, copies)
     end)
 
     it("coalesces missing-image recovery without restoring the live widget tree", function()

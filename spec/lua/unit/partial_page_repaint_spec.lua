@@ -21,6 +21,37 @@ describe("partial page repaint", function()
         end
     end)
 
+    it("skips a short-page flash after navigation supersedes it", function()
+        local scheduled = {}
+        local dirty_calls = 0
+        local FileChooser = { updateItems = function() end }
+        ZenSpec.replace("ui/widget/filechooser", FileChooser)
+        ZenSpec.replace("covermenu", {})
+        ZenSpec.replace("ui/uimanager", {
+            nextTick = function(_self, callback) scheduled[#scheduled + 1] = callback end,
+            setDirty = function() dirty_calls = dirty_calls + 1 end,
+            forceRePaint = function() error("superseded page repainted") end,
+        })
+        ZenSpec.unload("modules/filebrowser/patches/partial_page_repaint")
+        require("modules/filebrowser/patches/partial_page_repaint")()
+        local chooser = {
+            item_table = { 1, 2, 3 }, page = 2, perpage = 2,
+            _zen_cover_hydration_generation = 1,
+        }
+
+        FileChooser.updateItems(chooser)
+        chooser.page = 1
+        FileChooser.updateItems(chooser)
+        scheduled[1]()
+        assert.are.equal(0, dirty_calls)
+
+        chooser.page = 2
+        FileChooser.updateItems(chooser)
+        chooser._zen_cover_hydration_generation = 2
+        scheduled[2]()
+        assert.are.equal(0, dirty_calls)
+    end)
+
     it("repaints only short pages when a library background is active", function()
         local scheduled = {}
         local dirty_calls = 0

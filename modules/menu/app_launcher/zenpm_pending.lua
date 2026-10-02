@@ -28,10 +28,16 @@ local function candidate_paths()
     return paths
 end
 
-function M.path()
+function M.paths()
+    local available = {}
     for _i, path in ipairs(candidate_paths()) do
-        if DBConnection.isAvailable(path) then return path end
+        if DBConnection.isAvailable(path) then available[#available + 1] = path end
     end
+    return available
+end
+
+function M.path()
+    return M.paths()[1]
 end
 
 local function close_sqlite(conn, stmt)

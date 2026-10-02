@@ -104,6 +104,7 @@ describe("Zen renderer", function()
         ZenSpec.replace("ui/widget/container/alphacontainer", widget_class())
         ZenSpec.replace("ui/widget/container/bottomcontainer", widget_class("bottom"))
         ZenSpec.replace("ui/widget/container/framecontainer", widget_class())
+        ZenSpec.replace("ui/widget/iconwidget", widget_class())
         local WidgetContainer = class()
         function WidgetContainer:getSize() return self.dimen end
         ZenSpec.replace("ui/widget/container/widgetcontainer", WidgetContainer)
@@ -216,6 +217,13 @@ describe("Zen renderer", function()
             BORDER_SIZE = 2,
             getRatio = function() return 2 / 3 end,
             calcDims = function(width, height) return calc_dimensions(width, height) end,
+            getUpvalue = function(fn, target)
+                for index = 1, 64 do
+                    local name, value = debug.getupvalue(fn, index)
+                    if not name then return end
+                    if name == target then return value end
+                end
+            end,
         })
         ZenSpec.replace("modules/filebrowser/patches/home/widgets/cover_common", {
             BORDER_SIZE = 2,
@@ -230,6 +238,9 @@ describe("Zen renderer", function()
             end,
             set_dimmed_border = function(frame, dimmed)
                 frame._zen_cover_border_color = dimmed and 6 or nil
+            end,
+            rounded_enabled = function()
+                return _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners == true
             end,
         })
         ZenSpec.unload("modules/filebrowser/folder_cover")
@@ -414,6 +425,60 @@ describe("Zen renderer", function()
 
         assert.are.equal("complete", item._zen_effective_status)
         assert.are.equal(1, dimmed)
+    end)
+
+    it("dims only the cover in list views", function()
+        local ListMenuItem = {
+            update = function(self) self.updated_dim = self.entry.dim end,
+            paintTo = function() end,
+        }
+        local function stock_builder() return ListMenuItem end
+        ZenSpec.replace("listmenu", { _updateItemsBuildUI = stock_builder })
+        ZenSpec.replace("covermenu", { updateItems = function() end })
+        ZenSpec.replace("readcollection", {})
+        ZenSpec.replace("util", {})
+        ZenSpec.replace("apps/filemanager/filemanagerutil", {})
+        ZenSpec.replace("apps/filemanager/filemanager", { setupLayout = function() end })
+        ZenSpec.replace("ui/widget/container/rightcontainer", class())
+        _G.__ZEN_UI_PLUGIN.config.browser_cover_badges = { dim_finished_books = true }
+        ZenSpec.unload("modules/filebrowser/patches/browser_list_item_layout")
+        require("modules/filebrowser/patches/browser_list_item_layout")()
+
+        local dimmed
+        ListMenuItem.paintTo({
+            entry = {},
+            _zen_effective_status = "complete",
+            _cover_frame = {
+                dimen = { x = 11, y = 22, w = 30, h = 40 },
+                bordersize = 2,
+            },
+        }, {
+            lightenRect = function(_bb, ...) dimmed = { ... } end,
+        }, 100, 200)
+
+        assert.are.same({ 13, 24, 26, 36, 0.4 }, dimmed)
+
+        require("apps/filemanager/filemanager").instance = {
+            selected_files = { ["/book.epub"] = true },
+        }
+        local entry = { path = "/book.epub", is_file = true, dim = true }
+        local row = setmetatable({
+            entry = entry, do_cover_image = false, width = 320, height = 64,
+            _cover_frame = {},
+        }, { __index = ListMenuItem })
+        row:update()
+        assert.is_nil(row.updated_dim)
+        assert.is_true(entry.dim)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = true
+        local outline
+        row:paintTo({
+            paintBorder = function(_bb, ...) outline = { ... } end,
+        }, 5, 7)
+        assert.are.same({ 9, 11, 312, 56, 3, 0, 8 }, outline)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = false
+        row:paintTo({ paintBorder = function(_bb, ...) outline = { ... } end }, 5, 7)
+        assert.are.same({ 9, 11, 312, 56, 3, 0, 0 }, outline)
+        require("apps/filemanager/filemanager").instance = nil
     end)
 
     it("uses an exact shared real cover without requesting the decoded blob", function()
@@ -680,6 +745,39 @@ describe("Zen renderer", function()
         assert.are.same({ menu }, background_menus)
     end)
 
+    it("checks a mosaic background once per second and after its setting changes", function()
+        require("modules/filebrowser/patches/zen_renderer")()
+        local Background = require("common/ui/background")
+        local checks = 0
+        Background.library_path = function()
+            checks = checks + 1
+            return "/library/background.jpg"
+        end
+        Background.paintScreenRegion = function() return true end
+        local config = _G.__ZEN_UI_PLUGIN.config
+        config.library_background = { enabled = true, path = "/library/background.jpg" }
+        local item = setmetatable({
+            menu = { name = "filemanager" }, width = 100, height = 150,
+            _zen_cover_frame = {},
+        }, { __index = MosaicMenu._zen_mosaic_item_class })
+        local tick = 100
+        local original_time = os.time
+        rawset(os, "time", function() return tick end)
+        local ok, err = pcall(function()
+            item:paintTo({}, 0, 0)
+            item:paintTo({}, 0, 0)
+            assert.are.equal(1, checks)
+            config.library_background.path = "/library/other.jpg"
+            item:paintTo({}, 0, 0)
+            assert.are.equal(2, checks)
+            tick = 101
+            item:paintTo({}, 0, 0)
+        end)
+        rawset(os, "time", original_time)
+        assert.is_true(ok, tostring(err))
+        assert.are.equal(3, checks)
+    end)
+
     it("bounds two-line folder name labels to their cover when title strips are off", function()
         _G.__ZEN_UI_PLUGIN.config.browser_folder_cover = { name_opaque = true }
         _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = true
@@ -880,16 +978,18 @@ describe("Zen renderer", function()
         assert.are.equal(1, freed)
     end)
 
-    it("dims selected mosaic book covers", function()
-        ZenSpec.replace("bookinfomanager", {
-            getBookInfo = function()
-                return { cover_fetched = true, has_cover = false }
-            end,
-            isCachedCoverInvalid = function() return false end,
-        })
-        ZenSpec.unload("modules/filebrowser/patches/zen_renderer")
+    it("keeps selected mosaic book covers visible", function()
+        render_reusable = true
+        fresh_metadata = {
+            title = "Book", cover_fetched = "Y", has_cover = "Y",
+            cover_w = 600, cover_h = 900,
+        }
+        require("apps/filemanager/filemanager").instance = {
+            selected_files = { ["/book.epub"] = true },
+        }
         require("modules/filebrowser/patches/zen_renderer")()
         local menu = {
+            name = "filemanager",
             item_table = { { title = "Book", is_file = true, path = "/book.epub", dim = true } },
             item_group = {}, layout = {}, items_to_update = {}, page = 1,
             perpage = 1, nb_cols = 2, item_margin = 1, item_width = 100,
@@ -899,7 +999,24 @@ describe("Zen renderer", function()
 
         MosaicMenu._updateItemsBuildUI(menu)
 
-        assert.is_true(menu.layout[1][1]._zen_cover_frame.dim)
+        local item = menu.layout[1][1]
+        assert.is_nil(item._zen_cover_frame.dim)
+        assert.is_false(item.file_deleted)
+        assert.is_true(cover_books[1].has_real_cover)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = true
+        local outline
+        item:paintTo({
+            paintRect = function() end,
+            paintBorder = function(_bb, ...) outline = { ... } end,
+        }, 0, 0)
+        assert.are.same({ 0, 0, 100, 150, 3, 0, 8 }, outline)
+        _G.__ZEN_UI_PLUGIN.config.features.browser_cover_rounded_corners = false
+        item:paintTo({
+            paintRect = function() end,
+            paintBorder = function(_bb, ...) outline = { ... } end,
+        }, 0, 0)
+        assert.are.same({ 0, 0, 100, 150, 3, 0, 0 }, outline)
+        require("apps/filemanager/filemanager").instance = nil
     end)
 
     it("paints status, page, and series badges at the configured scale", function()
@@ -1077,7 +1194,10 @@ describe("Zen renderer", function()
 
     it("honors finished dimming and the new-banner setting", function()
         require("modules/filebrowser/patches/zen_renderer")()
-        _G.__ZEN_UI_PLUGIN.config.browser_cover_badges = { dim_finished_books = true }
+        _G.__ZEN_UI_PLUGIN.config.browser_cover_badges = {
+            dim_finished_books = true,
+            show_mosaic_progress = true,
+        }
         local item_class = MosaicMenu._zen_mosaic_item_class
         local item = setmetatable({
             _zen_cover_frame = { dimen = { x = 0, y = 0, w = 100, h = 150 }, bordersize = 1 },
@@ -1087,14 +1207,16 @@ describe("Zen renderer", function()
             height = 400,
         }, { __index = item_class })
         local dimmed = 0
+        local badge_rects = 0
         local bb = {
-            paintRectRGB32 = function() end,
+            paintRectRGB32 = function() badge_rects = badge_rects + 1 end,
             paintRect = function() end,
             lightenRect = function() dimmed = dimmed + 1 end,
         }
 
         item:paintTo(bb, 0, 0)
         assert.are.equal(1, dimmed)
+        assert.is_true(badge_rects > 0)
         assert.are.equal(6, item._zen_cover_frame._zen_cover_border_color)
 
         _G.__ZEN_UI_PLUGIN.config.browser_cover_badges = { show_new_banner = true }

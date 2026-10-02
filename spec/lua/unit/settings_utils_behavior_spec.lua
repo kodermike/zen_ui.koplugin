@@ -78,6 +78,59 @@ describe("settings utilities", function()
         assert.are.equal("/books/last", Utils.get_current_dir())
     end)
 
+    it("uses the library layout for image pickers and falls back from classic to mosaic", function()
+        local modules = { "bookinfomanager", "covermenu", "listmenu", "mosaicmenu",
+            "common/cover_utils", "ui/widget/pathchooser" }
+        local originals = {}
+        for _i, name in ipairs(modules) do originals[name] = package.loaded[name] end
+        local mode = "list_only_meta"
+        local update = function() end
+        local close = function() end
+        local list_build = function() end
+        local mosaic_build = function() end
+        ZenSpec.replace("bookinfomanager", {
+            getSetting = function(_self, key)
+                if key == "filemanager_display_mode" then return mode end
+                return ({ nb_cols_portrait = 4, nb_rows_portrait = 5,
+                    nb_cols_landscape = 6, nb_rows_landscape = 7 })[key]
+            end,
+        })
+        ZenSpec.replace("covermenu", { updateItems = update, onCloseWidget = close })
+        ZenSpec.replace("listmenu", {
+            _recalculateDimen = list_build, _updateItemsBuildUI = list_build,
+        })
+        ZenSpec.replace("mosaicmenu", {
+            _recalculateDimen = mosaic_build, _updateItemsBuildUI = mosaic_build,
+        })
+        ZenSpec.replace("common/cover_utils", { getFilesPerPage = function() return 9 end })
+        ZenSpec.replace("ui/widget/pathchooser", {
+            new = function(_self, options) return options end,
+        })
+
+        local list = Utils.newImagePathChooser{ path = "/images" }
+        assert.are.equal("list", list.display_mode_type)
+        assert.are.equal(list_build, list._updateItemsBuildUI)
+        assert.are.equal(update, list.updateItems)
+        assert.are.equal(close, list.onCloseWidget)
+        assert.is_true(list._do_cover_images)
+        assert.is_true(list._do_filename_only)
+        assert.are.equal(9, list.files_per_page)
+
+        mode = "classic"
+        local mosaic = Utils.newImagePathChooser{ path = "/images" }
+        assert.are.equal("mosaic", mosaic.display_mode_type)
+        assert.are.equal(mosaic_build, mosaic._updateItemsBuildUI)
+        assert.is_true(mosaic._do_cover_images)
+        assert.are.same({ 4, 5, 6, 7 }, {
+            mosaic.nb_cols_portrait, mosaic.nb_rows_portrait,
+            mosaic.nb_cols_landscape, mosaic.nb_rows_landscape,
+        })
+
+        mode = "mosaic_text"
+        assert.are.equal("mosaic", Utils.newImagePathChooser{}.display_mode_type)
+        for _i, name in ipairs(modules) do package.loaded[name] = originals[name] end
+    end)
+
     it("prefers the active interface IPv4 address", function()
         ZenSpec.replace("ui/network/manager", { interface = "wlan0" })
         ZenSpec.replace("ffi/posix_h", {})

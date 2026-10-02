@@ -61,13 +61,18 @@ describe("folder cover context-menu integration", function()
         replace("ui/widget/pathchooser", deps.PathChooser or Widget)
         replace("ui/uimanager", deps.UIManager or {})
         replace("gettext", callable_gettext())
-        replace("common/book_status", {})
+        replace("common/archive_actions", deps.ArchiveActions or {
+            contextRow = function() end,
+        })
+        replace("common/book_status", deps.BookStatus or {})
         replace("config/manager", deps.ConfigManager or {})
         replace("common/folder_cover_files", deps.Files)
         replace("common/ui/folder_cover_picker", deps.FolderCoverPicker or {
             show = function() end,
         })
-        replace("common/paths", deps.paths or {})
+        local paths = deps.paths or {}
+        paths.isInThemedDir = paths.isInThemedDir or paths.isInHomeDir
+        replace("common/paths", paths)
         replace("common/shared_state", deps.SharedState or {})
         replace("common/inline_icon_map", {
             arrow_right = ">",
@@ -76,6 +81,7 @@ describe("folder cover context-menu integration", function()
             filename = "filename-icon",
             details = "details-icon",
             edit = "edit-icon",
+            more = "more-icon",
             read_status = "status-icon",
             refresh = "refresh-icon",
         })
@@ -151,6 +157,15 @@ describe("folder cover context-menu integration", function()
         end
     end
 
+    local function has_widget_text(widget, text)
+        if type(widget) ~= "table" then return false end
+        if widget.text == text then return true end
+        for _i, child in ipairs(widget) do
+            if has_widget_text(child, text) then return true end
+        end
+        return false
+    end
+
     before_each(function()
         saved_modules = {}
         original_plugin = rawget(_G, "__ZEN_UI_PLUGIN")
@@ -216,6 +231,36 @@ describe("folder cover context-menu integration", function()
         assert.are.equal("cover.jpeg", stock_calls[1].filename)
         assert.are.equal("book.epub", stock_calls[5].filename)
         assert.are.equal("pathchooser", stock_calls[6].name)
+    end)
+
+    it("hides regular folders without books matching the status filter", function()
+        local empty = { mandatory = "2 \u{F114} 0 \u{F016}" }
+        local matching = { mandatory = "1 \u{F016}" }
+        local FileChooser = {
+            show_filter = { status = { complete = true } },
+            show_file = function() return true end,
+            getList = function()
+                return { empty, matching }, { "finished.epub" }
+            end,
+        }
+        local FileManager = {
+            moveFile = function() return true end,
+            setupLayout = function() end,
+        }
+
+        install_stubs({
+            FileChooser = FileChooser,
+            FileManager = FileManager,
+            Files = { isManaged = function() return false end },
+        })
+        apply_patch()
+
+        local dirs, files = FileChooser.getList({ name = "filemanager" }, "/library", {})
+        assert.are.same({ matching }, dirs)
+        assert.are.same({ "finished.epub" }, files)
+
+        dirs = FileChooser.getList({ name = "pathchooser" }, "/library", {})
+        assert.are.same({ empty, matching }, dirs)
     end)
 
     it("keeps every path chooser traversable without changing its title bar", function()
@@ -610,11 +655,87 @@ describe("folder cover context-menu integration", function()
         assert.are.equal(6, home_rebuilds)
     end)
 
-    it("places metadata editing above Delete in the Edit submenu", function()
+    it("flashes only the painted context-menu cover and skips closed dialogs", function()
+        local scheduled, flashes = {}, {}
+        local top_widget
+        local opening_calls = 0
+        local ButtonDialog = widget_class()
+        function ButtonDialog:new(options)
+            options.onShow = function() opening_calls = opening_calls + 1 end
+            return options
+        end
+        local FileManager = { setupLayout = function() end, moveFile = function() end }
+        local chooser = { path = "/library", showFileDialog = function() end }
+        local fm = { file_chooser = chooser }
+        FileManager.instance = fm
+        install_stubs({
+            ButtonDialog = ButtonDialog,
+            FileChooser = { show_filter = {}, show_file = function() return true end },
+            FileManager = FileManager,
+            Files = { isManaged = function() return false end },
+            UIManager = {
+                show = function(_self, widget)
+                    top_widget = widget
+                    widget:onShow()
+                end,
+                tickAfterNext = function(_self, callback) scheduled[#scheduled + 1] = callback end,
+                getTopmostVisibleWidget = function() return top_widget end,
+                setDirty = function(_self, widget, mode, region, dither)
+                    flashes[#flashes + 1] = {
+                        widget = widget, mode = mode, region = region, dither = dither,
+                    }
+                end,
+            },
+            Cover = {
+                BORDER_SIZE = 1,
+                getRatio = function() return 2 / 3 end,
+                makeCover = function() return { paintTo = function() end }, 80, 120 end,
+            },
+            BookInfoManager = { getBookInfo = function() return { title = "Book", pages = 100 } end },
+            paths = {
+                getHomeDir = function() return "/library" end,
+                isInHomeDir = function() return true end,
+                isHomeRoot = function() return false end,
+                isPrimaryHomeRoot = function() return false end,
+            },
+        })
+        apply_patch()
+        FileManager.setupLayout(fm)
+
+        local items = {
+            { path = "/library/book.epub", is_file = true, _zen_collection_name = "Test" },
+            { path = "/library/folder", is_file = false },
+            { _zen_group_files = { "/library/book.epub" }, _zen_group_name = "Group" },
+        }
+        for index, item in ipairs(items) do
+            chooser:showFileDialog(item)
+            assert.are.equal(index, opening_calls)
+            assert.are.equal(index, #scheduled)
+            assert.are.equal(index - 1, #flashes)
+            local cover = top_widget._added_widgets[1][1][1]
+            cover.dimen = { x = 100, y = 200, w = 80, h = 120 }
+            scheduled[index]()
+            assert.are.same({ mode = "full", region = cover.dimen, dither = true }, flashes[index])
+        end
+
+        top_widget:onShow()
+        top_widget = nil
+        scheduled[#scheduled]()
+        assert.are.equal(3, #flashes)
+        chooser:showSortOrderDialog({ title = "Sort order" })
+        assert.are.equal(4, #scheduled)
+    end)
+
+    it("keeps inline icons in plugin actions and preserves Edit ordering", function()
         local shown = {}
         local details_options
         local editor_options
+        local editor_file
+        local plugin_args
+        local plugin_action_called = false
+        local refresh_action_built = false
         local refreshed = {}
+        local deleted_bookinfo
         local FileChooser = {
             show_filter = {},
             show_file = function() return true end,
@@ -628,10 +749,32 @@ describe("folder cover context-menu integration", function()
         local FileManager = {
             moveFile = function() return true end,
             setupLayout = function() end,
+            file_dialog_added_buttons = {
+                function()
+                    refresh_action_built = true
+                    return {{ text = "Refresh cached book information" }}
+                end,
+                function(file, is_file, book_props)
+                    plugin_args = { file, is_file, book_props }
+                    return {
+                        {
+                            text = "\u{F05F9}  Incognito",
+                            icon = "plugin.svg",
+                            callback = function() plugin_action_called = true end,
+                        },
+                        {
+                            text_func = function() return "\u{F140B}  Dynamic action" end,
+                        },
+                        { text = "\u{F048A}  ZenFM Send" },
+                    }
+                end,
+                function() error("broken plugin") end,
+                index = { coverbrowser_2 = 1 },
+            },
         }
         local bookinfo = {
             showFromBookDetails = function(_self, file, _props, options)
-                assert.are.equal("/library/book.epub", file)
+                editor_file = file
                 editor_options = options
             end,
         }
@@ -640,11 +783,26 @@ describe("folder cover context-menu integration", function()
             bookinfo = bookinfo,
         }
         FileManager.instance = file_manager
+        local context_menu_config = { allow_delete = true }
         _G.__ZEN_UI_PLUGIN = {
-            config = { context_menu = { allow_delete = true } },
+            config = { context_menu = context_menu_config },
         }
 
+        local ButtonDialog = widget_class()
+        function ButtonDialog:new(options)
+            options.buttontable = { buttons_layout = options.buttons }
+            for _i, row in ipairs(options.buttons) do
+                for _j, button in ipairs(row) do
+                    button.text = button.text_func and button.text_func() or button.text
+                    button.label_widget = { face = {}, free = function() end }
+                    button.label_container = { dimen = { w = 400, h = 40 } }
+                end
+            end
+            return options
+        end
+
         install_stubs({
+            ButtonDialog = ButtonDialog,
             FileChooser = FileChooser,
             FileManager = FileManager,
             Files = { isManaged = function() return false end },
@@ -664,6 +822,7 @@ describe("folder cover context-menu integration", function()
                 getBookInfo = function()
                     return { title = "Book", authors = "Author" }
                 end,
+                deleteBookInfo = function(_, file) deleted_bookinfo = file end,
             },
             BookDetails = {
                 showFile = function(_file, options) details_options = options end,
@@ -671,6 +830,12 @@ describe("folder cover context-menu integration", function()
             MetadataService = {
                 refreshLibrary = function(_file_manager, file)
                     refreshed[#refreshed + 1] = file
+                end,
+            },
+            SharedState = { get = function() end },
+            ArchiveActions = {
+                contextRow = function()
+                    return {{ text = "\u{F19C}  Archive" }}
                 end,
             },
             paths = {
@@ -689,6 +854,50 @@ describe("folder cover context-menu integration", function()
             _zen_collection_name = "Test",
         })
         local dialog = shown[#shown]
+        assert.is_nil(find_button(dialog, "Archive"))
+        assert.is_nil(find_button(dialog, "More"))
+        assert.is_nil(plugin_args)
+
+        context_menu_config.show_archive = true
+        context_menu_config.show_plugin_actions = true
+        file_chooser:showFileDialog({
+            path = "/library/book.epub",
+            is_file = true,
+            _zen_collection_name = "Test",
+        })
+        dialog = shown[#shown]
+        assert.matches("\u{F19C}", assert(find_button(dialog, "Archive")).text, 1, true)
+        local more = assert(find_button(dialog, "More"))
+        assert.matches("more-icon", more.text, 1, true)
+        more.callback()
+        local more_dialog = shown[#shown]
+        assert.is_false(refresh_action_built)
+        assert.is_nil(find_button(more_dialog, "Refresh cached book information"))
+        assert.are.equal("/library/book.epub", plugin_args[1])
+        assert.is_true(plugin_args[2])
+        assert.are.equal("Book", plugin_args[3].title)
+        assert.are.equal(3, #more_dialog.buttons)
+        assert.are.equal(1, #more_dialog.buttons[1])
+        assert.are.equal(1, #more_dialog.buttons[2])
+        assert.are.equal("\u{F05F9}  Incognito", more_dialog.buttons[1][1].text)
+        assert.are.equal("Incognito", more_dialog.buttons[1][1].label_widget.text)
+        assert.is_true(has_widget_text(more_dialog.buttons[1][1].label_container, "\u{F05F9}"))
+        assert.is_nil(more_dialog.buttons[1][1].icon)
+        assert.are.equal("left", more_dialog.buttons[1][1].align)
+        assert.are.equal("\u{F140B}  Dynamic action", more_dialog.buttons[2][1].text_func())
+        assert.are.equal("Dynamic action", more_dialog.buttons[2][1].label_widget.text)
+        assert.is_true(has_widget_text(more_dialog.buttons[2][1].label_container, "\u{F140B}"))
+        assert.are.equal("ZenFM Send", more_dialog.buttons[3][1].label_widget.text)
+        assert.is_true(has_widget_text(more_dialog.buttons[3][1].label_container, "\u{F048A}"))
+        assert(find_button(more_dialog, "Incognito")).callback()
+        assert.is_true(plugin_action_called)
+
+        file_chooser:showFileDialog({
+            path = "/library/book.epub",
+            is_file = true,
+            _zen_collection_name = "Test",
+        })
+        dialog = shown[#shown]
         assert(find_button(dialog, "Details")).callback()
         assert.is_nil(details_options.edit_callback)
         assert.is_false(details_options.home_context)
@@ -701,6 +910,7 @@ describe("folder cover context-menu integration", function()
             1, true)
         assert.matches("Delete", edit_dialog.buttons[#edit_dialog.buttons][1].text, 1, true)
         assert(find_button(edit_dialog, "Edit metadata")).callback()
+        assert.are.equal("/library/book.epub", editor_file)
         assert.is_table(editor_options)
         editor_options.on_renamed("/library/renamed.epub")
         editor_options.on_saved("/library/renamed.epub")
@@ -713,20 +923,367 @@ describe("folder cover context-menu integration", function()
 
         local kindle_refreshes = 0
         file_chooser:showFileDialog({
+            path = "/mnt/us/documents/kindle.kfx",
+            is_file = true,
+            _zen_home_context = true,
+            _zen_kindle_book = true,
+        })
+        assert.is_nil(find_button(shown[#shown], "Edit"))
+
+        file_chooser:showFileDialog({
             path = "/cache/kindle.epub",
             is_file = true,
             _zen_home_context = true,
             _zen_kindle_book = true,
+            _zen_kindle_processed = true,
             _zen_refresh = function() kindle_refreshes = kindle_refreshes + 1 end,
             _zen_extra_buttons = { {{ text = "Clear cache" }} },
         })
         local kindle_dialog = shown[#shown]
+        assert.is_true(has_widget_text(kindle_dialog._added_widgets[1], "Kindle Library"))
         assert.is_truthy(find_button(kindle_dialog, "Details"))
         assert.is_truthy(find_button(kindle_dialog, "Read status"))
         assert.is_truthy(find_button(kindle_dialog, "Clear cache"))
-        assert.is_nil(find_button(kindle_dialog, "Add to collection"))
-        assert.is_nil(find_button(kindle_dialog, "Edit"))
+        assert.is_truthy(find_button(kindle_dialog, "Add to collection"))
+        assert(find_button(kindle_dialog, "Edit")).callback()
+        local kindle_edit_dialog = shown[#shown]
+        assert.are.equal(2, #kindle_edit_dialog.buttons)
+        assert.is_nil(find_button(kindle_edit_dialog, "Cut"))
+        assert.is_nil(find_button(kindle_edit_dialog, "Copy"))
+        assert.is_nil(find_button(kindle_edit_dialog, "Paste"))
+        assert.is_nil(find_button(kindle_edit_dialog, "Delete"))
+        assert(find_button(kindle_edit_dialog, "Refresh")).callback()
+        assert.are.equal("/cache/kindle.epub", deleted_bookinfo)
+        assert(find_button(kindle_edit_dialog, "Edit metadata")).callback()
+        assert.are.equal("/cache/kindle.epub", editor_file)
+        assert.is_table(editor_options)
+        editor_options.on_saved("/cache/kindle.epub")
+        assert.are.equal("/cache/kindle.epub", refreshed[#refreshed])
         find_button(kindle_dialog, "Refresh").callback()
         assert.are.equal(1, kindle_refreshes)
+    end)
+
+    it("keeps selected copy pending and moves selected files through the directory chooser", function()
+        local shown, pasted = {}, {}
+        local tree = {
+            ["/"] = { "home", "etc", "proc", "mnt", "library" },
+            ["/home"] = { "user" }, ["/home/user"] = {},
+            ["/etc"] = {}, ["/proc"] = {},
+            ["/mnt"] = { "us" }, ["/mnt/us"] = {},
+            ["/library"] = { "home", "proc", "notes.sdr", "outside_link", "target" },
+            ["/library/home"] = {}, ["/library/proc"] = {},
+            ["/library/notes.sdr"] = {}, ["/library/target"] = {},
+            ["/library/outside_link"] = {},
+            ["/library/extra"] = {},
+            ["/external/books"] = { "novels" }, ["/external/books/novels"] = {},
+        }
+        local preview, preview_entries, preview_options = {}, nil, nil
+        local decorated_cover
+        local skip_second = false
+        local summaries, added = {}, {}
+        local chooser = {
+            path = "/library",
+            showFileDialog = function() end,
+            refreshPath = function() end,
+            changeToPath = function(self, path) self.path = path end,
+            onFileSelect = function() error("unexpected selection fallback") end,
+        }
+        local FileChooser = { show_filter = {}, show_file = function() return true end }
+        local PathChooser = widget_class()
+        function PathChooser:new(values)
+            return setmetatable(values, { __index = self })
+        end
+        function PathChooser:getMenuItemMandatory() end
+        function PathChooser:show_dir() return true end
+        function PathChooser:changeToPath(path) self.path = path end
+        local FileManager = {
+            setupLayout = function() end,
+            moveFile = function() return true end,
+            copyFile = function(self, file) self.clipboard = file end,
+            cutFile = function(self, file) self.clipboard = file end,
+        }
+        local fm = setmetatable({ file_chooser = chooser }, { __index = FileManager })
+        FileManager.instance = fm
+        function fm:onToggleSelectMode()
+            if self.selected_files then self.selected_files = nil
+            else self.selected_files = {} end
+        end
+        function fm:pasteSelectedFiles(overwrite, folder)
+            pasted[#pasted + 1] = {
+                files = {
+                    ["/library/a.epub"] = self.selected_files["/library/a.epub"],
+                    ["/library/b.epub"] = self.selected_files["/library/b.epub"],
+                },
+                cut = self.cutfile,
+                overwrite = overwrite,
+                folder = folder,
+            }
+            if skip_second then
+                self.selected_files["/library/a.epub"] = nil
+            else
+                for file in pairs(self.selected_files) do self.selected_files[file] = nil end
+                self:onToggleSelectMode()
+            end
+        end
+        install_stubs({
+            FileChooser = FileChooser,
+            FileManager = FileManager,
+            PathChooser = PathChooser,
+            Files = { isManaged = function() return false end, slotCount = function() return 0 end },
+            Cover = {
+                BORDER_SIZE = 1,
+                getMode = function() return "none" end,
+                getRatio = function() return 3 / 4 end,
+                makeCover = function(path, fake_chooser, options)
+                    preview_entries = fake_chooser:genItemTableFromPath(path)
+                    preview_options = options
+                    return preview
+                end,
+            },
+            paths = {
+                getHomeDir = function() return "/library" end,
+                isInThemedDir = function() return true end,
+                isHomeRoot = function() return false end,
+                isPrimaryHomeRoot = function() return false end,
+            },
+            ConfigManager = { get = function()
+                return { additional_home_dirs = { "/library/extra", "/external/books" } }
+            end },
+            ffiUtil = {
+                realpath = function(path)
+                    if path == "/library/outside_link" then return "/etc" end
+                    return path
+                end,
+                basename = function(path) return path:match("([^/]+)$") end,
+                dirname = function(path)
+                    local parent = path:match("^(.*)/[^/]+$")
+                    return parent and parent ~= "" and parent or "/"
+                end,
+                strcoll = function(a, b) return a < b end,
+                template = function(str, value) return str:gsub("%%1", tostring(value)) end,
+            },
+            UIManager = {
+                show = function(_self, widget) shown[#shown + 1] = widget end,
+                close = function() end,
+                setDirty = function() end,
+            },
+            SharedState = { get = function() end },
+            lfs = {
+                dir = function(path)
+                    local entries, index = tree[path] or {}, 0
+                    return function()
+                        index = index + 1
+                        return entries[index]
+                    end
+                end,
+                attributes = function(path, field)
+                    if tree[path] and field == "mode" then
+                        return "directory"
+                    end
+                end,
+            },
+            BookStatus = { acknowledgeNewVersion = function() end, invalidate = function() end },
+            ReadCollection = {
+                coll = { Favorites = {} },
+                default_collection_name = "Favorites",
+                isFileInCollection = function() return false end,
+                addItemsMultiple = function(_self, files)
+                    for file in pairs(files) do added[file] = true end
+                end,
+                write = function() end,
+            },
+        })
+        replace("common/utils", { resolveLocalIcon = function(_dir, name) return name end })
+        replace("modules/filebrowser/patches/home/widgets/cover_common", {
+            decorate_cover_frame = function(frame)
+                decorated_cover = frame
+                return frame
+            end,
+        })
+        replace("common/inline_icon_map", {
+            copy = "copy", move = "move", delete = "delete", clear = "clear",
+            read_status = "status", status = "unread", reading = "reading",
+            tbr = "tbr", on_hold = "on hold", finished = "finished",
+            arrow_right = ">",
+        })
+        local BookList = widget_class()
+        BookList.setBookInfoCacheProperty = function() end
+        replace("ui/widget/booklist", BookList)
+        replace("ui/widget/menu", widget_class())
+        replace("ui/widget/titlebar", widget_class())
+        replace("docsettings", {
+            open = function(_self, file)
+                return {
+                    file = file,
+                    readSetting = function() return {} end,
+                    delSetting = function() end,
+                }
+            end,
+        })
+        replace("apps/filemanager/filemanagerutil", {
+            saveSummary = function(doc, summary) summaries[doc.file] = summary.status end,
+        })
+        replace("common/tbr_index", {
+            collectionName = function() return "To Be Read" end,
+            setExplicit = function() end,
+            refreshPath = function() end,
+            collectionChanged = function() end,
+        })
+        replace("modules/filebrowser/patches/standalone_page", {
+            apply_background = function() end,
+        })
+        replace("ui/widget/confirmbox", {
+            new = function(_class, spec)
+                spec.addWidget = function() end
+                return spec
+            end,
+        })
+        replace("ui/widget/checkbutton", widget_class())
+        _G.__ZEN_UI_PLUGIN = {
+            config = {
+                context_menu = { allow_delete = true },
+                features = { browser_cover_rounded_corners = true },
+                uniform_cover_ratio = "3:4",
+            },
+        }
+        apply_patch()
+        fm:setupLayout()
+
+        local selected_item = { path = "/library/a.epub", is_file = true }
+        local cover = {}
+        local widget = {
+            entry = selected_item, _zen_cover_frame = cover, dimen = {},
+            update = function() error("mosaic selection rebuilt the cover") end,
+        }
+        chooser.layout = { { widget } }
+        fm.selected_files = {}
+        assert.is_true(chooser:onFileSelect(selected_item))
+        assert.is_nil(cover.dim)
+        assert.are.equal(cover, widget._zen_cover_frame)
+        assert.is_true(chooser:onFileSelect(selected_item))
+        assert.is_nil(cover.dim)
+
+        do
+            fm.selected_files = { ["/library/a.epub"] = true, ["/library/b.epub"] = true }
+            fm:onShowPlusMenu()
+            local header_row = shown[#shown]._added_widgets[1][1]
+            assert.is_nil(shown[#shown].title)
+            assert.is_nil(shown[#shown].item_table)
+            assert.are.equal(preview, header_row[1])
+            assert.are.equal("2 files", header_row[3][1].text)
+            assert.is_true(preview_options.is_folder)
+            assert.are.equal(105, preview_options.max_w)
+            assert.are.equal(preview, decorated_cover)
+            assert.are.same({ "/library/a.epub", "/library/b.epub" },
+                { preview_entries[1].path, preview_entries[2].path })
+            assert.is_true(find_button(shown[#shown], "Delete").enabled)
+            assert.is_truthy(find_button(shown[#shown], "Read status"))
+            assert.is_truthy(find_button(shown[#shown], "Add to collection"))
+            assert.is_truthy(find_button(shown[#shown], "Exit select mode"))
+            assert(find_button(shown[#shown], "Copy")).callback()
+            assert.is_nil(fm.selected_files)
+            assert.is_true(fm._zen_selected_clipboard.files["/library/a.epub"])
+            chooser:changeToPath("/library/target")
+            fm:pasteSelectedFilesFromZenClipboard(chooser.path)
+            shown[#shown].ok_callback()
+            assert.are.same({
+                files = { ["/library/a.epub"] = true, ["/library/b.epub"] = true },
+                cut = false,
+                overwrite = false,
+                folder = "/library/target",
+            }, pasted[#pasted])
+            assert.is_nil(fm._zen_selected_clipboard)
+        end
+
+        fm.selected_files = {}
+        assert.is_true(chooser:onFileSelect(selected_item))
+        fm.selected_files["/library/b.epub"] = true
+        fm:onShowPlusMenu()
+        assert(find_button(shown[#shown], "Move")).callback()
+        local destination_chooser = shown[#shown]
+        assert.is_true(destination_chooser.select_directory)
+        assert.are.equal("/library", destination_chooser.path)
+        assert.are.same({ "/library/extra", "/external/books" }, destination_chooser.extra_roots)
+        assert.are.equal("/library", destination_chooser.home_root)
+        table.insert(destination_chooser.extra_roots, "")
+        assert.is_true(fm.selected_files["/library/a.epub"])
+        assert.is_nil(cover.dim)
+        assert.are.equal(cover, widget._zen_cover_frame)
+        assert.is_nil(fm._zen_selected_clipboard)
+        assert.are.equal(1, #pasted)
+        local destinations = destination_chooser:genItemTableFromPath("/library")
+        assert.is_nil(destinations[1].is_go_up)
+        assert.are.equal("/library", destinations[1].path)
+        local listed = {}
+        for _i, entry in ipairs(destinations) do listed[entry.path] = true end
+        assert.is_true(listed["/library/home"])
+        assert.is_true(listed["/external/books"])
+        assert.is_true(listed["/external/books/novels"])
+        assert.is_nil(listed["/library/proc"])
+        assert.is_nil(listed["/library/notes.sdr"])
+        assert.is_nil(listed["/library/outside_link"])
+        assert.are.same({}, destination_chooser:genItemTableFromPath("/"))
+        assert.are.same({}, destination_chooser:genItemTableFromPath("/home"))
+        destination_chooser:onMenuSelect({ path = "/" })
+        destination_chooser:onMenuSelect({ path = "/library/outside_link" })
+        destination_chooser:changeToPath("/")
+        assert.are.equal("/library", destination_chooser.path)
+        destination_chooser:onMenuHold({ path = "/external/books" })
+        assert.are.equal("/external/books", destination_chooser.path)
+        local external = destination_chooser:genItemTableFromPath("/external/books")
+        assert.is_nil(external[1].is_go_up)
+        listed = {}
+        for _i, entry in ipairs(external) do listed[entry.path] = entry end
+        assert.is_true(listed["/library"].is_go_up)
+        destination_chooser:onMenuHold({ path = "/external/books/novels" })
+        assert.are.equal("/external/books/novels", destination_chooser.path)
+        destination_chooser:onMenuSelect(listed["/library"])
+        assert.are.equal("/library", destination_chooser.path)
+        destination_chooser:onMenuHold({ path = "/library/target" })
+        local target_items = destination_chooser:genItemTableFromPath("/library/target")
+        assert.is_true(target_items[1].is_go_up)
+        assert.are.equal("/library", target_items[1].path)
+        destination_chooser:onMenuSelect(target_items[1])
+        assert.are.equal("/library", destination_chooser.path)
+        assert.are.equal(1, #pasted)
+        assert.is_true(fm.selected_files["/library/a.epub"])
+        destination_chooser:onMenuSelect({ path = "/library/target" })
+        assert.are.same({
+            files = { ["/library/a.epub"] = true, ["/library/b.epub"] = true },
+            cut = true, overwrite = false, folder = "/library/target",
+        }, pasted[#pasted])
+        assert.is_nil(fm.selected_files)
+
+        fm.selected_files = { ["/library/a.epub"] = true, ["/library/b.epub"] = true }
+        fm:onShowPlusMenu()
+        assert(find_button(shown[#shown], "Copy")).callback()
+        skip_second = true
+        fm:pasteSelectedFilesFromZenClipboard("/library/target")
+        shown[#shown].ok_callback()
+        assert.is_nil(fm.selected_files)
+        assert.are.same({ ["/library/b.epub"] = true }, fm._zen_selected_clipboard.files)
+        skip_second = false
+        fm:pasteSelectedFilesFromZenClipboard("/library/target")
+        shown[#shown].ok_callback()
+        assert.are.same({ ["/library/b.epub"] = true }, pasted[#pasted].files)
+        assert.is_nil(fm._zen_selected_clipboard)
+
+        fm.selected_files = { ["/library/a.epub"] = true, ["/library/b.epub"] = true }
+        fm:onShowPlusMenu()
+        assert(find_button(shown[#shown], "Read status")).callback()
+        assert(find_button(shown[#shown], "Finished")).callback()
+        assert.are.same({ ["/library/a.epub"] = "complete", ["/library/b.epub"] = "complete" }, summaries)
+
+        fm:onShowPlusMenu()
+        assert(find_button(shown[#shown], "Add to collection")).callback()
+        local picker = shown[#shown]
+        picker.onMenuSelect(picker, picker.item_table[1])
+        assert.are.same({ ["/library/a.epub"] = true, ["/library/b.epub"] = true }, added)
+
+        fm.selected_files = { ["/library/a.epub"] = true }
+        fm:onShowPlusMenu()
+        assert.are.equal("1 file", shown[#shown]._added_widgets[1][1][3][1].text)
+        assert(find_button(shown[#shown], "Exit select mode")).callback()
+        assert.is_nil(fm.selected_files)
     end)
 end)

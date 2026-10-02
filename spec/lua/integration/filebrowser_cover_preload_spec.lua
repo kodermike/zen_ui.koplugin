@@ -65,6 +65,12 @@ describe("filebrowser cover preloading", function()
         end
     end
 
+    local function settle_page_turn(menu)
+        local update = assert(menu._zen_cover_page_update_fn)
+        require("ui/uimanager"):unschedule(update)
+        update()
+    end
+
     before_each(function()
         scheduled = {}
         scheduled_delays = {}
@@ -151,7 +157,10 @@ describe("filebrowser cover preloading", function()
             end,
             unschedule = function(_self, fn)
                 for index = #scheduled, 1, -1 do
-                    if scheduled[index] == fn then table.remove(scheduled, index) end
+                    if scheduled[index] == fn then
+                        table.remove(scheduled, index)
+                        table.remove(scheduled_delays, index)
+                    end
                 end
             end,
             setDirty = function(_self, widget, mode, region, dither)
@@ -1591,6 +1600,146 @@ describe("filebrowser cover preloading", function()
         assert.is_true(metric_value(measurements[1], "input_to_update_ms=") > 0)
     end)
 
+    it("coalesces rapid navigation before building or refreshing mosaic pages", function()
+        local CoverMenu = require("covermenu")
+        local FileChooser = require("ui/widget/filechooser")
+        local Menu = require("ui/widget/menu")
+        local UIManager = require("ui/uimanager")
+        local Geom = require("ui/geometry")
+        local built, hydrated = {}, {}
+        next_page = function(menu)
+            menu.page = menu.page + 1
+            CoverMenu.updateItems(menu, 1, true)
+            return true
+        end
+        previous_page = function(menu)
+            menu.page = menu.page - 1
+            FileChooser.updateItems(menu, 1, true)
+            return true
+        end
+        goto_page = function(menu, page)
+            menu.page = page
+            CoverMenu.updateItems(menu, 1, true)
+            return true
+        end
+        update_items = function(menu, select_number, no_recalculate_dimen)
+            local page = menu.page
+            built[#built + 1] = page
+            if page > 1 then
+                assert.are.equal(1, select_number)
+                assert.is_true(no_recalculate_dimen)
+            end
+            UIManager:setDirty(menu.show_parent, "ui")
+            menu._zen_cover_hydration_items[1] = {
+                menu = menu,
+                _zen_cover_hydration_queued = true,
+                dimen = Geom:new{ x = 20, y = 100, w = 90, h = 120 },
+                update = function(self)
+                    hydrated[#hydrated + 1] = page
+                    self._has_cover_image = true
+                end,
+            }
+            menu:_zen_request_cover_hydration()
+        end
+        require("modules/filebrowser/patches/cover_preload")()
+        local menu = {
+            item_table = {}, page = 1, page_num = 8, perpage = 1,
+            display_mode_type = "mosaic", show_parent = {},
+            _updateItemsBuildUI = function() end,
+            dimen = Geom:new{ x = 0, y = 0, w = 600, h = 800 },
+        }
+
+        CoverMenu.updateItems(menu)
+        local stale_hydration = scheduled[1]
+        assert.is_true(Menu.onNextPage(menu))
+        local stale_turn = menu._zen_cover_page_update_fn
+        assert.is_true(Menu.onNextPage(menu))
+        assert.are.equal(3, menu.page)
+        assert.is_true(FileChooser.onPrevPage(menu))
+        assert.are.equal(2, menu.page)
+        assert.is_true(CoverMenu.onGotoPage(menu, 5))
+        assert.are.same({ 1 }, built)
+        assert.are.equal(1, #dirty)
+        assert.are.equal(1, #scheduled)
+
+        stale_hydration()
+        stale_turn()
+        assert.are.same({}, hydrated)
+        assert.are.same({ 1 }, built)
+        assert.are.equal(1, #dirty)
+
+        table.remove(scheduled, 1)()
+        assert.are.same({ 1, 5 }, built)
+        assert.are.equal(2, #dirty)
+        assert.are.equal("jump_forward",
+            metric_value(last_measurement_named("Cover page updated"), "page_turn_direction="))
+        assert.is_nil(menu._zen_cover_turn_active)
+        table.remove(scheduled, 1)()
+        assert.are.same({ 5 }, hydrated)
+        assert.are.equal(3, #dirty)
+
+        Menu.onNextPage(menu)
+        local closed_turn = menu._zen_cover_page_update_fn
+        CoverMenu.onCloseWidget(menu)
+        closed_turn()
+        assert.are.same({ 1, 5 }, built)
+        assert.are.equal(3, #dirty)
+        assert.is_nil(menu._zen_cover_page_update_fn)
+    end)
+
+    it("waits for an ongoing contact so the next tap can supersede a queued page", function()
+        local CoverMenu = require("covermenu")
+        local Menu = require("ui/widget/menu")
+        local UIManager = require("ui/uimanager")
+        local contact = { down = true }
+        device.input = { gesture_detector = { active_contacts = { [0] = contact } } }
+        local built = {}
+        next_page = function(menu)
+            menu.page = menu.page + 1
+            CoverMenu.updateItems(menu)
+            return true
+        end
+        update_items = function(menu)
+            built[#built + 1] = menu.page
+            UIManager:setDirty(menu.show_parent, "ui")
+        end
+        require("modules/filebrowser/patches/cover_preload")()
+        local menu = {
+            item_table = {}, page = 1, page_num = 4, perpage = 1,
+            display_mode_type = "mosaic", show_parent = {},
+        }
+
+        CoverMenu.updateItems(menu)
+        assert.is_true(Menu.onNextPage(menu))
+        local stale = menu._zen_cover_page_update_fn
+        assert.are.equal(0, scheduled_delays[1])
+        settle_page_turn(menu)
+        assert.are.same({ 1 }, built)
+        assert.are.equal(1, #dirty)
+        assert.are.equal(1, #scheduled)
+        assert.are.equal(stale, menu._zen_cover_page_update_fn)
+
+        contact.down = false
+        assert.is_true(Menu.onNextPage(menu))
+        stale()
+        assert.are.same({ 1 }, built)
+        assert.are.equal(0, scheduled_delays[1])
+        settle_page_turn(menu)
+        assert.are.same({ 1, 3 }, built)
+        assert.are.equal(2, #dirty)
+        assert.is_nil(menu._zen_cover_page_update_fn)
+
+        contact.down = true
+        Menu.onNextPage(menu)
+        settle_page_turn(menu)
+        local closed = menu._zen_cover_page_update_fn
+        CoverMenu.onCloseWidget(menu)
+        closed()
+        assert.are.same({ 1, 3 }, built)
+        assert.are.equal(2, #dirty)
+        assert.are.equal(0, #scheduled)
+    end)
+
     it("tracks direct page jumps and scopes full-page mosaic refreshes", function()
         local CoverMenu = require("covermenu")
         local Menu = require("ui/widget/menu")
@@ -1622,6 +1771,7 @@ describe("filebrowser cover preloading", function()
         }
 
         Menu.onGotoPage(menu, 2)
+        settle_page_turn(menu)
 
         assert.are.equal("jump_forward",
             metric_value(measurements[1], "page_turn_direction="))
@@ -1629,6 +1779,107 @@ describe("filebrowser cover preloading", function()
         assert.are.same({ x = 0, y = 50, w = 600, h = 750 }, dirty[1].region)
         assert.is_true(dirty[1].dither)
         assert.are.equal(93.8, metric_value(measurements[1], "refresh_region_pct="))
+    end)
+
+    for _i, case in ipairs({
+        { name = "Kobo color", kobo = true, color = true, flash = true, covers = true, mode = "[partial]" },
+        { name = "Kobo monochrome", kobo = true, color = false, flash = true, covers = true, mode = "flashui" },
+        { name = "Kindle color", kobo = false, color = true, flash = true, covers = true, mode = "flashui" },
+        { name = "Kobo color with UI refreshes", kobo = true, color = true, flash = false, covers = true, mode = "[partial]" },
+        { name = "Kobo color without images", kobo = true, color = true, flash = true, covers = false, mode = "ui" },
+    }) do
+        it("uses " .. case.mode .. " for cached mosaic pages on " .. case.name, function()
+            local CoverMenu = require("covermenu")
+            local FileChooser = require("ui/widget/filechooser")
+            local Menu = require("ui/widget/menu")
+            local UIManager = require("ui/uimanager")
+            local BookInfoManager = require("bookinfomanager")
+            device.isKobo = function() return case.kobo end
+            device.hasColorScreen = function() return case.color end
+            BookInfoManager.getSetting = function(_self, key)
+                return key == "flash_ui_cover_images" and case.flash
+            end
+            next_page = function(menu)
+                menu.page = menu.page + 1
+                return CoverMenu.updateItems(menu)
+            end
+            previous_page = function(menu)
+                menu.page = menu.page - 1
+                return CoverMenu.updateItems(menu)
+            end
+            goto_page = function(menu, page)
+                menu.page = page
+                return CoverMenu.updateItems(menu)
+            end
+            update_items = function(menu)
+                UIManager:setDirty(menu.show_parent, function()
+                    local mode = case.covers and BookInfoManager:getSetting("flash_ui_cover_images")
+                        and "flashui" or "ui"
+                    return mode, menu.dimen, case.covers
+                end)
+            end
+            require("modules/filebrowser/patches/cover_preload")()
+            local menu = {
+                item_table = {
+                    { is_file = true, path = "/one.epub" },
+                    { is_file = true, path = "/two.epub" },
+                },
+                page = 1, page_num = 2, perpage = 1,
+                display_mode_type = "mosaic", show_parent = {},
+                dimen = { x = 0, y = 0, w = 600, h = 800 },
+                title_bar = { dimen = { h = 50 } },
+                cover_specs = { max_cover_w = 100, max_cover_h = 150 },
+            }
+
+            CoverMenu.updateItems(menu)
+            Menu.onNextPage(menu)
+            assert.are.equal(0, scheduled_delays[1])
+            settle_page_turn(menu)
+            FileChooser.onPrevPage(menu)
+            settle_page_turn(menu)
+            CoverMenu.onGotoPage(menu, 2)
+            settle_page_turn(menu)
+
+            assert.are.equal(4, #dirty)
+            for index, call in ipairs(dirty) do
+                assert.are.equal(case.mode, call.mode)
+                assert.are.equal(case.covers, call.dither)
+                assert.are.same(index == 1 and menu.dimen
+                    or { x = 0, y = 50, w = 600, h = 750 }, call.region)
+            end
+        end)
+    end
+
+    it("selects the Kobo color waveform when painting reveals image content", function()
+        local CoverMenu = require("covermenu")
+        local UIManager = require("ui/uimanager")
+        local refresh_callback
+        device.isKobo = function() return true end
+        device.hasColorScreen = function() return true end
+        UIManager.setDirty = function(_self, _widget, callback)
+            refresh_callback = callback
+        end
+        update_items = function(menu)
+            UIManager:setDirty(menu.show_parent, function()
+                return "ui", menu.dimen, false
+            end)
+        end
+        require("modules/filebrowser/patches/cover_preload")()
+        local menu = {
+            item_table = { { is_file = true, path = "/book.epub" } },
+            page = 1, page_num = 1, perpage = 1,
+            display_mode_type = "mosaic", show_parent = { dithered = false },
+            dimen = { x = 0, y = 0, w = 600, h = 800 },
+            cover_specs = { max_cover_w = 100, max_cover_h = 150 },
+        }
+
+        CoverMenu.updateItems(menu)
+        menu.show_parent.dithered = true
+        local mode, region, dither = refresh_callback()
+
+        assert.are.equal("[partial]", mode)
+        assert.are.same(menu.dimen, region)
+        assert.is_true(dither)
     end)
 
     it("reveals direct page jumps before hydrating cold covers", function()
@@ -1675,6 +1926,9 @@ describe("filebrowser cover preloading", function()
         }
 
         Menu.onGotoPage(menu, 1)
+        assert.are.equal(0, #dirty)
+        assert.are.equal(0, scheduled_delays[1])
+        settle_page_turn(menu)
 
         assert.are.equal(1, #dirty)
         assert.are.same({}, hydrated)
@@ -1730,6 +1984,9 @@ describe("filebrowser cover preloading", function()
 
         Menu.onNextPage(menu)
 
+        assert.are.equal(0, #dirty)
+        assert.are.equal(0, scheduled_delays[1])
+        settle_page_turn(menu)
         assert.are.equal(1, #dirty)
         assert.are.same({}, hydrated)
         assert.are.equal("immediate_turn",
@@ -1775,6 +2032,7 @@ describe("filebrowser cover preloading", function()
         CoverMenu.updateItems(menu)
         dirty = {}
         Menu.onNextPage(menu)
+        settle_page_turn(menu)
 
         assert.are.equal(1, #dirty)
         assert.are.same({ x = 0, y = 50, w = 600, h = 430 }, dirty[1].region)
@@ -2779,35 +3037,52 @@ describe("filebrowser cover preloading", function()
         assert.are.same({}, dirty)
     end)
 
-    it("refreshes the full color screen after cover hydration", function()
-        local CoverMenu = require("covermenu")
-        local Geom = require("ui/geometry")
-        device.hasColorScreen = function() return true end
-        update_items = function(menu)
-            menu._zen_cover_hydration_items[1] = {
-                menu = menu,
-                _zen_cover_hydration_queued = true,
-                dimen = Geom:new{ x = 10, y = 20, w = 90, h = 120 },
-                update = function(self) self._has_cover_image = true end,
+    for _i, case in ipairs({
+        { name = "Kobo cover flashes", kobo = true, flash = true, mode = "[partial]" },
+        { name = "Kindle cover flashes", kobo = false, flash = true, mode = "flashui" },
+        { name = "Kobo UI refreshes", kobo = true, flash = false, mode = "[partial]" },
+    }) do
+        it("uses " .. case.mode .. " after hydration with " .. case.name, function()
+            local CoverMenu = require("covermenu")
+            local Geom = require("ui/geometry")
+            device.isKobo = function() return case.kobo end
+            device.hasColorScreen = function() return true end
+            require("bookinfomanager").getSetting = function(_self, key)
+                return key == "flash_ui_cover_images" and case.flash
+            end
+            update_items = function(menu)
+                menu._zen_cover_hydration_items[1] = {
+                    menu = menu,
+                    _zen_cover_hydration_queued = true,
+                    dimen = Geom:new{ x = 10, y = 20, w = 90, h = 120 },
+                    update = function(self) self._has_cover_image = true end,
+                }
+                menu:_zen_request_cover_hydration()
+            end
+            require("modules/filebrowser/patches/cover_preload")()
+            local menu = {
+                item_table = { { is_file = true, path = "/book.epub" } },
+                page = 1, page_num = 1, perpage = 1,
+                display_mode_type = "mosaic", show_parent = {},
+                dimen = Geom:new{ x = 0, y = 0, w = 600, h = 800 },
+                cover_specs = { max_cover_w = 100, max_cover_h = 150 },
             }
-            menu:_zen_request_cover_hydration()
-        end
-        require("modules/filebrowser/patches/cover_preload")()
-        local menu = {
-            item_table = { { is_file = true, path = "/book.epub" } },
-            page = 1, page_num = 1, perpage = 1,
-            display_mode_type = "mosaic", show_parent = {},
-            dimen = Geom:new{ x = 0, y = 0, w = 600, h = 800 },
-            cover_specs = { max_cover_w = 100, max_cover_h = 150 },
-        }
 
-        CoverMenu.updateItems(menu)
-        table.remove(scheduled, 1)()
+            CoverMenu.updateItems(menu)
+            table.remove(scheduled, 1)()
 
-        assert.is_nil(dirty[1].region)
-        assert.is_true(dirty[1].dither)
-        assert.are.equal(100, metric_value(measurements[#measurements], "region_pct="))
-    end)
+            assert.are.equal(1, #dirty)
+            assert.are.equal(case.mode, dirty[1].mode)
+            if case.kobo then
+                assert.are.same({ x = 10, y = 20, w = 90, h = 120 }, dirty[1].region)
+            else
+                assert.is_nil(dirty[1].region)
+            end
+            assert.is_true(dirty[1].dither)
+            assert.are.equal(case.kobo and 2.3 or 100,
+                metric_value(measurements[#measurements], "region_pct="))
+        end)
+    end
 
     it("restarts extracted-cover polling after returning from Home", function()
         local CoverMenu = require("covermenu")
@@ -2860,11 +3135,9 @@ describe("filebrowser cover preloading", function()
         update_items = function(menu)
             local item = { filepath = "/pending.epub" }
             menu.items_to_update = { item }
+            local files_to_index = { { filepath = item.filepath, cover_specs = menu.cover_specs } }
             UIManager:nextTick(function()
-                BookInfoManager:extractInBackground({ {
-                    filepath = item.filepath,
-                    cover_specs = menu.cover_specs,
-                } })
+                BookInfoManager:extractInBackground(files_to_index)
             end)
             menu.items_update_action = function() end
         end
@@ -3009,11 +3282,9 @@ describe("filebrowser cover preloading", function()
                 dimen = Geom:new{ x = 10, y = 20, w = 90, h = 120 },
             }
             menu.items_to_update = { item }
+            local files_to_index = { { filepath = item.filepath, cover_specs = menu.cover_specs } }
             UIManager:nextTick(function()
-                BookInfoManager:extractInBackground({ {
-                    filepath = item.filepath,
-                    cover_specs = menu.cover_specs,
-                } })
+                BookInfoManager:extractInBackground(files_to_index)
             end)
             menu.items_update_action = function()
                 assert.are.same({ item.filepath }, decode_drops)
@@ -3061,11 +3332,9 @@ describe("filebrowser cover preloading", function()
                 dimen = Geom:new{ x = 10, y = 20, w = 90, h = 120 },
             }
             menu.items_to_update = { item }
+            local files_to_index = { { filepath = path, cover_specs = menu.cover_specs } }
             UIManager:nextTick(function()
-                BookInfoManager:extractInBackground({ {
-                    filepath = path,
-                    cover_specs = menu.cover_specs,
-                } })
+                BookInfoManager:extractInBackground(files_to_index)
             end)
             menu.items_update_action = function()
                 decoded[path] = true
@@ -3204,11 +3473,12 @@ describe("filebrowser cover preloading", function()
     end)
 
     it("coalesces rapid page changes before starting extraction", function()
-        local launches = 0
+        local BookInfoManager = require("bookinfomanager")
         local UIManager = require("ui/uimanager")
         update_items = function()
+            local files_to_index = { { filepath = "/current.epub" } }
             UIManager:nextTick(function()
-                launches = launches + 1
+                BookInfoManager:extractInBackground(files_to_index)
             end)
         end
         local CoverMenu = require("covermenu")
@@ -3227,18 +3497,45 @@ describe("filebrowser cover preloading", function()
         assert.are.equal(1, #scheduled)
         table.remove(scheduled, 1)()
 
-        assert.are.equal(1, launches)
+        assert.are.equal(1, #extraction_launches)
+    end)
+
+    it("keeps extraction scheduled when a short page also requests a repaint", function()
+        local BookInfoManager = require("bookinfomanager")
+        local UIManager = require("ui/uimanager")
+        local repaints = 0
+        update_items = function()
+            local files_to_index = { { filepath = "/archive/book.epub" } }
+            UIManager:nextTick(function()
+                BookInfoManager:extractInBackground(files_to_index)
+            end)
+            UIManager:nextTick(function() repaints = repaints + 1 end)
+        end
+        local CoverMenu = require("covermenu")
+        require("modules/filebrowser/patches/cover_preload")()
+        local menu = {
+            item_table = { { is_file = true, path = "/archive/book.epub" } },
+            page = 1, page_num = 1, perpage = 9,
+            display_mode_type = "mosaic",
+            cover_specs = { max_cover_w = 100, max_cover_h = 150 },
+        }
+
+        CoverMenu.updateItems(menu)
+        assert.are.equal(1, repaints)
+        assert.are.equal(0, #extraction_launches)
+        assert.are.equal(1, #scheduled)
+        table.remove(scheduled, 1)()
+        assert.are.equal(1, #extraction_launches)
+        assert.are.equal("/archive/book.epub", extraction_launches[1][1].filepath)
     end)
 
     it("keeps the active extraction and replaces stale queued pages", function()
         local BookInfoManager = require("bookinfomanager")
         local UIManager = require("ui/uimanager")
         update_items = function(menu)
+            local files_to_index = { { filepath = menu.path, cover_specs = menu.cover_specs } }
             UIManager:nextTick(function()
-                BookInfoManager:extractInBackground({ {
-                    filepath = menu.path,
-                    cover_specs = menu.cover_specs,
-                } })
+                BookInfoManager:extractInBackground(files_to_index)
             end)
         end
         local CoverMenu = require("covermenu")

@@ -32,9 +32,11 @@ local function apply_partial_page_repaint()
         if short_page and not pending then
             pending = true
             local widget = self
+            local generation = self._zen_cover_hydration_generation
             UIManager:nextTick(function()
                 pending = false
-                if widget._zen_no_forced_repaint then return end
+                if widget._zen_no_forced_repaint or (widget.page or 1) ~= page
+                        or widget._zen_cover_hydration_generation ~= generation then return end
                 UIManager:setDirty(nil, "full")
                 UIManager:forceRePaint()
             end)

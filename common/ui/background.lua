@@ -187,6 +187,7 @@ local function get_widget(path, w, h)
         center_y_ratio = 0.5,
         file_do_cache = false,
         alpha = true,
+        original_in_nightmode = false,
     }
     _cache[key] = iw
     return iw
@@ -200,7 +201,7 @@ function M.paint(bb, x, y, w, h, path)
         local iw = get_widget(path, w, h)
         if not iw then return end
         iw:paintTo(bb, x, y)
-        if Screen.night_mode then
+        if Screen.night_mode and not M.library_invert_with_dark_mode() then
             bb:invertRect(x, y, w, h)
         end
         painted = true
@@ -212,15 +213,17 @@ function M.paint(bb, x, y, w, h, path)
 end
 
 local function get_screen_buffer(path, w, h, bb_type)
-    if not ImageWidget or not file_exists(path) or w <= 0 or h <= 0 then
+    if not ImageWidget or w <= 0 or h <= 0 then
         return nil
     end
     local night_key = Screen.night_mode and "night" or "day"
     local opacity = M.library_opacity()
-    local key = string.format("%s|%d|%d|%s|%s|%d", path, w, h,
-        tostring(bb_type), night_key, opacity)
+    local preinvert = Screen.night_mode and not M.library_invert_with_dark_mode()
+    local key = string.format("%s|%d|%d|%s|%s|%d|%s", path, w, h,
+        tostring(bb_type), night_key, opacity, tostring(preinvert))
     local cached = _buffer_cache[key]
     if cached then return cached end
+    if not file_exists(path) then return nil end
 
     local out
     local ok = pcall(function()
@@ -229,12 +232,12 @@ local function get_screen_buffer(path, w, h, bb_type)
         local iw = get_widget(path, w, h)
         if not iw then error("no background widget") end
         iw:paintTo(out, 0, 0)
-        if Screen.night_mode then
+        if preinvert then
             out:invertRect(0, 0, w, h)
         end
         if opacity < 100 then
             local fade = 1 - opacity / 100
-            if Screen.night_mode then
+            if preinvert then
                 out:darkenRect(0, 0, w, h, fade)
             else
                 out:lightenRect(0, 0, w, h, fade)
@@ -346,6 +349,12 @@ function M.library_opacity(plugin)
     local bg = type(cfg) == "table" and cfg.library_background
     local opacity = type(bg) == "table" and tonumber(bg.opacity) or 100
     return math.max(0, math.min(100, math.floor(opacity + 0.5)))
+end
+
+function M.library_invert_with_dark_mode(plugin)
+    local cfg = library_config(plugin)
+    local bg = type(cfg) == "table" and cfg.library_background
+    return type(bg) ~= "table" or bg.invert_with_dark_mode ~= false
 end
 
 function M.library_path(plugin)

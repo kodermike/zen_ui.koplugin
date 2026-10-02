@@ -112,6 +112,7 @@ describe("navbar settings", function()
         })
         ZenSpec.replace("common/paths", {
             getHomeDir = function() return "/home" end,
+            getArchiveDir = function() end,
         })
         ZenSpec.replace("util", {
             splitFilePathName = function(path)
@@ -140,6 +141,9 @@ describe("navbar settings", function()
             end,
         })
         ZenSpec.replace("common/dispatcher_menu", {
+            addSubMenu = function(dispatcher, ...)
+                return dispatcher:addSubMenu(...)
+            end,
             wrap = function(_items, _caller, on_update)
                 dispatcher_update = on_update
             end,

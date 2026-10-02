@@ -267,6 +267,45 @@ describe("home featured widget", function()
         assert.are.equal(book.path, opened)
     end)
 
+    it("registers only its embedded status row for minute repaint", function()
+        local refresh
+        local repaint_widget
+        local status_builds = 0
+        local expected_regions = {{ x = 4, y = 0, w = 20, h = 14 }}
+        local Featured = require("modules/filebrowser/patches/home/widgets/featured_common")
+        Featured.build({
+            width = 600,
+            height = 220,
+            module_cfg = { show_status_bar = true },
+            data = {
+                getFeaturedBook = function()
+                    return { path = "/library/alpha.epub", title = "Alpha", status = "new" }
+                end,
+            },
+            buildStatusRow = function(width)
+                status_builds = status_builds + 1
+                return widget_class("status"):new{ width = width, height = 14 }
+            end,
+            statusRowRefreshRegions = function(previous, current)
+                assert.is_table(previous)
+                assert.is_table(current)
+                return expected_regions
+            end,
+            registerClockRefresh = function(callback, target)
+                refresh = callback
+                repaint_widget = target
+            end,
+        }, "recently_read")
+
+        assert.is_function(refresh)
+        assert.are.equal("ui/widget/container/framecontainer", repaint_widget.kind)
+        assert.are.equal(14, repaint_widget.height)
+        local did_refresh, regions = refresh({ "time", "battery" })
+        assert.is_true(did_refresh)
+        assert.are.equal(expected_regions, regions)
+        assert.are.equal(2, status_builds)
+    end)
+
     it("caps the cover width and keeps the default layout at cover height", function()
         local Featured = require("modules/filebrowser/patches/home/widgets/featured_common")
         local content_bounds
@@ -602,6 +641,37 @@ describe("home featured widget", function()
             end
         end
         assert.equals(2, labels)
+    end)
+
+    it("uses saved progress with stable page labels", function()
+        local BookProgress = require("common/ui/book_progress")
+        local progress_bar = spy.on(BookProgress, "bar")
+        local Featured = require("modules/filebrowser/patches/home/widgets/featured_common")
+        Featured.build({
+            width = 600,
+            height = 220,
+            module_cfg = { progress_meta = { left = "percent", right = "current_total" } },
+            data = {
+                getFeaturedBook = function()
+                    return {
+                        path = "/library/alpha.epub",
+                        title = "Alpha",
+                        status = "reading",
+                        percent = 0.25,
+                        stable_current_page = 45,
+                        stable_pages = 120,
+                        stable_current_label = "45",
+                        stable_last_label = "120",
+                    }
+                end,
+            },
+        }, "recently_read")
+
+        assert.is_true(has_text("25%"))
+        assert.is_true(has_text("45 / 120"))
+        assert.spy(progress_bar).was_called_with(0.25,
+            progress_bar_width("25%", "45 / 120"),
+            progress_bar_height("25%", "45 / 120"))
     end)
 
     it("hides the complete progress row when disabled", function()

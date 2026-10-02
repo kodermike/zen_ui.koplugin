@@ -45,7 +45,7 @@ describe("status bar settings", function()
         replace("common/ui/icon_menu_item", {
             decorate = function(item) return item end,
         })
-        replace("common/bluetooth", { isAvailable = function() return false end })
+        replace("modules/menu/bluetooth/bluetooth", { isAvailable = function() return false end })
         replace("common/date_format", {
             format = function(format)
                 return ({
@@ -112,7 +112,7 @@ describe("status bar settings", function()
 
         assert.are.same({ "time" }, config.status_bar.left_order)
         assert.are.same({}, config.status_bar.center_order)
-        assert.are.same({ "wifi", "battery" }, config.status_bar.right_order)
+        assert.are.same({ "bluetooth", "wifi", "battery" }, config.status_bar.right_order)
         assert.is_true(page.checked_func())
     end)
 

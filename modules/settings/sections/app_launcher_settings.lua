@@ -4,10 +4,13 @@ local UIManager = require("ui/uimanager")
 local icons = require("common/inline_icon_map")
 local IconItem = require("common/ui/icon_menu_item")
 local icon_utils = require("common/utils")
+local plugin_root = require("common/plugin_root")
 
 local Model = require("modules/menu/app_launcher/model")
+local ActionFilter = require("modules/menu/app_launcher/action_filter")
 local NativeMenu = require("modules/menu/app_launcher/native_menu")
 local PagePlan = require("modules/menu/app_launcher/page_plan")
+local BookSwitcherPage = require("modules/menu/app_launcher/book_switcher_page")
 local PluginScan = require("modules/menu/app_launcher/plugin_scan")
 local DispatcherMenu = require("common/dispatcher_menu")
 local Destination = require("common/library_destination")
@@ -529,13 +532,14 @@ function M.build(ctx)
                     add_plugin(folder, touch_menu)
                 end,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("Add KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = function(touch_menu)
                     add_koreader_menu(folder, touch_menu)
                 end,
-            }, icons.open_menu),
+            },
             IconItem.decorate({
                 text = _("Open folder"),
                 keep_menu_open = true,
@@ -576,13 +580,14 @@ function M.build(ctx)
                     add_plugin(folder, touch_menu)
                 end,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = function(touch_menu)
                     add_koreader_menu(folder, touch_menu)
                 end,
-            }, icons.koreader_menu),
+            },
         }
         if not folder then
             items[#items + 1] = IconItem.decorate({
@@ -624,7 +629,7 @@ function M.build(ctx)
         if not ok_disp then return nil end
         local dispatch_items = {}
         local caller = {}
-        Dispatcher:addSubMenu(caller, dispatch_items, entry, "action")
+        DispatcherMenu.addSubMenu(Dispatcher, caller, dispatch_items, entry, "action")
         wrap_dispatch_callbacks(dispatch_items, caller, function(touch_menu)
             sync_action_label(entry)
             if is_draft_entry(entry) then
@@ -633,7 +638,7 @@ function M.build(ctx)
                 save_app_launcher()
             end
             if touch_menu and touch_menu.updateItems then
-                touch_menu:updateItems(1)
+                touch_menu:updateItems()
             end
         end)
         return IconItem.decorate({
@@ -852,6 +857,19 @@ function M.build(ctx)
             add_label_item()
             add_icon_item()
         end
+        if entry.type ~= "break" then
+            items[#items + 1] = IconItem.decorate({
+                text = _("Reader action"),
+                checked_func = function()
+                    return ActionFilter.is_reader_entry(Dispatcher, entry)
+                end,
+                callback = function(touch_menu)
+                    entry.reader_action = not ActionFilter.is_reader_entry(Dispatcher, entry)
+                    if not is_draft_entry(entry) then save_app_launcher() end
+                    if touch_menu then touch_menu:updateItems(1) end
+                end,
+            }, icons.settings_reader)
+        end
         if not is_draft_entry(entry) then
             local move_items = build_move_items(entry, parent)
             for _i, item in ipairs(move_items) do
@@ -988,6 +1006,38 @@ function M.build(ctx)
                     end,
                     callback = function()
                         cfg.book_switcher_reader_only = cfg.book_switcher_reader_only ~= true
+                        save_app_launcher()
+                    end,
+                },
+                {
+                    text_func = function()
+                        return _("Max books shown: ")
+                            .. tostring(BookSwitcherPage.normalizeCount(cfg.book_switcher_count))
+                    end,
+                    keep_menu_open = true,
+                    callback = function(touch_menu)
+                        local SpinWidget = require("ui/widget/spinwidget")
+                        UIManager:show(SpinWidget:new{
+                            title_text = _("Max books shown"),
+                            value = BookSwitcherPage.normalizeCount(cfg.book_switcher_count),
+                            value_min = 1,
+                            value_max = 8,
+                            default_value = BookSwitcherPage.BOOK_COUNT,
+                            callback = function(spin)
+                                cfg.book_switcher_count = spin.value
+                                save_app_launcher()
+                                if touch_menu and touch_menu.updateItems then touch_menu:updateItems() end
+                            end,
+                        })
+                    end,
+                },
+                {
+                    text = _("Hide finished books"),
+                    checked_func = function()
+                        return cfg.book_switcher_hide_finished ~= false
+                    end,
+                    callback = function()
+                        cfg.book_switcher_hide_finished = cfg.book_switcher_hide_finished == false
                         save_app_launcher()
                     end,
                 },

@@ -16,6 +16,7 @@ describe("library settings", function()
         "apps/filemanager/filemanager",
         "fontlist",
         "ui/font",
+        "ffi/util",
         "ui/widget/confirmbox",
         "ui/widget/fontchooser",
         "ui/widget/infomessage",
@@ -46,6 +47,10 @@ describe("library settings", function()
         ZenSpec.replace("modules/settings/zen_settings_apply", {})
         ZenSpec.replace("modules/settings/zen_settings_utils", {
             buildColorSubMenu = function() return {} end,
+            newImagePathChooser = function(options)
+                options._image_layout = true
+                return options
+            end,
         })
         ZenSpec.unload("common/library_font_path")
         ZenSpec.unload("modules/settings/sections/library_settings")
@@ -300,13 +305,15 @@ describe("library settings", function()
     end)
 
     it("rebuilds Home when the folder cover mode changes", function()
-        local scheduled
+        local deferred
         local saves = 0
         local refreshes = 0
         local rebuilds = 0
-        package.loaded["ui/uimanager"].scheduleIn = function(_self, delay, callback)
-            scheduled = { delay = delay, callback = callback }
-        end
+        package.loaded["modules/settings/zen_settings_apply"].defer_until_settings_close =
+            function(key, callback)
+                assert.are.equal("home_rebuild", key)
+                deferred = callback
+            end
         package.loaded["common/shared_state"].get = function()
             return { rebuildActive = function() rebuilds = rebuilds + 1 end }
         end
@@ -346,20 +353,19 @@ describe("library settings", function()
         assert.are.equal(1, saves)
         assert.are.equal(1, refreshes)
         assert.are.equal(0, rebuilds)
-        assert.are.equal(0.25, scheduled.delay)
+        assert.is_function(deferred)
 
-        scheduled.callback()
+        deferred()
         assert.are.equal(1, rebuilds)
     end)
 
     it("rebuilds Home when spine lines or rounded corners change", function()
-        local scheduled
+        local deferred
         local saves = 0
         local refreshes = 0
         local rebuilds = 0
-        package.loaded["ui/uimanager"].scheduleIn = function(_self, delay, callback)
-            scheduled = { delay = delay, callback = callback }
-        end
+        package.loaded["modules/settings/zen_settings_apply"].defer_until_settings_close =
+            function(_key, callback) deferred = callback end
         package.loaded["common/shared_state"].get = function()
             return { rebuildActive = function() rebuilds = rebuilds + 1 end }
         end
@@ -393,12 +399,12 @@ describe("library settings", function()
         end
 
         find_item(items, "Show spine lines").callback()
-        assert.are.equal(0.25, scheduled.delay)
-        scheduled.callback()
+        assert.is_function(deferred)
+        deferred()
 
         find_item(items, "Rounded cover corners").callback()
-        assert.are.equal(0.25, scheduled.delay)
-        scheduled.callback()
+        assert.is_function(deferred)
+        deferred()
 
         assert.is_true(config.browser_folder_cover.show_spine_lines)
         assert.is_false(config.features.browser_cover_rounded_corners)
@@ -450,37 +456,40 @@ describe("library settings", function()
         assert.are.equal(1, saves)
     end)
 
-    it("resolves portable Library font paths for the chooser and stores them relatively", function()
-        local chooser
+    it("lists Library fonts inside settings and stores portable paths", function()
         local name_path
         local saves = 0
         local plugin_root = assert(require("common/plugin_root"))
         local font_path = "fonts/hyperreadable/Hyperreadable-Regular.ttf"
         local resolved_font_path = plugin_root .. "/" .. font_path
+        local selected = plugin_root .. "/fonts/hyperreadable/Hyperreadable-Bold.ttf"
         local stock_font_path = "./fonts/noto/NotoSans-Regular.ttf"
-        package.loaded["ui/uimanager"].show = function(_self, widget)
-            chooser = widget
-        end
+        local external_path = "/mnt/fonts/External-Regular.ttf"
         package.loaded["ui/uimanager"].scheduleIn = function() end
         package.loaded["modules/settings/zen_settings_apply"].reinit_filemanager = function() end
         package.loaded["modules/settings/zen_settings_apply"].prompt_restart = function() end
         ZenSpec.replace("ui/widget/fontchooser", {
             getFontNameText = function(path)
                 name_path = path
-                return "Hyperreadable"
+                return path:match("([^/]+)$")
             end,
             isFontRegistered = function(path)
                 return path == resolved_font_path or path == stock_font_path
+                    or path == selected or path == external_path
             end,
-            new = function(_self, options) return options end,
         })
         ZenSpec.replace("ui/font", {
             fontmap = { cfont = "NotoSans-Regular.ttf" },
         })
+        ZenSpec.replace("ffi/util", {
+            strcoll = function(a, b) return a < b end,
+        })
         ZenSpec.replace("fontlist", {
             fontinfo = {
+                [resolved_font_path] = {},
+                [selected] = {},
                 [stock_font_path] = {},
-                ["/external/Unavailable-Regular.ttf"] = {},
+                [external_path] = {},
             },
         })
         ZenSpec.replace("apps/filemanager/filemanager", {})
@@ -510,35 +519,43 @@ describe("library settings", function()
             end
         end
         assert.is_not_nil(font_item)
-        assert.are.equal("Font: Hyperreadable", font_item.text_func())
+        assert.are.equal("Font: Hyperreadable-Regular.ttf", font_item.text_func())
         assert.are.equal(resolved_font_path, name_path)
 
-        font_item.callback()
+        local menu_updates = 0
+        local touchmenu = { updateItems = function() menu_updates = menu_updates + 1 end }
+        local font_choices = font_item.sub_item_table_func(touchmenu)
+        assert.are.equal(resolved_font_path, font_choices.open_on_menu_item_id_func())
+        local function choice(file)
+            for _i, item in ipairs(font_choices) do
+                if item.menu_item_id == file then return item end
+            end
+        end
+        assert.is_true(choice(resolved_font_path).checked_func())
 
-        assert.are.equal(resolved_font_path, chooser.font_file)
-        assert.are.equal(resolved_font_path, chooser.default_font_file)
-
-        local selected = plugin_root .. "/fonts/hyperreadable/Hyperreadable-Bold.ttf"
-        chooser.callback(selected)
+        choice(selected).callback()
         assert.are.equal("fonts/hyperreadable/Hyperreadable-Bold.ttf",
             config.library_font.font_face)
         assert.are.equal(1, saves)
+        assert.is_true(choice(selected).checked_func())
 
-        chooser.callback("/mnt/fonts/External-Regular.ttf")
-        assert.are.equal("/mnt/fonts/External-Regular.ttf", config.library_font.font_face)
+        choice(external_path).callback()
+        assert.are.equal(external_path, config.library_font.font_face)
         assert.are.equal(2, saves)
 
         config.library_font.font_face = "cfont"
-        font_item.callback()
-        assert.are.equal(stock_font_path, chooser.font_file)
+        font_choices = font_item.sub_item_table_func(touchmenu)
+        assert.are.equal(stock_font_path, font_choices.open_on_menu_item_id_func())
+        assert.is_true(choice(stock_font_path).checked_func())
         assert.are.equal("cfont", config.library_font.font_face)
         assert.are.equal(2, saves)
 
         config.library_font.font_face = "/missing/Unavailable-Regular.ttf"
-        font_item.callback()
-        assert.are.equal(resolved_font_path, chooser.font_file)
+        font_choices = font_item.sub_item_table_func(touchmenu)
+        assert.are.equal(resolved_font_path, font_choices.open_on_menu_item_id_func())
         assert.are.equal(font_path, config.library_font.font_face)
         assert.are.equal(3, saves)
+        assert.are.equal(3, menu_updates)
     end)
 
     it("shows the selected Library font path on hold without resetting it", function()
@@ -586,7 +603,7 @@ describe("library settings", function()
         assert.are.equal(0, saves)
     end)
 
-    it("edits library background opacity and refreshes the cached surfaces", function()
+    it("edits wallpaper opacity and inversion and refreshes the cached surfaces", function()
         local picker
         local saves = 0
         local cache_clears = 0
@@ -605,9 +622,12 @@ describe("library settings", function()
             end
         package.loaded["modules/settings/zen_settings_apply"].reinit_filemanager_on_menu_close =
             function() reinitializations = reinitializations + 1 end
-        package.loaded["ui/uimanager"].scheduleIn = function()
-            scheduled = scheduled + 1
-        end
+        local deferred = {}
+        package.loaded["modules/settings/zen_settings_apply"].defer_until_settings_close =
+            function(key, callback)
+                if not deferred[key] then scheduled = scheduled + 1 end
+                deferred[key] = callback
+            end
         ZenSpec.replace("common/ui/background", {
             clearCache = function() cache_clears = cache_clears + 1 end,
         })
@@ -627,20 +647,23 @@ describe("library settings", function()
         })
         local background
         for _i, item in ipairs(items) do
-            if item.text == "Background" then
+            if item.text == "Wallpaper" then
                 background = item
                 break
             end
         end
         local opacity = assert(background).sub_item_table[2]
+        local inversion = background.sub_item_table[3]
 
         assert.is_true(background.checked_func())
         assert.is_function(background.checkmark_callback)
+        assert.are.equal("Invert with dark mode", inversion.text)
+        assert.is_true(inversion.checked_func())
         assert.are.equal("Opacity: 100%", opacity.text_func())
         assert.is_true(opacity.enabled_func())
         opacity.callback({ updateItems = function() menu_updates = menu_updates + 1 end })
         assert.are.same({
-            title = "Background - Opacity",
+            title = "Wallpaper - Opacity",
             value = 100,
             min = 0,
             max = 100,
@@ -656,16 +679,30 @@ describe("library settings", function()
         assert.are.equal(1, menu_updates)
         assert.are.equal("Opacity: 38%", opacity.text_func())
 
-        background.checkmark_callback()
-        assert.is_false(config.library_background.enabled)
-        assert.is_false(background.checked_func())
+        assert.is_function(inversion.callback)
+        inversion.callback()
+        assert.is_false(config.library_background.invert_with_dark_mode)
+        assert.is_false(inversion.checked_func())
         assert.are.equal(2, saves)
         assert.are.equal(2, cache_clears)
         assert.are.equal(2, reinitializations)
+
+        inversion.callback()
+        assert.is_true(config.library_background.invert_with_dark_mode)
+        assert.is_true(inversion.checked_func())
+        assert.are.equal(3, saves)
+        assert.are.equal(3, cache_clears)
+
+        background.checkmark_callback()
+        assert.is_false(config.library_background.enabled)
+        assert.is_false(background.checked_func())
+        assert.are.equal(4, saves)
+        assert.are.equal(4, cache_clears)
+        assert.are.equal(4, reinitializations)
         assert.are.equal(1, scheduled)
     end)
 
-    it("validates the image when enabling the library background parent switch", function()
+    it("validates the image when enabling the wallpaper parent switch", function()
         local shown
         local saves = 0
         local cache_clears = 0
@@ -677,6 +714,12 @@ describe("library settings", function()
         end
         package.loaded["modules/settings/zen_settings_apply"].reinit_filemanager_on_menu_close =
             function() reinitializations = reinitializations + 1 end
+        local deferred = {}
+        package.loaded["modules/settings/zen_settings_apply"].defer_until_settings_close =
+            function(key, callback)
+                if not deferred[key] then scheduled = scheduled + 1 end
+                deferred[key] = callback
+            end
         ZenSpec.replace("ui/widget/infomessage", {
             new = function(_, spec) return spec end,
         })
@@ -701,14 +744,14 @@ describe("library settings", function()
         })
         local background
         for _i, item in ipairs(items) do
-            if item.text == "Background" then
+            if item.text == "Wallpaper" then
                 background = item
                 break
             end
         end
 
         assert.is_false(background.checked_func())
-        assert.are.equal(2, #background.sub_item_table)
+        assert.are.equal(3, #background.sub_item_table)
         background.checkmark_callback()
 
         assert.is_false(config.library_background.enabled)
@@ -727,7 +770,7 @@ describe("library settings", function()
         assert.are.equal(1, scheduled)
     end)
 
-    it("uses the wallpapers directory as the background picker default and Home", function()
+    it("uses the wallpapers directory as the wallpaper picker default and Home", function()
         local chooser
         local home_path
         package.loaded["ui/uimanager"].show = function(_, widget) chooser = widget end
@@ -746,14 +789,53 @@ describe("library settings", function()
         })
         local background
         for _i, item in ipairs(items) do
-            if item.text == "Background" then background = item; break end
+            if item.text == "Wallpaper" then background = item; break end
         end
 
         background.sub_item_table[1].callback()
         assert.are.equal("/koreader/resources/wallpapers", chooser.path)
+        assert.is_true(chooser._image_layout)
         assert.is_true(chooser.goHome({
             changeToPath = function(_, path) home_path = path end,
         }))
         assert.are.equal("/koreader/resources/wallpapers", home_path)
+    end)
+
+    it("puts archive and plugin actions off by default under Context menu", function()
+        local saves = 0
+        local config = {
+            browser_hide_up_folder = {},
+            context_menu = { allow_delete = true },
+            features = {},
+        }
+        local items = require("modules/settings/sections/library_settings").build({
+            config = config,
+            plugin = { saveConfig = function() saves = saves + 1 end },
+            save_and_apply = function() end,
+        })
+
+        local context_menu = items[#items]
+        assert.are.equal("Context menu", context_menu.text)
+        assert.are.equal(2, #context_menu.sub_item_table)
+        local archive = context_menu.sub_item_table[1]
+        assert.are.equal("Archive", archive.text)
+        assert.are.equal("Plugin actions", context_menu.sub_item_table[2].text)
+        local allow_delete
+        for _i, item in ipairs(items) do
+            if item.text == "Allow delete" then allow_delete = item end
+        end
+        assert.is_not_nil(allow_delete)
+        assert.is_true(allow_delete.checked_func())
+        local plugin_actions = context_menu.sub_item_table[2]
+        assert.is_false(archive.checked_func())
+        assert.is_false(plugin_actions.checked_func())
+        assert.is_false(require("config/defaults").context_menu.show_archive)
+        assert.is_false(require("config/defaults").context_menu.show_plugin_actions)
+
+        archive.callback()
+        assert.is_true(archive.checked_func())
+        plugin_actions.callback()
+        assert.is_true(plugin_actions.checked_func())
+        assert.are.equal(2, saves)
     end)
 end)

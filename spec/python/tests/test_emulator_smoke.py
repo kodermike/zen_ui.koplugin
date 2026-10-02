@@ -85,13 +85,13 @@ def _select_arrange_label(driver: ZenDriver, label: str) -> None:
 def _open_buttons_arrange(driver: ZenDriver) -> None:
     assert driver.command("open_settings_page")["ok"] is True
     attempts: list[dict[str, object]] = []
-    for _attempt in range(3):
+    for _attempt in range(4):
         arrange = driver.command("arrange_page_state")
         if arrange.get("ok") is True:
             return
         settings = driver.command("settings_page_state")
         labels = settings["settings"]["labels"]
-        target = "Controls" if "Controls" in labels else "Buttons"
+        target = "Interface" if "Interface" in labels else "Controls" if "Controls" in labels else "Buttons"
         selected = driver.command("settings_page_select", label=target)
         attempts.append({
             "arrange": arrange,
@@ -383,8 +383,12 @@ def test_pt_br_settings_root_labels_are_localized() -> None:
             driver = ZenDriver(socket_path)
             assert driver.command("open_settings_page")["ok"] is True
             labels = driver.command("settings_page_state")["settings"]["labels"]
-            assert {"Biblioteca", "Barra de navegação", "Adicionais"}.issubset(labels)
-            assert {"Library", "Navbar", "Extras"}.isdisjoint(labels)
+            assert {"Biblioteca", "Interface", "Geral", "Adicionais"}.issubset(labels)
+            assert {"Library", "Navbar", "General", "Extras"}.isdisjoint(labels)
+            assert driver.command("settings_page_select", label="Interface")["ok"] is True
+            labels = driver.command("settings_page_state")["settings"]["labels"]
+            assert {"Controles", "Inicializador", "Barra de navegação", "Ícones personalizados"}.issubset(labels)
+            assert {"Controls", "Launcher", "Navbar", "Custom icons"}.isdisjoint(labels)
         finally:
             process.send_signal(signal.SIGTERM)
             try:
@@ -583,9 +587,36 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             assert settings.get("row_style") == settings.get("standard_style")
             assert settings.get("title_font_size") == settings["row_style"]["font_size"]
             assert settings.get("title_bold") is True
-            assert {"Controls", "Launcher", "Library", "Reader"}.issubset(
-                set(settings.get("labels", []))
-            )
+            assert settings.get("labels") == [
+                "Home", "Library", "Reader", "Interface", "Extras", "General", "KOReader", "About",
+            ]
+            assert driver.command("settings_page_select", label="Interface")["ok"] is True
+            interface_labels = driver.command("settings_page_state")["settings"]["labels"]
+            assert interface_labels[:4] == ["Controls", "Launcher", "Navbar", "Status bar"]
+            assert interface_labels[4].startswith("Font:")
+            assert interface_labels[5:] == [
+                "Zen Keyboard", "Wallpaper", "Custom icons", "Blur menu background", "Zen Search",
+            ]
+            assert driver.command("settings_page_select", label=interface_labels[4])["ok"] is True
+            font_labels = driver.command("settings_page_state")["settings"]["labels"]
+            assert font_labels[0].startswith("Font size:")
+            assert font_labels[1].startswith("Font:")
+            assert font_labels[2] == "Reset font"
+            assert driver.command("settings_page_back")["ok"] is True
+            assert driver.command("settings_page_back")["ok"] is True
+            assert driver.command("settings_page_select", label="General")["ok"] is True
+            general_labels = driver.command("settings_page_state")["settings"]["labels"]
+            expected_general = [
+                "Wi-Fi", "Schedules", "Sleep", "Battery", "Language", "Time and date", "Advanced", "Updates",
+            ]
+            if "Bluetooth" in general_labels:
+                expected_general.insert(1, "Bluetooth")
+            assert general_labels == expected_general
+            assert driver.command("settings_page_select", label="Advanced")["ok"] is True
+            advanced_labels = driver.command("settings_page_state")["settings"]["labels"]
+            assert "Double tap to open books" not in advanced_labels
+            assert driver.command("settings_page_back")["ok"] is True
+            assert driver.command("settings_page_back")["ok"] is True
             assert driver.command(
                 "settings_page_titlebar_tap", button="search"
             )["ok"] is True
@@ -595,6 +626,8 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             settings = driver.command("settings_page_state")["settings"]
             assert settings.get("title") == "Library"
             assert settings.get("back_visible") is True
+            assert not any(label.startswith("Font:") for label in settings["labels"])
+            assert settings["labels"][-1] == "Double tap to open books"
             assert driver.command("settings_page_select", label="Folders")["ok"] is True
             settings = driver.command("settings_page_state")["settings"]
             assert settings.get("title") == "Folders"
@@ -646,10 +679,13 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
             assert settings.get("search_keyboard_visible") is False
 
             assert driver.command("settings_page_search", query="")["ok"] is True
+            assert driver.command("settings_page_select", label="Interface")["ok"] is True
             assert driver.command("settings_page_select", label="Controls")["ok"] is True
             settings = driver.command("settings_page_state")["settings"]
+            assert "Blur menu background" not in settings["labels"]
             assert settings.get("has_search_input") is False
             assert settings.get("has_search_button") is True
+            assert driver.command("settings_page_back")["ok"] is True
             assert driver.command("settings_page_back")["ok"] is True
             non_touch_search = driver.command("settings_page_non_touch_search")
             assert non_touch_search.get("search_button_focused") is True
@@ -727,6 +763,7 @@ def test_clean_emulator_renders_fixture_library_and_reader_goldens() -> None:
 
             assert driver.command("open_settings_page")["ok"] is True
             time.sleep(0.2)
+            assert driver.command("settings_page_select", label="Interface")["ok"] is True
             assert driver.command("settings_page_select", label="Launcher")["ok"] is True
             assert driver.command("settings_page_select", label="Buttons")["ok"] is True
             arrange = _wait_command(
@@ -891,6 +928,7 @@ def test_settings_page_keeps_enabled_status_bar_at_top() -> None:
             assert settings.get("status_spacer_height", 0) < settings.get("status_height", 0)
             settings_status_y = settings.get("status_y")
             settings_status_identity = settings.get("status_identity")
+            assert driver.command("settings_page_select", label="Interface")["ok"] is True
             assert driver.command("settings_page_select", label="Launcher")["ok"] is True
             settings = driver.command("settings_page_state")["settings"]
             assert settings.get("status_identity") == settings_status_identity

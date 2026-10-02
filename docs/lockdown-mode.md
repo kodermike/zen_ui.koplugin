@@ -1,6 +1,6 @@
 ---
 title: Lockdown Mode
-category: Lockdown Mode
+category: Extras
 summary: Restrict library, Controls, and reader interactions for a controlled reading setup.
 settingsPath: Zen Settings > Extras > Lockdown mode
 order: 65

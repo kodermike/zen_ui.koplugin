@@ -8,6 +8,7 @@ local T = require("ffi/util").template
 local UIManager = require("ui/uimanager")
 local utils = require("modules/settings/zen_settings_utils")
 local icon_utils = require("common/utils")
+local plugin_root = require("common/plugin_root")
 local paths = require("common/paths")
 local icons = require("common/inline_icon_map")
 local IconItem = require("common/ui/icon_menu_item")
@@ -185,6 +186,13 @@ function M.build(ctx)
         { id = "page_right",  text = _("Next page")     },
         { id = "menu",        text = _("Menu")          },
     }
+    local archive_available = paths.getArchiveDir() ~= nil
+    if archive_available then
+        table.insert(navbar_tab_items, 2, {
+            id = "archive",
+            text = _("Archive"),
+        })
+    end
 
     if config.navbar.show_tabs.books == nil then
         config.navbar.show_tabs.books = true
@@ -204,6 +212,9 @@ function M.build(ctx)
         "books", "folder", "kindle", "manga", "news", "history", "favorites",
         "collections", "authors", "series", "languages", "home", "tags", "to_be_read",
     }
+    if archive_available then
+        table.insert(default_tab_ids, 2, "archive")
+    end
 
     local function get_builtin_tab_label(tab_id)
         local tab = tab_item_by_id[tab_id]
@@ -789,7 +800,7 @@ function M.build(ctx)
         elseif ct.type == "action" and ok_disp then
             local dispatch_items = {}
             local caller = {}
-            Dispatcher:addSubMenu(caller, dispatch_items, ct, "action")
+            DispatcherMenu.addSubMenu(Dispatcher, caller, dispatch_items, ct, "action")
             wrap_dispatch_callbacks(dispatch_items, caller, function(touch_menu)
                 sync_ct_action_label(ct)
                 if is_draft_tab(ct) then
@@ -798,7 +809,7 @@ function M.build(ctx)
                     save_and_defer_navbar_refresh()
                 end
                 if touch_menu and touch_menu.updateItems then
-                    touch_menu:updateItems(1)
+                    touch_menu:updateItems()
                 end
             end)
             table.insert(items, IconItem.decorate({
@@ -1409,11 +1420,12 @@ function M.build(ctx)
                 keep_menu_open = true,
                 callback = addPluginTab,
             }, icons.plugin),
-            IconItem.decorate({
+            {
                 text = _("KOReader menu"),
+                icon_file = plugin_root .. "/icons/koreader.png",
                 keep_menu_open = true,
                 callback = addKoreaderMenuTab,
-            }, icons.open_menu),
+            },
         }
         ZenArrangeList.show{
             title = _("Tabs"),

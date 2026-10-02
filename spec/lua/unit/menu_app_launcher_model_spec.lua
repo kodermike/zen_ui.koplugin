@@ -560,6 +560,34 @@ describe("app launcher action filter", function()
         assert.is_false(Filter.has_registered_action(Dispatcher, { settings = {} }))
     end)
 
+    it("defaults only reader dispatcher buttons to reader actions and honors overrides", function()
+        local settingsList = {
+            reader_action = { reader = true },
+            rolling_action = { rolling = true },
+            paging_action = { paging = true },
+            library_action = {},
+        }
+        local Dispatcher = { registerAction = function() return settingsList end }
+        local Filter = require("modules/menu/app_launcher/action_filter")
+        for _i, key in ipairs({ "reader_action", "rolling_action", "paging_action" }) do
+            local entry = { type = "action", action = { [key] = true } }
+            assert.is_true(Filter.is_reader_entry(Dispatcher, entry))
+            entry.reader_action = false
+            assert.is_false(Filter.is_reader_entry(Dispatcher, entry))
+        end
+        for _i, entry_type in ipairs({
+            "action", "plugin", "koreader_menu", "quick_setting", "folder_shortcut", "tag", "folder",
+        }) do
+            local entry = { type = entry_type, action = { library_action = true } }
+            assert.is_false(Filter.is_reader_entry(Dispatcher, entry))
+            entry.reader_action = true
+            assert.is_true(Filter.is_reader_entry(Dispatcher, entry))
+            entry.reader_action = false
+            assert.is_false(Filter.is_reader_entry(Dispatcher, entry))
+        end
+        assert.is_false(Filter.is_reader_entry(Dispatcher, nil))
+    end)
+
     it("removes reader dispatcher sections in place", function()
         local Filter = require("modules/menu/app_launcher/action_filter")
         local items = {

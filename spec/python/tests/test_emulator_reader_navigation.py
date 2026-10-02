@@ -101,6 +101,7 @@ def _launch(
     library: Path,
     default_tab: str,
     pending_reader_defaults: bool = False,
+    restore_library_view: bool = True,
 ) -> subprocess.Popen[str]:
     settings_dir = ko_home / "settings" / "ZenOS"
     settings_dir.mkdir(parents=True, exist_ok=True)
@@ -116,7 +117,8 @@ def _launch(
     (settings_dir / "config.lua").write_text(
         "return { updater = { update_auto_check = false }, "
         + pending_meta
-        + "features = { restore_library_view = true }, "
+        + "features = { restore_library_view = "
+        + str(restore_library_view).lower() + " }, "
         "navbar = { default_tab = " + repr(default_tab) + ", "
         "show_tabs = { home = true, authors = true, series = true }, "
         "tab_order = { 'home', 'authors', 'series', 'books' } } }\n",
@@ -276,6 +278,60 @@ def test_book_opens_in_reader_and_home_returns_to_library(
             assert after.get("page") == before.get("page")
             if default_tab == "books":
                 _wait_for_folder_cover(driver, folder)
+        finally:
+            process.send_signal(signal.SIGTERM)
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+
+
+@pytest.mark.parametrize(
+    ("restore_library_view", "outside_home", "expected_tab"),
+    [
+        (True, False, "books"),
+        (False, False, "home"),
+        (True, True, "home"),
+    ],
+)
+def test_reader_menu_home_respects_restore_location(
+    restore_library_view: bool, outside_home: bool, expected_tab: str
+) -> None:
+    runtime = Path(os.environ["KOREADER_DIR"])
+    with tempfile.TemporaryDirectory(prefix="zen-ui-reader-restore-") as temporary:
+        root = Path(temporary)
+        ko_home = root / "home"
+        ko_home.mkdir()
+        library = root / "library"
+        library.mkdir()
+        book_dir = root / "outside" if outside_home else library
+        book_dir.mkdir(exist_ok=True)
+        book = book_dir / "Reader Navigation.epub"
+        _write_readable_epub(book)
+        _seed_mosaic_mode(ko_home)
+        socket_path = root / "driver.sock"
+        process = _launch(runtime, ko_home, socket_path, library, "home",
+                          restore_library_view=restore_library_view)
+        try:
+            wait_for_socket(socket_path)
+            driver = ZenDriver(socket_path)
+            _wait_for_file_manager(driver)
+            assert driver.command("activate_navbar_tab", id="books").get("ok") is True
+            _wait_for_navbar_view(driver, None, "Library")
+
+            assert driver.open_book(book).get("ok") is True
+            _wait_for_reader(driver, book)
+            assert driver.reader_menu_home().get("ok") is True
+            _wait_for_reader_closed(driver)
+
+            view = _wait_for_navbar_view(
+                driver, "home" if expected_tab == "home" else None,
+                "Home" if expected_tab == "home" else "Library",
+            )
+            assert (view.get("top_name") == "home") is (expected_tab == "home")
+            assert driver.command("home_state")["home"]["on_top"] is (expected_tab == "home")
+            assert _wait_for_file_manager(driver).get("path") == str(library.resolve())
         finally:
             process.send_signal(signal.SIGTERM)
             try:

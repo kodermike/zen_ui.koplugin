@@ -36,7 +36,7 @@ function M.isInsideHeaderControl(title_bar, pos)
 end
 
 function M.getTapHeight(title_bar)
-    local height = Device.screen:getHeight() * 0.05
+    local height = Device.screen:getHeight() * 0.07
     local dimen = title_bar and title_bar.dimen
     if dimen and dimen.y and dimen.h then
         return math.max(height, dimen.y + dimen.h)
@@ -124,7 +124,7 @@ end
 function M.handleTap(title_bar, gesture)
     local pos = gesture and gesture.pos
     if M.isNearHeaderControl(title_bar, pos) then return true end
-    if not (pos and pos.y < Device.screen:getHeight() * 0.05) then return end
+    if not (pos and pos.y < Device.screen:getHeight() * 0.07) then return end
     if show_for_gesture(gesture, "swipe") then return true end
 end
 
@@ -152,6 +152,18 @@ function M.apply()
     local Menu = require("ui/widget/menu")
     local original_on_swipe = Menu.onSwipe
     local original_init = Menu.init
+
+    for _i, menu_class in ipairs({
+        require("apps/reader/modules/readermenu"),
+        require("apps/filemanager/filemanagermenu"),
+    }) do
+        local original_on_tap_show_menu = menu_class.onTapShowMenu
+        menu_class.onTapShowMenu = function(self, gesture)
+            if gesture and gesture.pos and gesture.pos.y < Device.screen:getHeight() * 0.07 then
+                return original_on_tap_show_menu(self, gesture)
+            end
+        end
+    end
 
     Menu.onSwipe = function(self, arg, gesture)
         local handled = M.handleSwipe(gesture)

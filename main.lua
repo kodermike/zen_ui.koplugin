@@ -61,6 +61,7 @@ local _ = require("gettext")
 local _pt_active = package.loaded["ptutil"] ~= nil
 
 local ConfigManager = require("config/manager")
+local BatteryStats = require("common/battery_stats")
 local _startup_config = ConfigManager.load()
 local registry = require("modules/registry")
 local zen_settings_page = require("modules/settings/zen_settings_page")
@@ -114,11 +115,14 @@ if _plugin_root then
                 end
                 table.sort(FontList.fontlist)
             end
+            local ok_font, Font = pcall(require, "ui/font")
+            if ok_font and Font then
+                require("common/library_font_path").registerFontAliases(Font, FontList)
+            end
             -- SymbolsNerdFont also serves as glyph fallback for MDI icons.
             -- Skipped when ProjectTitle is active: crengine fails to register
             -- the font on some devices, causing a width=0 crash.
             if not _pt_active then
-                local ok_font, Font = pcall(require, "ui/font")
                 if ok_font and Font and Font.fallbacks then
                     pcall(table.insert, Font.fallbacks, "SymbolsNerdFont-Regular.ttf")
                 end
@@ -136,11 +140,11 @@ local _zen_plugin_ref = nil
 -- so the on_update_found callback can rebuild their tab_item_table dynamically.
 local _zen_menu_instances = setmetatable({}, { __mode = "k" })
 
-local function refresh_home_date_dependent(plugin)
+local function refresh_home_date_dependent(plugin, force)
     local ok_shared, SharedState = pcall(require, "common/shared_state")
     local home = ok_shared and SharedState.get(plugin, "home") or nil
     if home and type(home.refreshDateDependentActive) == "function" then
-        home.refreshDateDependentActive()
+        home.refreshDateDependentActive(force)
     end
 end
 
@@ -232,6 +236,7 @@ function ZenUI:init()
     end
     i18n.refresh()
     self.config = ConfigManager.load()
+    BatteryStats.start()
     if _plugin_root then
         require("common/utils").copyDefaultCustomTabIcon(
             _plugin_root .. "/icons/", self.config and self.config.navbar)
@@ -252,6 +257,15 @@ function ZenUI:init()
         end
     end
     require("ui/uimanager"):nextTick(function()
+        if _plugin_root and require("device"):isKindle() then
+            local ok, installed, err = pcall(function()
+                return require("common/kindle_launcher").install(
+                    _plugin_root, "/mnt/us/documents/ZenReader.sh")
+            end)
+            if not ok or not installed then
+                logger.warn("Kindle launcher install failed:", err or installed)
+            end
+        end
         local ok, added_or_error = pcall(function()
             return require("modules/menu/app_launcher/model").ensure_zenpm_plugin_entries()
         end)
@@ -341,7 +355,18 @@ function ZenUI:init()
 
     self:_initModules()
     -- TBR is a normal KOReader collection; create it for standard pickers.
-    pcall(function() require("common/tbr_index").ensureCollection() end)
+    pcall(function()
+        local tbr_index = require("common/tbr_index")
+        tbr_index.ensureCollection()
+        if not self.config._meta.tbr_collection_migrated then
+            tbr_index.scheduleAudit(nil, function()
+                if tbr_index.isAuditComplete() then
+                    tbr_index.getAll({ include_new = false })
+                    tbr_index.refreshViews(self)
+                end
+            end)
+        end
+    end)
     logger.perf("Core initialization completed", (os.clock() - started_at) * 1000)
 
     local function schedule_quickstart_menu_tour(delay)
@@ -570,8 +595,15 @@ function ZenUI:init()
         local _cfg = _zen_plugin_ref and _zen_plugin_ref.config
         local _lc = _cfg and _cfg.lockdown
         local _ft = _cfg and _cfg.features
-        return type(_lc) == "table" and _lc.disable_settings_panel == true
+        local _qs = _cfg and _cfg.quick_settings
+        local _buttons = type(_qs) == "table" and _qs.show_buttons
+        local tour_pending = _cfg and _cfg._meta
+            and _cfg._meta.quickstart_menu_tour_pending == true
+        local hidden_by_lockdown = type(_lc) == "table" and _lc.disable_settings_panel == true
             and type(_ft) == "table" and _ft.lockdown_mode == true
+        return hidden_by_lockdown
+            or not tour_pending and type(_ft) == "table" and _ft.quick_settings == true
+                and type(_buttons) == "table" and _buttons.zen_settings == true
     end
 
     local function flip_lh_rh_icons()
@@ -804,9 +836,9 @@ function ZenUI:init()
                     if ui and ui.document then ui.tearing_down = was_tearing_down end
                     if not ui then return end
                     if ui.document then
-                        local kindle = require("modules/filebrowser/patches/kindle_virtual_library")
                         library_navigation.showFromReader(ui, _zen_plugin_ref,
-                            { force_default = kindle.isBookPath(ui.document.file) })
+                            { force_default = not library_navigation.restoreEnabled(_zen_plugin_ref)
+                                or not paths.isInHomeDir(ui.document.file) })
                     else
                         local is_default_active = rawget(_G, "__ZEN_UI_NAVBAR_IS_DEFAULT_TAB_ACTIVE")
                         if type(is_default_active) == "function" and is_default_active() then
@@ -835,6 +867,10 @@ function ZenUI:init()
         local orig_show = menu_class.onShowMenu
         if type(orig_show) == "function" then
             menu_class.onShowMenu = function(m_self, ...)
+                local refresh_settings = rawget(_G, "__ZEN_UI_REFRESH_SETTINGS")
+                if type(refresh_settings) == "function" then
+                    refresh_settings()
+                end
                 refresh_zen_menu_tabs(m_self)
                 return orig_show(m_self, ...)
             end
@@ -872,6 +908,29 @@ function ZenUI:init()
     end
     zen_updater._on_update_found = update_icon
 
+    -- Settings whose availability depends on external KOReader state (such as
+    -- the configured archive folder) can ask us to rebuild the cached Zen tab.
+    local archive_was_available = paths.getArchiveDir() ~= nil
+    _G.__ZEN_UI_REFRESH_SETTINGS = function(force)
+        local archive_available = paths.getArchiveDir() ~= nil
+        if not force and archive_available == archive_was_available then return end
+        if archive_available and not archive_was_available then
+            _zen_plugin_ref.config.navbar.show_tabs.archive = false
+            _zen_plugin_ref:saveConfig()
+        end
+        archive_was_available = archive_available
+        for m_instance in pairs(_zen_menu_instances) do
+            refresh_zen_menu_tabs(m_instance)
+        end
+        local settings_page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
+        if settings_page and type(settings_page.updateItems) == "function" then
+            settings_page:updateItems()
+        end
+        local reinject = rawget(_G, "__ZEN_UI_REINJECT_NAVBARS")
+            or rawget(_G, "__ZEN_UI_REINJECT_FM_NAVBAR")
+        if type(reinject) == "function" then reinject() end
+    end
+
     -- Trigger background update check on fresh startup too, not only on resume.
     zen_updater.schedule_wakeup_check()
 
@@ -894,15 +953,13 @@ end
 -- Also called from init() so a fresh KOReader start triggers the same check.
 function ZenUI:onResume()
     if self._zenos_brand_inert then return end
+    BatteryStats.resume()
     zen_updater.schedule_wakeup_check()
     local ok_incognito, Incognito = pcall(require, "modules/global/patches/incognito_mode")
     if ok_incognito and type(Incognito.onResume) == "function" then
         Incognito.onResume(self)
     end
     local UIManager = require("ui/uimanager")
-    UIManager:scheduleIn(0.5, function()
-        refresh_home_date_dependent(self)
-    end)
     UIManager:scheduleIn(1.5, function()
         refresh_home_date_dependent(self)
     end)
@@ -915,7 +972,7 @@ local function invalidate_annotation_quotes(plugin)
     if ok_quotes and HomeQuotes and HomeQuotes.invalidateAnnotations then
         HomeQuotes.invalidateAnnotations()
     end
-    refresh_home_date_dependent(plugin)
+    refresh_home_date_dependent(plugin, true)
 end
 
 function ZenUI:onAnnotationsModified()
@@ -940,11 +997,23 @@ end
 -- On suspend: cancel the pending timer so checks don't run while asleep.
 function ZenUI:onSuspend()
     if self._zenos_brand_inert then return end
+    BatteryStats.suspend()
     zen_updater.cancel_wakeup_check()
+    require("modules/menu/bluetooth/bluetooth").onSuspend()
     local ok_incognito, Incognito = pcall(require, "modules/global/patches/incognito_mode")
     if ok_incognito and type(Incognito.onSuspend) == "function" then
         Incognito.onSuspend()
     end
+end
+
+function ZenUI:onCharging()
+    if self._zenos_brand_inert then return end
+    BatteryStats.chargingChanged()
+end
+
+function ZenUI:onNotCharging()
+    if self._zenos_brand_inert then return end
+    BatteryStats.chargingChanged()
 end
 
 local function close_zen_standalone_views(shared)
@@ -970,6 +1039,7 @@ end
 
 function ZenUI:onCloseWidget()
     if self._zenos_brand_inert then return end
+    BatteryStats.stop()
     cancel_item_table_cache_persist()
     close_zen_standalone_views(self._zen_shared)
 end
@@ -978,6 +1048,7 @@ end
 -- the "delete plugin settings" action during disable/uninstall.
 function ZenUI:deletePluginSettings()
     zen_updater.cancel_wakeup_check()
+    BatteryStats.stop()
     zen_updater._on_update_found = nil
     cancel_item_table_cache_persist()
 

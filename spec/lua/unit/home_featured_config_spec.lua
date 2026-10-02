@@ -7,6 +7,7 @@ describe("unified Home featured configuration", function()
         local Presets = require("modules/filebrowser/patches/home/home_presets")
         local page = Presets.defaultHomePage()
 
+        assert.is_true(page.edit_mode)
         assert.are.same({ "datetime", "featured", "stats_triplet", "reading_goals", "strip", "quotes" },
             page.rows.order)
         assert.is_true(page.rows.enabled.featured)

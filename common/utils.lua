@@ -3,6 +3,7 @@ local M = {}
 local OPTICAL_ICON_SCALES = {
     zenfm = 1.25,
     zenpm = 1.25,
+    zen_ui = 1.25,
 }
 
 function M.iconOpticalScale(name)

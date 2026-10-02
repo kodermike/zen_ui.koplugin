@@ -12,6 +12,8 @@ local showcase_quote
 local showcase_picker
 local showcase_picker_wrapped
 local metadata_showcase_editor
+local switcher_showcase_restore
+local controls_showcase_restore
 
 local function get_zen_plugin()
     local PluginLoader = require("pluginloader")
@@ -223,6 +225,42 @@ local function show_lockdown_control()
         if id == "zen" then order[#order + 1] = "lockdown" end
     end
     quick_settings.button_order = order
+    return true
+end
+
+local function show_minimal_controls()
+    local plugin = get_zen_plugin()
+    local config = plugin and plugin.config and plugin.config.quick_settings
+    local features = plugin and plugin.config and plugin.config.features
+    if type(config) ~= "table" or type(features) ~= "table" then
+        return false, "quick settings unavailable"
+    end
+    local launcher_enabled = features.app_launcher
+    local original = {
+        button_order = config.button_order,
+        show_buttons = config.show_buttons,
+        show_labels = config.show_labels,
+        show_frontlight = config.show_frontlight,
+        show_warmth = config.show_warmth,
+        unified_light_slider = config.unified_light_slider,
+    }
+    local restore
+    restore = function()
+        for key, value in pairs(original) do config[key] = value end
+        features.app_launcher = launcher_enabled
+        if controls_showcase_restore == restore then controls_showcase_restore = nil end
+    end
+    controls_showcase_restore = restore
+    config.button_order = { "wifi", "night", "rotate", "zen", "zen_settings", "launcher" }
+    config.show_buttons = {
+        wifi = true, night = true, rotate = true, zen = true,
+        zen_settings = true, launcher = true,
+    }
+    features.app_launcher = false
+    config.show_labels = true
+    config.show_frontlight = true
+    config.show_warmth = true
+    config.unified_light_slider = true
     return true
 end
 
@@ -1246,6 +1284,8 @@ end
 
 local function reset_showcase_ui(session)
     showcase_picker = nil
+    if switcher_showcase_restore then switcher_showcase_restore() end
+    if controls_showcase_restore then controls_showcase_restore() end
     local settings_page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
     if settings_page and type(settings_page.onClose) == "function" then
         pcall(settings_page.onClose, settings_page)
@@ -1588,6 +1628,144 @@ local function open_quickstart()
     return true
 end
 
+local function show_network_switcher_fixture(names)
+    if type(names) ~= "table" or #names < 2 then
+        return false, "network switcher fixture needs Wi-Fi names"
+    end
+    local Device = require("device")
+    local NetworkMgr = require("ui/network/manager")
+    local networks = {}
+    local states = {
+        { connected = true, password = "fixture-password", flags = "WPA2", signal_quality = 96 },
+        { password = "fixture-password", flags = "WPA2", signal_quality = 86 },
+        { flags = "WPA2", signal_quality = 76 },
+        { flags = "", signal_quality = 64 },
+        { flags = "WPA2", signal_quality = 52 },
+        { flags = "SAE", signal_quality = 41 },
+    }
+    for index, name in ipairs(names) do
+        if type(name) ~= "string" or name == "" then
+            return false, "network switcher fixture has an invalid Wi-Fi name"
+        end
+        local state = states[index] or states[#states]
+        networks[#networks + 1] = {
+            connected = state.connected,
+            flags = state.flags,
+            password = state.password,
+            signal_quality = state.signal_quality,
+            ssid = name,
+        }
+    end
+
+    local original_has_wifi_manager = Device.hasWifiManager
+    local original_get_network_list = NetworkMgr.getNetworkList
+    local original_is_wifi_on = NetworkMgr.isWifiOn
+    local original_is_connected = NetworkMgr.isConnected
+    local restore
+    restore = function()
+        Device.hasWifiManager = original_has_wifi_manager
+        NetworkMgr.getNetworkList = original_get_network_list
+        NetworkMgr.isWifiOn = original_is_wifi_on
+        NetworkMgr.isConnected = original_is_connected
+        if switcher_showcase_restore == restore then switcher_showcase_restore = nil end
+    end
+    switcher_showcase_restore = restore
+    Device.hasWifiManager = function() return true end
+    NetworkMgr.isWifiOn = function() return true end
+    NetworkMgr.isConnected = function() return false end
+    NetworkMgr.getNetworkList = function()
+        restore()
+        return networks
+    end
+
+    local ok_open, opened = pcall(function()
+        return require("modules/menu/network_switcher").open(nil, false, get_zen_plugin())
+    end)
+    if not ok_open or opened ~= true then
+        restore()
+        return false, tostring(opened)
+    end
+    return true
+end
+
+local function show_bluetooth_switcher_fixture(names)
+    if type(names) ~= "table" or #names < 2 then
+        return false, "Bluetooth switcher fixture needs device names"
+    end
+    local states = {
+        { connected = true, paired = true, rssi = -38 },
+        { paired = true, rssi = -49 },
+        { paired = true, rssi = -60 },
+        { rssi = -68 },
+        { rssi = -75 },
+        { rssi = -84 },
+    }
+    local devices = {}
+    for index, name in ipairs(names) do
+        if type(name) ~= "string" or name == "" then
+            return false, "Bluetooth switcher fixture has an invalid device name"
+        end
+        local state = states[index] or states[#states]
+        devices[#devices + 1] = {
+            address = string.format("02:00:00:00:00:%02X", index),
+            name = name, connected = state.connected, paired = state.paired,
+            rssi = state.rssi,
+        }
+    end
+
+    local Kindle = require("modules/menu/bluetooth_adapters/kindle")
+    local Bluetooth = require("modules/menu/bluetooth/bluetooth")
+    local original_is_supported = Kindle.isSupported
+    local original_new = Kindle.new
+    local original_is_enabled = Bluetooth.isEnabled
+    local restore
+    restore = function()
+        Kindle.isSupported = original_is_supported
+        Kindle.new = original_new
+        Bluetooth.isEnabled = original_is_enabled
+        if switcher_showcase_restore == restore then switcher_showcase_restore = nil end
+    end
+    switcher_showcase_restore = restore
+    Kindle.isSupported = function() return true end
+    Kindle.new = function()
+        return {
+            id = "kindle",
+            getDeviceList = function() return devices end,
+            scan = function(done) restore(); done(true) end,
+            close = function() end,
+        }
+    end
+    Bluetooth.isEnabled = function() return true end
+
+    local ok_open, opened = pcall(function()
+        return require("modules/menu/bluetooth_switcher").open(nil, false, get_zen_plugin())
+    end)
+    if not ok_open or opened ~= true then
+        restore()
+        return false, tostring(opened)
+    end
+    return true
+end
+
+local function switcher_fixture_state(name)
+    local stack = UIManager._window_stack or {}
+    for index = #stack, 1, -1 do
+        local menu = stack[index] and stack[index].widget
+        if menu and menu.name == name then
+            local labels = {}
+            for _i, item in ipairs(menu.item_table or {}) do
+                labels[#labels + 1] = item.text
+            end
+            return {
+                labels = labels,
+                open = true,
+                status_visible = menu.title_bar and menu.title_bar.status_widget ~= nil,
+            }
+        end
+    end
+    return { labels = {}, open = false, status_visible = false }
+end
+
 local function dimen_bounds(dimen)
     if not (dimen and tonumber(dimen.x) and tonumber(dimen.y)
             and tonumber(dimen.w) and tonumber(dimen.h)) then return nil end
@@ -1699,6 +1877,10 @@ function Driver:handleCommand(command)
         local ok, err = show_lockdown_control()
         return { ok = ok == true, error = err }
     end
+    if kind == "showcase_minimal_controls" then
+        local ok, err = show_minimal_controls()
+        return { ok = ok == true, error = err }
+    end
     if kind == "open_file_context" and type(params.path) == "string" then
         local ok, err = open_file_context(params.path)
         return { ok = ok == true, error = err }
@@ -1725,6 +1907,20 @@ function Driver:handleCommand(command)
     if kind == "open_quickstart" then
         local ok, err = open_quickstart()
         return { ok = ok == true, error = err }
+    end
+    if kind == "show_network_switcher_fixture" then
+        local ok, err = show_network_switcher_fixture(params.names)
+        return { ok = ok == true, error = err }
+    end
+    if kind == "network_switcher_fixture_state" then
+        return { ok = true, network_switcher = switcher_fixture_state("network_switcher") }
+    end
+    if kind == "show_bluetooth_switcher_fixture" then
+        local ok, err = show_bluetooth_switcher_fixture(params.names)
+        return { ok = ok == true, error = err }
+    end
+    if kind == "bluetooth_switcher_fixture_state" then
+        return { ok = true, bluetooth_switcher = switcher_fixture_state("bluetooth_switcher") }
     end
     if kind == "showcase_bounds" and type(params.target) == "string" then
         local bounds, err = showcase_bounds(params.target, params.label)
@@ -1867,6 +2063,11 @@ function Driver:handleCommand(command)
         local active_tab = touch_menu and tabs[touch_menu.cur_tab]
         local visible_texts = {}
         if touch_menu then collect_texts(touch_menu, visible_texts, {}, 0) end
+        local button_ids = {}
+        local refs = touch_menu and touch_menu._zen_panel_refs
+        for _i, button in ipairs(refs and refs.buttons or {}) do
+            button_ids[#button_ids + 1] = button.id
+        end
         local empty_segment = bar and bar.bar_sep and bar.bar_sep.empty_segments
             and bar.bar_sep.empty_segments[1]
         local solid_separator_positions = {}
@@ -1886,6 +2087,9 @@ function Driver:handleCommand(command)
             tab_segments = tab_segments,
             active_tab = active_tab,
             visible_texts = visible_texts,
+            button_ids = button_ids,
+            unified_slider = refs and refs.fl_progress ~= nil
+                and refs.fl_progress == refs.nl_progress or false,
             empty_segment = empty_segment,
             solid_separator_positions = solid_separator_positions,
         }
@@ -1984,8 +2188,10 @@ function Driver:handleCommand(command)
     end
     if kind == "open_settings_page" then
         local FileManager = require("apps/filemanager/filemanager")
-        local menu = FileManager.instance and FileManager.instance.menu
-        if not menu then return { ok = false, error = "file manager menu unavailable" } end
+        local ReaderUI = require("apps/reader/readerui")
+        local ui = ReaderUI.instance or FileManager.instance
+        local menu = ui and ui.menu
+        if not menu then return { ok = false, error = "active menu unavailable" } end
         local item = menu._zen_tab_item
         if not item and type(menu.setUpdateItemTable) == "function" then
             menu:setUpdateItemTable()
@@ -2012,6 +2218,17 @@ function Driver:handleCommand(command)
         end
         return { ok = true }
     end
+    if kind == "native_settings_state" then
+        local reader = require("apps/reader/readerui").instance
+        if not reader then return { ok = false, error = "reader unavailable" } end
+        local config = reader.config
+        local values, defaults = {}, {}
+        for _i, key in ipairs(params.keys or {}) do
+            values[key] = config.configurable[key]
+            defaults[key] = G_reader_settings:readSetting(config.options.prefix .. "_" .. key)
+        end
+        return { ok = true, prefix = config.options.prefix, values = values, defaults = defaults }
+    end
     if kind == "settings_page_state" then
         local page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
         if not page then return { ok = false, error = "settings page unavailable" } end
@@ -2025,6 +2242,16 @@ function Driver:handleCommand(command)
         local items = {}
         for _i, item in ipairs(page.item_table or {}) do
             local label = item._zen_display_text or item.text or ""
+            local icon, row_bounds
+            for _j, row in ipairs(page.item_group or {}) do
+                if row.entry == item then
+                    row_bounds = dimen_bounds(row._underline_container and row._underline_container.dimen)
+                    icon = find_descendant(row, function(widget)
+                        return widget.dimen and item.icon_file and widget.file == item.icon_file
+                    end)
+                    break
+                end
+            end
             local checked
             if type(item.checked_func) == "function" then
                 local ok_checked, value = pcall(item.checked_func)
@@ -2036,6 +2263,9 @@ function Driver:handleCommand(command)
                 breadcrumb = item._zen_settings_breadcrumb,
                 radio = item.radio == true,
                 checked = checked,
+                icon_file = item.icon_file,
+                icon_bounds = dimen_bounds(icon and icon.dimen),
+                row_bounds = row_bounds,
             }
         end
         return {
@@ -2087,6 +2317,7 @@ function Driver:handleCommand(command)
                 row_style = find_settings_row_style(page.item_group),
                 row_alignment = settings_row_alignment(page.item_group),
                 standard_style = settings_row_standard(),
+                icon_gap = require("common/ui/icon_menu_item").getSettingsIconGap(),
                 labels = labels,
                 items = items,
             },
@@ -2182,17 +2413,52 @@ function Driver:handleCommand(command)
             submitted = submitted,
         }
     end
-    if kind == "settings_page_select" and type(params.label) == "string" then
+    if kind == "settings_page_select" or kind == "settings_page_hold" then
         local page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")
         if not page then return { ok = false, error = "settings page unavailable" } end
-        for _i, item in ipairs(page.item_table or {}) do
+        for index, item in ipairs(page.item_table or {}) do
             local label = item._zen_display_text or item.text or ""
-            if label == params.label then
-                local ok_select, err = pcall(page.onMenuSelect, page, item)
+            if label == params.label or index == params.index then
+                local callback = kind == "settings_page_hold" and page.onMenuHold or page.onMenuSelect
+                local ok_select, err = pcall(callback, page, item)
                 return { ok = ok_select, error = ok_select and nil or tostring(err) }
             end
         end
         return { ok = false, error = "settings item unavailable" }
+    end
+    if kind == "native_settings_confirm" then
+        local ConfirmBox = require("ui/widget/confirmbox")
+        for index = #UIManager._window_stack, 1, -1 do
+            local widget = UIManager._window_stack[index].widget
+            if getmetatable(widget) == ConfirmBox then
+                widget.ok_callback()
+                UIManager:close(widget)
+                return { ok = true }
+            end
+        end
+        return { ok = false, error = "confirmation unavailable" }
+    end
+    if kind == "native_settings_input" then
+        local InputDialog = require("ui/widget/inputdialog")
+        for index = #UIManager._window_stack, 1, -1 do
+            local widget = UIManager._window_stack[index].widget
+            if getmetatable(widget) == InputDialog then
+                if params.text then widget:setInputText(params.text) end
+                if params.button then
+                    for _i, row in ipairs(widget.buttons or {}) do
+                        for _j, button in ipairs(row) do
+                            if button.text == params.button then button.callback() end
+                        end
+                    end
+                end
+                local open = false
+                for _i, entry in ipairs(UIManager._window_stack) do
+                    if entry.widget == widget then open = true end
+                end
+                return { ok = true, open = open }
+            end
+        end
+        return { ok = false, error = "input unavailable" }
     end
     if kind == "settings_page_back" then
         local page = rawget(_G, "__ZEN_UI_SETTINGS_PAGE")

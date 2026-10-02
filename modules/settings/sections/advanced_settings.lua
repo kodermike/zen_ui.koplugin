@@ -6,6 +6,8 @@ local _ = require("gettext")
 local UIManager = require("ui/uimanager")
 local utils = require("modules/settings/zen_settings_utils")
 local paths = require("common/paths")
+local icons = require("common/inline_icon_map")
+local IconItem = require("common/ui/icon_menu_item")
 
 local M = {}
 
@@ -36,6 +38,7 @@ function M.build(ctx)
 
     table.insert(items, {
         text = _("Partial pages refresh"),
+        help_text = _("Flash the screen in the library when a page is not full of books to prevent ghosting."),
         checked_func = function()
             return config.features.partial_page_repaint == true
         end,
@@ -46,8 +49,8 @@ function M.build(ctx)
         end,
     })
 
-    table.insert(items, {
-        text = _("Require double tap to open books"),
+    local double_tap_item = {
+        text = _("Double tap to open books"),
         help_text = _("When enabled, tap the same book twice in rapid succession to open it. Keyboard controls are unchanged."),
         checked_func = function()
             return type(config.developer) == "table"
@@ -59,7 +62,28 @@ function M.build(ctx)
                 config.developer.double_tap_to_open_books ~= true
             plugin:saveConfig()
         end,
-    })
+        sub_item_table = {
+            {
+                text = _("Single tap to open context menu"),
+                enabled_func = function()
+                    return type(config.developer) == "table"
+                        and config.developer.double_tap_to_open_books == true
+                end,
+                checked_func = function()
+                    return type(config.developer) == "table"
+                        and config.developer.single_tap_to_open_context_menu == true
+                end,
+                callback = function()
+                    if type(config.developer) ~= "table" then config.developer = {} end
+                    config.developer.single_tap_to_open_context_menu =
+                        config.developer.single_tap_to_open_context_menu ~= true
+                    plugin:saveConfig()
+                end,
+            },
+        },
+    }
+    double_tap_item.checkmark_callback = double_tap_item.callback
+    table.insert(items, IconItem.decorate(double_tap_item, icons.double_tap))
 
     table.insert(items, {
         text = _("Allow dragging reader modals"),

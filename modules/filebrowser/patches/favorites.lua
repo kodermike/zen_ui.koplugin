@@ -2,6 +2,7 @@ local function apply_favorites()
     local FileManagerCollection = require("apps/filemanager/filemanagercollection")
     local Menu = require("ui/widget/menu")
     local SharedState = require("common/shared_state")
+    local _ = require("gettext")
 
     local zen_plugin = rawget(_G, "__ZEN_UI_PLUGIN")
     if not zen_plugin or type(zen_plugin.config) ~= "table" then
@@ -118,10 +119,10 @@ local function apply_favorites()
             if show_back and createStatusRowCustomBack then
                 local back_callback = menu.onReturn and function() menu.onReturn() end
                                    or function() end
-                status_row = createStatusRowCustomBack(back_callback)
+                status_row = createStatusRowCustomBack(back_callback, _("Favorites"))
             elseif createStatusRow then
                 local FileManager = require("apps/filemanager/filemanager")
-                status_row = createStatusRow(nil, FileManager.instance)
+                status_row = createStatusRow(nil, FileManager.instance, _("Favorites"))
             end
 
             if status_row then
@@ -155,7 +156,7 @@ local function apply_favorites()
                             or function() end
                 menu._zen_status_refresh = function()
                     if tb.title_group and #tb.title_group >= 2 then
-                        tb.title_group[2] = createStatusRowCustomBack(back_cb)
+                        tb.title_group[2] = createStatusRowCustomBack(back_cb, _("Favorites"))
                         tb.title_group:resetLayout()
                         if repaintTitleBar then repaintTitleBar(tb) end
                     end
@@ -164,7 +165,7 @@ local function apply_favorites()
                 menu._zen_status_refresh = function()
                     if tb.title_group and #tb.title_group >= 2 then
                         local FileManager = require("apps/filemanager/filemanager")
-                        tb.title_group[2] = createStatusRow(nil, FileManager.instance)
+                        tb.title_group[2] = createStatusRow(nil, FileManager.instance, _("Favorites"))
                         tb.title_group:resetLayout()
                         if repaintTitleBar then repaintTitleBar(tb) end
                     end

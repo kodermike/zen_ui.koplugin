@@ -30,7 +30,7 @@ order: 50
 
 ## Overview
 
-Reader settings control ZenOS features while a book is open. They cover the top status bar, reader themes and font menu, highlight and lookup tools, bottom swipe, stable page labels, page browser, return behavior, and bottom status bar options including presets.
+Reader settings control the reading screen. They cover status bars, themes, font access, lookup and highlighting, page navigation, and what happens when you leave a book.
 
 ![Page browser](/images/zen_os/page_browser.webp)
 

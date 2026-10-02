@@ -222,20 +222,22 @@ local function rebuild_touch_menu_item(row)
 end
 
 local function settings_control_widget(item, enabled)
-    if type(item.checked_func) == "function" then
+    if type(item.checked_func) == "function" or item.checked ~= nil then
+        local function checked()
+            if type(item.checked_func) == "function" then return not not item.checked_func() end
+            return not not item.checked
+        end
         if item.radio == true then
             return RadioMark:new{
                 checkable = true,
-                checked = item.checked_func() == true,
+                checked = checked(),
                 enabled = enabled,
             }
         end
         return ZenToggle:new{
             width = M.SETTINGS_TOGGLE_WIDTH,
             height = M.SETTINGS_TOGGLE_HEIGHT,
-            value_func = function()
-                return item.checked_func() == true
-            end,
+            value_func = checked,
         }
     end
 end
@@ -244,6 +246,12 @@ local function settings_icon_widget(item, height, face)
     if item.icon_glyph then
         return M.makeState(item.icon_glyph, M.SETTINGS_ICON_WIDTH, height,
             M.getSettingsIconFace(face))
+    elseif item.icon_file then
+        local size = M.getSettingsIconFace(face).size
+        return CenterContainer:new{
+            dimen = Geom:new{ w = M.SETTINGS_ICON_WIDTH, h = height },
+            IconWidget:new{ file = item.icon_file, width = size, height = size },
+        }
     end
 end
 
@@ -268,14 +276,35 @@ local function rebuild_settings_menu_item(row)
         table.insert(right_controls, control_widget)
         table.insert(right_controls, HorizontalSpan:new{ width = Size.padding.large })
     end
+    local mandatory = type(item.mandatory_func) == "function"
+        and item.mandatory_func() or item.mandatory
+    if mandatory then
+        table.insert(right_controls, TextWidget:new{
+            text = tostring(mandatory),
+            max_width = math.floor(row.dimen.w * 0.4),
+            face = face,
+            fgcolor = visual_enabled and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_DARK_GRAY,
+        })
+        if item._zen_has_submenu then
+            table.insert(right_controls, HorizontalSpan:new{ width = Size.padding.large })
+        end
+    end
     if item._zen_has_submenu then
-        table.insert(right_controls, IconWidget:new{
-            icon = item._zen_caret_icon or "chevron.right",
+        local caret = item._zen_caret_icon or "chevron.right"
+        local caret_options = {
             width = M.SETTINGS_CARET_SIZE,
             height = M.SETTINGS_CARET_SIZE,
+        }
+        if caret:find("/", 1, true) then
+            caret_options.file = caret
+        else
+            caret_options.icon = caret
+        end
+        table.insert(right_controls, IconWidget:new(caret_options))
+    elseif control_widget or mandatory then
+        table.insert(right_controls, HorizontalSpan:new{
+            width = M.SETTINGS_CARET_SIZE + (mandatory and Size.padding.large or 0),
         })
-    elseif control_widget then
-        table.insert(right_controls, HorizontalSpan:new{ width = M.SETTINGS_CARET_SIZE })
     end
     table.insert(right_controls, HorizontalSpan:new{ width = right_padding })
     local right_controls_w = right_controls:getSize().w
@@ -352,7 +381,7 @@ local function rebuild_settings_menu_item(row)
         dimen = Geom:new{ w = row.dimen.w, h = row.dimen.h },
         left,
     }
-    if control_widget or item._zen_has_submenu then
+    if control_widget or item._zen_has_submenu or mandatory then
         table.insert(content, RightContainer:new{
             dimen = Geom:new{ w = row.dimen.w, h = row.dimen.h },
             right_controls,

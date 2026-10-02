@@ -16,6 +16,26 @@ M.SKIP_DIRS = {
     ["temp"] = true,
     ["tmp"] = true,
 }
+M.SKIP_ROOT_DIRS = {
+    ["bin"] = true,
+    ["boot"] = true,
+    ["etc"] = true,
+    ["home"] = true,
+    ["lib"] = true,
+    ["lib32"] = true,
+    ["lib64"] = true,
+    ["opt"] = true,
+    ["root"] = true,
+    ["sbin"] = true,
+    ["srv"] = true,
+    ["usr"] = true,
+    ["var"] = true,
+}
+
+function M.shouldSkipDir(parent, name)
+    return M.SKIP_DIRS[name] or (parent == "/" and M.SKIP_ROOT_DIRS[name])
+        or name:match("%.sdr$") ~= nil
+end
 
 function M.walk(roots, opts)
     local started_at = os.clock()
@@ -52,7 +72,7 @@ function M.walk(roots, opts)
                 local fullpath = join_path(path, name)
                 local attributes = lfs.attributes(fullpath)
                 if attributes and attributes.mode == "directory" then
-                    local should_scan = not M.SKIP_DIRS[name] and not name:match("%.sdr$")
+                    local should_scan = not M.shouldSkipDir(path, name)
                     if should_scan and (not on_dir or on_dir(name, fullpath, attributes, depth) ~= false)
                             and scan(fullpath, depth + 1, attributes) then
                         return true

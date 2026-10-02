@@ -5,6 +5,7 @@ local Cover  = require("common/cover_utils")
 local library_font = require("modules/filebrowser/patches/library_font")
 local Background = require("common/ui/background")
 local SharedState = require("common/shared_state")
+local _ = require("gettext")
 
 logger.dbg("module loaded")
 
@@ -933,7 +934,7 @@ local function apply_collections()
 
         if createStatusRow and tb.title_group and #tb.title_group >= 2 then
             local FileManager = require("apps/filemanager/filemanager")
-            local status_row = createStatusRow(nil, FileManager.instance)
+            local status_row = createStatusRow(nil, FileManager.instance, _("Collections"))
             tb.title_group[2] = status_row
             tb.title_group:resetLayout()
 
@@ -945,7 +946,7 @@ local function apply_collections()
             local repaintTitleBar = get_shared("repaintTitleBar")
             menu._zen_status_refresh = function()
                 if tb.title_group and #tb.title_group >= 2 then
-                    tb.title_group[2] = createStatusRow(nil, FileManager.instance)
+                    tb.title_group[2] = createStatusRow(nil, FileManager.instance, _("Collections"))
                     tb.title_group:resetLayout()
                     if repaintTitleBar then repaintTitleBar(tb) end
                 end

@@ -337,7 +337,7 @@ local function apply_automatic_series_grouping()
         local current_dir_cache = {}
         local first_file_path
         for _i, item in ipairs(item_table) do
-            if item.is_file and item.path then
+            if item.is_file and item.path and type(item.doc_props) ~= "table" then
                 first_file_path = item.path
                 break
             end

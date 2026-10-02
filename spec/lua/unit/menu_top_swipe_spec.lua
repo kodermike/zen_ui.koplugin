@@ -1,7 +1,9 @@
 describe("top menu tap handling", function()
     local Device
     local FileManager
+    local FileManagerMenu
     local Menu
+    local ReaderMenu
     local TopMenu
 
     local function point(x, y)
@@ -38,8 +40,20 @@ describe("top menu tap handling", function()
             init = function() end,
             onSwipe = function() end,
         }
+        local function native_menu()
+            return {
+                onTapShowMenu = function(self)
+                    self.shown = (self.shown or 0) + 1
+                    return true
+                end,
+            }
+        end
+        ReaderMenu = native_menu()
+        FileManagerMenu = native_menu()
         ZenSpec.replace("device", Device)
         ZenSpec.replace("ui/widget/menu", Menu)
+        ZenSpec.replace("apps/reader/modules/readermenu", ReaderMenu)
+        ZenSpec.replace("apps/filemanager/filemanagermenu", FileManagerMenu)
         ZenSpec.replace("apps/filemanager/filemanager", FileManager)
         ZenSpec.replace("apps/reader/readerui", {})
         ZenSpec.replace("ui/gesturerange", { new = function(_self, opts) return opts end })
@@ -52,6 +66,8 @@ describe("top menu tap handling", function()
         ZenSpec.unload("modules/global/patches/menu_top_swipe")
         ZenSpec.unload("device")
         ZenSpec.unload("ui/widget/menu")
+        ZenSpec.unload("apps/reader/modules/readermenu")
+        ZenSpec.unload("apps/filemanager/filemanagermenu")
         ZenSpec.unload("apps/filemanager/filemanager")
         ZenSpec.unload("apps/reader/readerui")
         ZenSpec.unload("ui/gesturerange")
@@ -65,8 +81,20 @@ describe("top menu tap handling", function()
             },
         }
 
-        assert.is_true(Menu.onTap(settings, nil, { pos = point(100, 10) }))
+        assert.are.equal(70, TopMenu.getTapHeight())
+        assert.is_true(Menu.onTap(settings, nil, { pos = point(100, 69) }))
+        assert.is_nil(Menu.onTap(settings, nil, { pos = point(100, 70) }))
         assert.are.equal(1, FileManager.instance.menu.shown)
+    end)
+
+    it("limits native reader and file browser menu taps to the top 7%", function()
+        for _i, menu_class in ipairs({ ReaderMenu, FileManagerMenu }) do
+            local menu = setmetatable({}, { __index = menu_class })
+            assert.is_true(menu:onTapShowMenu({ pos = point(500, 69) }))
+            assert.is_nil(menu:onTapShowMenu({ pos = point(500, 70) }))
+            assert.is_nil(menu:onTapShowMenu({ pos = point(500, 150) }))
+            assert.are.equal(1, menu.shown)
+        end
     end)
 
     it("eats taps above and between right-side header controls", function()

@@ -1,5 +1,48 @@
 local M = {}
 
+local function upvalue(func, target)
+    if type(func) ~= "function" then return nil end
+    local i = 1
+    while true do
+        local name, value = debug.getupvalue(func, i)
+        if not name then return nil end
+        if name == target then return value end
+        i = i + 1
+    end
+end
+
+function M.addSubMenu(dispatcher, caller, menu, location, settings)
+    dispatcher:init()
+    local specs = upvalue(dispatcher.registerAction, "settingsList")
+    if type(specs) ~= "table" then
+        return dispatcher:addSubMenu(caller, menu, location, settings)
+    end
+
+    local unavailable = {}
+    for _key, spec in pairs(specs) do
+        if spec.condition == false then
+            unavailable[#unavailable + 1] = spec
+            spec.condition = true
+        end
+    end
+    local ok, err = pcall(dispatcher.addSubMenu, dispatcher, caller, menu, location, settings)
+    for _i, spec in ipairs(unavailable) do spec.condition = false end
+    if not ok then error(err, 0) end
+
+    for _i, section in ipairs(menu) do
+        for _j, item in ipairs(section.sub_item_table or {}) do
+            local spec = specs[upvalue(item.checked_func, "k")]
+            if spec then
+                local original_enabled = item.enabled_func
+                item.enabled_func = function()
+                    return (not original_enabled or original_enabled() ~= false)
+                        and dispatcher:isActionEnabled(spec)
+                end
+            end
+        end
+    end
+end
+
 local function install_flush_on_update(menu)
     if type(menu) ~= "table" or menu._zen_dispatch_flush_installed then return end
     menu._zen_dispatch_flush_installed = true

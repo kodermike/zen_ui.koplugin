@@ -388,6 +388,8 @@ local function setup_display_mode(menu, is_group_view, tab_id, group_name)
     return display_mode_type
 end
 
+M.setupDisplayMode = setup_display_mode
+
 -- clean_nav: suppress back arrow, inject status bar row, set display mode
 -- back_callback: optional function for the status bar back chevron
 -------------------------------------------------------------------------------
@@ -782,6 +784,34 @@ local function sortDetailFiles(files, collate, reverse)
     return sorted
 end
 
+local function group_tag_book_items(items, tab_id)
+    local cfg = tab_id == "tags" and load_zen_config()
+    if not (cfg and cfg.features and cfg.features.automatic_series_grouping ~= false) then
+        return items
+    end
+    local file_paths, by_path = {}, {}
+    for _i, item in ipairs(items) do
+        file_paths[#file_paths + 1] = item.path
+        by_path[item.path] = item
+    end
+    local db = require("common/db_bookinfo")
+    local grouped = db.groupPathsBySeries(file_paths, db.getLightMetadata())
+    local result = {}
+    for _i, entry in ipairs(grouped) do
+        if type(entry) == "table" then
+            result[#result + 1] = {
+                text = entry.series,
+                mandatory = tostring(#entry.files) .. " \u{F016}",
+                _zen_files = entry.files,
+                is_series_group = true,
+            }
+        else
+            result[#result + 1] = by_path[entry]
+        end
+    end
+    return result
+end
+
 -- Status-scoped tabs already define their own filter.
 local function apply_status_filter(files, tab_id)
     if tab_id == "status" or tab_id == "to_be_read" then return files end
@@ -808,6 +838,7 @@ end
 -- menu: the Menu instance to refresh after sort change
 -- files: list of file paths
 -------------------------------------------------------------------------------
+local showDetailView
 local function showDetailSortDialog(group_name, tab_id, menu, files, reload_files)
     local _ = require("gettext")
     local ButtonDialog = require("ui/widget/buttondialog")
@@ -857,6 +888,7 @@ local function showDetailSortDialog(group_name, tab_id, menu, files, reload_file
             })
         end
 
+        book_items = group_tag_book_items(book_items, tab_id)
         if should_show_up_folder() then
             table.insert(book_items, 1, { text = "\u{2B06} ..", is_go_up = true, mandatory = "" })
         end
@@ -912,6 +944,16 @@ local function showDetailSortDialog(group_name, tab_id, menu, files, reload_file
                     end,
                 }},
             }
+            if tab_id == "to_be_read" then
+                order_buttons[#order_buttons + 1] = {{
+                    text = "\u{F0DC}  " .. _("Order TBR"),
+                    align = "left",
+                    callback = function()
+                        UIManager:close(order_dialog)
+                        require("common/tbr_index").showOrder({ plugin = _zen_plugin })
+                    end,
+                }}
+            end
             order_dialog = ButtonDialog:new{
                 title       = _("Sort order"),
                 title_align = "center",
@@ -995,7 +1037,7 @@ end
 -- showDetailView: book list for one author/series group
 -- Called from onMenuSelect on the group list menu
 -------------------------------------------------------------------------------
-local function showDetailView(group_item, injectNavbar, tab_id, navbar_tab_id)
+showDetailView = function(group_item, injectNavbar, tab_id, navbar_tab_id)
     local _ = require("gettext")
     local UIManager = require("ui/uimanager")
 
@@ -1056,6 +1098,7 @@ local function showDetailView(group_item, injectNavbar, tab_id, navbar_tab_id)
             mandatory = attr and util_mod.getFriendlySize(attr.size or 0) or "",
         })
     end
+    book_items = group_tag_book_items(book_items, tab_id)
     if #book_items == 0 then
         table.insert(book_items, {
             text                   = group_empty_message(tab_id),
@@ -1079,6 +1122,17 @@ local function showDetailView(group_item, injectNavbar, tab_id, navbar_tab_id)
                 else UIManager:close(menu_self) end
                 return
             end
+            if item.is_series_group then
+                local series_menu = showDetailView(
+                    item, injectNavbar, "series", navbar_tab_id or tab_id)
+                if series_menu then
+                    series_menu._zen_restore_parent = {
+                        group_name = group_name,
+                        page = menu_self.page,
+                    }
+                end
+                return
+            end
             if item.path then
                 if toggle_file_selection(menu_self, item) then return end
                 local fm = get_file_manager()
@@ -1092,7 +1146,21 @@ local function showDetailView(group_item, injectNavbar, tab_id, navbar_tab_id)
         end,
         onMenuHold = function(menu_self, item)
             if show_select_mode_menu() then return true end
+            if item.is_series_group then
+                return M.showGroupContextMenu(item.text, item._zen_files,
+                    "series", menu_self)
+            end
             if not item.path then return end
+            local ok_kindle, Kindle = pcall(require,
+                "modules/filebrowser/patches/kindle_virtual_library")
+            if ok_kindle and type(Kindle.isBookPath) == "function"
+                    and Kindle.isBookPath(item.path)
+                    and type(Kindle.showBookContextMenu) == "function"
+                    and Kindle.showBookContextMenu(menu_self, item, function()
+                        menu_self:updateItems()
+                    end) then
+                return true
+            end
             local fm = get_file_manager()
             if fm and fm.file_chooser and fm.file_chooser.showFileDialog then
                 show_file_dialog_with_refresh(fm.file_chooser, menu_self, {
@@ -1221,15 +1289,7 @@ local function showDetailView(group_item, injectNavbar, tab_id, navbar_tab_id)
             _G.__ZEN_UI_LIBRARY_STATE = nil
         end
         detail_menu:updateItems()
-        -- Re-inject status row after updateItems (it may reset title_group).
-        local createSR2   = _zen_shared and _zen_shared.createStatusRowCustomBack
-        local repaintTB2  = _zen_shared and _zen_shared.repaintTitleBar
-        local tb2 = detail_menu.title_bar
-        if tb2 and createSR2 and tb2.title_group and #tb2.title_group >= 2 then
-            tb2.title_group[2] = createSR2(back_to_group, group_name)
-            tb2.title_group:resetLayout()
-            if repaintTB2 then repaintTB2(tb2) end
-        end
+        if detail_menu._zen_status_refresh then detail_menu:_zen_status_refresh() end
     end)
     return detail_menu, true
 end
@@ -1461,16 +1521,7 @@ showGroupView = function(tab_id, injectNavbar, groups)
             _G.__ZEN_UI_LIBRARY_STATE = nil
         end
         menu:updateItems()
-        -- Re-inject status row after updateItems (it may reset title_group).
-        local createSR2 = _zen_shared and _zen_shared.createStatusRow
-        local repaintTB2 = _zen_shared and _zen_shared.repaintTitleBar
-        local tb2 = menu.title_bar
-        if tb2 and createSR2 and tb2.title_group and #tb2.title_group >= 2 then
-            local FileManager2 = require("apps/filemanager/filemanager")
-            tb2.title_group[2] = createSR2(nil, FileManager2.instance)
-            tb2.title_group:resetLayout()
-            if repaintTB2 then repaintTB2(tb2) end
-        end
+        if menu._zen_status_refresh then menu:_zen_status_refresh() end
         -- Re-open the specific group folder that was open before reader.
         -- Guard: showFiles post-hook may have already opened it synchronously.
         if restore_detail then
@@ -1761,15 +1812,7 @@ function M.showTBRView(injectNavbar)
             _G.__ZEN_UI_LIBRARY_STATE = nil
         end
         menu:updateItems()
-        local createSR2  = _zen_shared and _zen_shared.createStatusRow
-        local repaintTB2 = _zen_shared and _zen_shared.repaintTitleBar
-        local tb2 = menu.title_bar
-        if tb2 and createSR2 and tb2.title_group and #tb2.title_group >= 2 then
-            local FileManager2 = require("apps/filemanager/filemanager")
-            tb2.title_group[2] = createSR2(nil, FileManager2.instance)
-            tb2.title_group:resetLayout()
-            if repaintTB2 then repaintTB2(tb2) end
-        end
+        if menu._zen_status_refresh then menu:_zen_status_refresh() end
     end)
     return menu, true
 end
@@ -1811,6 +1854,13 @@ end
 function M.getActiveDetail()
     if #_detail_menus > 0 then
         local m = _detail_menus[#_detail_menus]
+        if m._zen_restore_parent then
+            return {
+                group_name = m._zen_restore_parent.group_name,
+                tab_id = "tags",
+                page = m._zen_restore_parent.page or 1,
+            }
+        end
         return { group_name = m._zen_group_name, tab_id = m._zen_tab_id, page = m.page or 1 }
     end
 end
@@ -1833,8 +1883,8 @@ end
 -- Close all open group/detail menus to prevent UIManager stack pollution
 function M.closeAll()
     local UIManager2 = require("ui/uimanager")
-    for _i, m in ipairs(_detail_menus) do
-        UIManager2:close(m)
+    for index = #_detail_menus, 1, -1 do
+        UIManager2:close(_detail_menus[index])
     end
     _detail_menus = {}
     if _authors_menu then UIManager2:close(_authors_menu); _authors_menu = nil end

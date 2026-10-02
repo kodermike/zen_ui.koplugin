@@ -75,5 +75,24 @@ describe("reader navbar dispatch", function()
         assert.are.equal("ShowZenUIStats", action.event)
         assert.are.equal("ZenOS: Stats", action.title)
         assert.is_true(action.general)
+        local battery_action = actions.zen_ui_show_battery_stats
+        assert.are.equal("ShowZenUIBatteryStats", battery_action.event)
+        assert.are.equal("ZenOS: Battery Stats", battery_action.title)
+        assert.is_true(battery_action.general)
+    end)
+
+    it("opens battery stats through the dispatcher handler", function()
+        local plugin = { marker = "zen" }
+        local opened_plugin
+        local original = package.loaded["modules/settings/battery_stats_menu"]
+        ZenSpec.replace("modules/settings/battery_stats_menu", {
+            open = function(value)
+                opened_plugin = value
+                return true
+            end,
+        })
+        assert.is_true(Dispatch.onShowZenUIBatteryStats(plugin))
+        assert.are.equal(plugin, opened_plugin)
+        package.loaded["modules/settings/battery_stats_menu"] = original
     end)
 end)

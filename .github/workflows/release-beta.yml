@@ -101,8 +101,27 @@ jobs:
         if: steps.version_check.outputs.skip == 'false'
         run: pip install fonttools
 
+      - name: Download latest ZenOS Launcher
+        if: steps.version_check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE=$(gh api repos/xZenLabs/zen-reader-scriptlet/releases/latest)
+          TAG=$(jq -r '.tag_name' <<< "$RELEASE")
+          URL=$(jq -r '.assets[] | select(.name == "ZenReader.sh") | .browser_download_url' <<< "$RELEASE")
+          SHA=$(jq -r '.assets[] | select(.name == "ZenReader.sh") | .digest | sub("^sha256:"; "")' <<< "$RELEASE")
+          [[ "$URL" == "https://github.com/xZenLabs/zen-reader-scriptlet/releases/download/$TAG/ZenReader.sh" ]] || exit 1
+          [[ "$SHA" =~ ^[0-9a-fA-F]{64}$ ]] || exit 1
+          mkdir -p kindle-launcher
+          curl -fsSL "$URL" -o kindle-launcher/ZenReader.sh
+          echo "$SHA  kindle-launcher/ZenReader.sh" | sha256sum -c -
+          grep -Fqx "# Version: ${TAG#v}" kindle-launcher/ZenReader.sh
+          curl -fsSL "https://raw.githubusercontent.com/xZenLabs/zen-reader-scriptlet/$TAG/LICENSE" -o kindle-launcher/LICENSE
+
       - name: Build and verify plugin zips
         if: steps.version_check.outputs.skip == 'false'
+        env:
+          ZENOS_REQUIRE_KINDLE_LAUNCHER: "1"
         run: ./spec/run package-check
 
       - name: Build release notes

@@ -22,10 +22,6 @@ local LIBRARY_WALLPAPERS_DIR = DataStorage:getFullDataDir() .. "/resources/wallp
 local DEFAULT_LIBRARY_FONT = defaults.library_font.font_face
 local BOOK_DETAIL_ORDER = defaults.book_details.order
 local BOOK_DETAIL_TEXT_STYLE_DEFAULTS = defaults.book_details.text_styles
-local home_rebuild_pending = false
-local home_rebuild_poll_active = false
-local bg_surface_refresh_pending = false
-local bg_surface_refresh_poll_active = false
 
 local function resolved_library_font(font_face)
     if font_face == "default" then font_face = DEFAULT_LIBRARY_FONT end
@@ -70,34 +66,14 @@ local function picker_default(FontChooser)
     return "default", find_registered_font_file("cfont")
 end
 
-local function is_filemanager_menu_open()
-    local ok_fm, FileManager = pcall(require, "apps/filemanager/filemanager")
-    if not ok_fm or not FileManager or not FileManager.instance then return false end
-    local fm = FileManager.instance
-    return fm.menu ~= nil and fm.menu.menu_container ~= nil
-end
-
 local function schedule_home_rebuild_on_menu_close(plugin)
-    if not plugin then return end
-    home_rebuild_pending = true
-    if home_rebuild_poll_active then return end
-    home_rebuild_poll_active = true
-
-    local function tick()
-        if is_filemanager_menu_open() then
-            UIManager:scheduleIn(0.25, tick)
-            return
-        end
-        home_rebuild_poll_active = false
-        if not home_rebuild_pending then return end
-        home_rebuild_pending = false
+    if not plugin or not settings_apply.defer_until_settings_close then return end
+    settings_apply.defer_until_settings_close("home_rebuild", function()
         local home = SharedState.get(plugin, "home")
         if home and home.rebuildActive then
             home.rebuildActive()
         end
-    end
-
-    UIManager:scheduleIn(0.25, tick)
+    end)
 end
 
 local function refresh_background_surfaces(plugin)
@@ -127,23 +103,10 @@ local function refresh_background_surfaces(plugin)
 end
 
 local function schedule_background_surface_refresh(plugin)
-    if not plugin then return end
-    bg_surface_refresh_pending = true
-    if bg_surface_refresh_poll_active then return end
-    bg_surface_refresh_poll_active = true
-
-    local function tick()
-        if is_filemanager_menu_open() then
-            UIManager:scheduleIn(0.25, tick)
-            return
-        end
-        bg_surface_refresh_poll_active = false
-        if not bg_surface_refresh_pending then return end
-        bg_surface_refresh_pending = false
+    if not plugin or not settings_apply.defer_until_settings_close then return end
+    settings_apply.defer_until_settings_close("background_surfaces", function()
         refresh_background_surfaces(plugin)
-    end
-
-    UIManager:scheduleIn(0.25, tick)
+    end)
 end
 
 local function ensure_library_font_cfg(config)
@@ -220,6 +183,7 @@ function M.build(ctx)
     table.insert(items, status_bar_section.build(ctx))
     table.insert(items, metadata_section.build(ctx))
     table.insert(items, {
+        text = _("Font"),
         text_func = function()
             local cfg = ensure_library_font_cfg(config)
             local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
@@ -238,7 +202,7 @@ function M.build(ctx)
                     local SpinWidget = require("ui/widget/spinwidget")
                     local cfg = ensure_library_font_cfg(config)
                     UIManager:show(SpinWidget:new{
-                        title_text = _("Library font size"),
+                        title_text = _("Font size"),
                         value = cfg.font_size,
                         value_min = 10,
                         value_max = 40,
@@ -251,6 +215,7 @@ function M.build(ctx)
                 end,
             },
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local cfg = ensure_library_font_cfg(config)
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
@@ -259,9 +224,10 @@ function M.build(ctx)
                     return string.format("%s %s", _("Font:"), face_text)
                 end,
                 keep_menu_open = true,
-                callback = function(touchmenu_instance)
+                _zen_search_skip_children = true,
+                sub_item_table_func = function(touchmenu_instance)
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
-                    if not ok_fc then return end
+                    if not ok_fc then return {} end
                     local cfg = ensure_library_font_cfg(config)
                     local default_config, default_file = picker_default(FontChooser)
                     local display_face = cfg.font_face == "default"
@@ -277,19 +243,44 @@ function M.build(ctx)
                             save_library_font(config, plugin, touchmenu_instance)
                         end
                     end
-                    if not display_face then return end
-                    UIManager:show(FontChooser:new{
-                        title = _("Library font"),
-                        font_file = display_face,
-                        default_font_file = default_file,
-                        callback = function(file)
-                            local portable_file = LibraryFontPath.toConfig(file)
-                            if cfg.font_face ~= portable_file then
-                                cfg.font_face = portable_file
-                                save_library_font(config, plugin, touchmenu_instance, true)
-                            end
-                        end,
-                    })
+                    if not display_face then return {} end
+                    local FontList = require("fontlist")
+                    local Font = require("ui/font")
+                    local font_items = {
+                        open_on_menu_item_id_func = function() return display_face end,
+                    }
+                    for file in pairs(FontList.fontinfo) do
+                        local name_text, name = FontChooser.getFontNameText(file)
+                        font_items[#font_items + 1] = {
+                            text = (name_text or file) .. (file == default_file and "  ★" or ""),
+                            font_name = name or name_text or file,
+                            menu_item_id = file,
+                            radio = true,
+                            checked_func = function() return display_face == file end,
+                            font_func = function(size) return Font:getFace(file, size) end,
+                            keep_menu_open = true,
+                            callback = function()
+                                local portable_file = LibraryFontPath.toConfig(file)
+                                if cfg.font_face ~= portable_file then
+                                    cfg.font_face = portable_file
+                                    display_face = file
+                                    save_library_font(config, plugin, touchmenu_instance, true)
+                                end
+                            end,
+                            hold_callback = function()
+                                local InfoMessage = require("ui/widget/infomessage")
+                                UIManager:show(InfoMessage:new{ text = file, show_icon = false })
+                            end,
+                        }
+                    end
+                    local ffiUtil = require("ffi/util")
+                    table.sort(font_items, function(a, b)
+                        if a.font_name ~= b.font_name then
+                            return ffiUtil.strcoll(a.font_name, b.font_name)
+                        end
+                        return ffiUtil.strcoll(a.text, b.text)
+                    end)
+                    return font_items
                 end,
                 hold_callback = function()
                     local cfg = ensure_library_font_cfg(config)
@@ -1254,7 +1245,7 @@ function M.build(ctx)
     end
 
     table.insert(items, {
-        text = _("Background"),
+        text = _("Wallpaper"),
         checked_func = function()
             return ensure_lib_bg().enabled == true
         end,
@@ -1291,8 +1282,7 @@ function M.build(ctx)
                 end,
                 keep_menu_open = true,
                 callback = function(touchmenu_instance)
-                    local PathChooser = require("ui/widget/pathchooser")
-                    UIManager:show(PathChooser:new{
+                    UIManager:show(zen_settings_utils.newImagePathChooser{
                         select_file = true,
                         select_directory = false,
                         show_files = true,
@@ -1335,13 +1325,24 @@ function M.build(ctx)
                 callback = function(touchmenu_instance)
                     local bg = ensure_lib_bg()
                     zen_settings_utils.show_value_picker(
-                        _("Background") .. " - " .. _("Opacity"), bg.opacity,
+                        _("Wallpaper") .. " - " .. _("Opacity"), bg.opacity,
                         function(value)
                             bg.opacity = math.max(0,
                                 math.min(100, math.floor(value + 0.5)))
                             save_lib_bg()
                             if touchmenu_instance then touchmenu_instance:updateItems() end
                         end, 0, 100)
+                end,
+            },
+            {
+                text = _("Invert with dark mode"),
+                checked_func = function()
+                    return ensure_lib_bg().invert_with_dark_mode ~= false
+                end,
+                callback = function()
+                    local bg = ensure_lib_bg()
+                    bg.invert_with_dark_mode = bg.invert_with_dark_mode == false
+                    save_lib_bg()
                 end,
             },
         },
@@ -1590,6 +1591,7 @@ function M.build(ctx)
     local function build_book_detail_description_font_items()
         return {
             {
+                _zen_search_text = _("Font"),
                 text_func = function()
                     local style = ensure_book_detail_description_style()
                     local ok_fc, FontChooser = pcall(require, "ui/widget/fontchooser")
@@ -1740,6 +1742,38 @@ function M.build(ctx)
             if touchmenu_instance then touchmenu_instance:updateItems() end
         end,
     }, icons.tbr))
+
+    table.insert(items, IconItem.decorate({
+        text = _("Context menu"),
+        sub_item_table = {
+            {
+                text = _("Archive"),
+                checked_func = function()
+                    return type(config.context_menu) == "table"
+                        and config.context_menu.show_archive == true
+                end,
+                callback = function()
+                    if type(config.context_menu) ~= "table" then config.context_menu = {} end
+                    config.context_menu.show_archive =
+                        config.context_menu.show_archive ~= true
+                    plugin:saveConfig()
+                end,
+            },
+            {
+                text = _("Plugin actions"),
+                checked_func = function()
+                    return type(config.context_menu) == "table"
+                        and config.context_menu.show_plugin_actions == true
+                end,
+                callback = function()
+                    if type(config.context_menu) ~= "table" then config.context_menu = {} end
+                    config.context_menu.show_plugin_actions =
+                        config.context_menu.show_plugin_actions ~= true
+                    plugin:saveConfig()
+                end,
+            },
+        },
+    }, icons.more_vertical))
 
     return items
 end

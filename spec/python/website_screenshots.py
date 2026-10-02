@@ -50,7 +50,8 @@ SESSIONS = frozenset(("general", "reader"))
 EXPECTED_IDS = frozenset((
     "zen_home", "home_bookshelf", "home_simple",
     "library_covers_full", "library_list_full", "context_menu", "metadata_editor", "stats",
-    "launcher", "quicksettings", "quickstart", "zen_settings",
+    "launcher", "quicksettings", "quicksettings_minimal", "network_switcher",
+    "bluetooth_switcher", "quickstart", "zen_settings",
     "launcher_add_plugin_menu", "launcher_add_koreader_menu",
     "controls_buttons_settings", "navbar_buttons_settings",
     "reader", "reader_launcher_book_switcher",
@@ -652,6 +653,8 @@ def _zen_config(background_path: Path = SHOWCASE_BACKGROUND) -> dict[str, object
             "show_warmth": True,
             "rotate_action": "90",
             "screenshot_timer_seconds": 3,
+            "zen_settings_label": "",
+            "launcher_label": "",
             "custom_buttons": [],
             "next_custom_id": 0,
             "layout_version": 2,
@@ -1556,7 +1559,45 @@ class CaptureWorkflow:
                 )
             if options.get("show_lockdown_control") is True:
                 _require_ok(driver.command("showcase_lockdown_control"), action)
-            _require_ok(driver.command("menu_tab_layout", tab_id=options["tab"]), action)
+            if options.get("minimal_controls") is True:
+                _require_ok(driver.command("showcase_minimal_controls"), action)
+            layout = _require_ok(driver.command("menu_tab_layout", tab_id=options["tab"]), action)
+            if options.get("minimal_controls") is True and (
+                layout.get("active_tab") != "quicksettings"
+                or "app_launcher" in layout.get("tabs", [])
+                or layout.get("button_ids") != [
+                    "wifi", "night", "rotate", "zen", "zen_settings", "launcher",
+                ]
+                or layout.get("unified_slider") is not True
+                or not {"Settings", "Launcher"}.issubset(layout.get("visible_texts", []))
+            ):
+                raise CaptureError(f"minimal Controls layout mismatch: {layout}")
+            return
+        if action == "network_switcher":
+            names = options.get("wifi_names")
+            if not isinstance(names, list) or len(names) < 2:
+                raise CaptureError("network switcher fixture needs fictional Wi-Fi names")
+            names = [str(name) for name in names]
+            _require_ok(driver.command("show_network_switcher_fixture", names=names), action)
+            _wait_for(
+                lambda: driver.command("network_switcher_fixture_state"),
+                lambda value: value.get("network_switcher", {}).get("labels") == names
+                and value.get("network_switcher", {}).get("status_visible") is True,
+                scenario.id,
+            )
+            return
+        if action == "bluetooth_switcher":
+            names = options.get("device_names")
+            if not isinstance(names, list) or len(names) < 2:
+                raise CaptureError("Bluetooth switcher fixture needs fictional device names")
+            names = [str(name) for name in names]
+            _require_ok(driver.command("show_bluetooth_switcher_fixture", names=names), action)
+            _wait_for(
+                lambda: driver.command("bluetooth_switcher_fixture_state"),
+                lambda value: value.get("bluetooth_switcher", {}).get("labels") == names
+                and value.get("bluetooth_switcher", {}).get("status_visible") is True,
+                scenario.id,
+            )
             return
         if action == "quickstart":
             _require_ok(driver.command("open_quickstart"), action)
@@ -1580,6 +1621,10 @@ class CaptureWorkflow:
                 lambda: driver.command("settings_page_state"),
                 lambda value: value.get("settings", {}).get("title") == "Settings",
                 "settings root",
+            )
+            _require_ok(
+                driver.command("settings_page_select", label="Interface"),
+                "Interface",
             )
             if action.startswith("launcher_add_"):
                 root_label = "Launcher"

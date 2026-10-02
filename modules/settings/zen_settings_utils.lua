@@ -355,6 +355,33 @@ function M.get_current_dir()
     return M.get_last_dir()
 end
 
+function M.newImagePathChooser(options)
+    local BookInfoManager = require("bookinfomanager")
+    local mode = BookInfoManager:getSetting("filemanager_display_mode")
+    local list = type(mode) == "string" and mode:sub(1, 5) == "list_"
+    local CoverMenu = require("covermenu")
+    local Layout = require(list and "listmenu" or "mosaicmenu")
+
+    options.display_mode_type = list and "list" or "mosaic"
+    options.updateItems = CoverMenu.updateItems
+    options.onCloseWidget = CoverMenu.onCloseWidget
+    options._recalculateDimen = Layout._recalculateDimen
+    options._updateItemsBuildUI = Layout._updateItemsBuildUI
+    options._do_cover_images = true
+    options._do_hint_opened = false
+    if list then
+        options._do_filename_only = true
+        options.files_per_page = require("common/cover_utils").getFilesPerPage()
+    else
+        options.nb_cols_portrait = BookInfoManager:getSetting("nb_cols_portrait") or 3
+        options.nb_rows_portrait = BookInfoManager:getSetting("nb_rows_portrait") or 3
+        options.nb_cols_landscape = BookInfoManager:getSetting("nb_cols_landscape") or 4
+        options.nb_rows_landscape = BookInfoManager:getSetting("nb_rows_landscape") or 2
+        options._do_center_partial_rows = false
+    end
+    return require("ui/widget/pathchooser"):new(options)
+end
+
 -- ---------------------------------------------------------------------------
 -- Time / value picker dialogs
 -- ---------------------------------------------------------------------------

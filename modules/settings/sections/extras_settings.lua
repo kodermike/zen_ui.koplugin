@@ -61,26 +61,22 @@ function M.build(ctx)
             sub_item_table = display_mode_items,
         }, icons.settings_layout)
 
-        table.insert(items, {
+        local opds_item = {
             text = _("Zen OPDS"),
             help_text = _("Enable ZenOS enhancements to the OPDS browser: cover art, list view, hold menu, and navigation improvements."),
-            sub_item_table = {
-                IconItem.decorate({
-                    text = _("Enable Zen OPDS"),
-                    checked_func = function()
-                        return config.features.zen_opds ~= false
-                    end,
-                    callback = function(touchmenu_instance)
-                        config.features.zen_opds = config.features.zen_opds == false
-                        plugin:saveConfig()
-                        if touchmenu_instance then touchmenu_instance:updateItems() end
-                        settings_apply.prompt_restart()
-                    end,
-                }, icons.enable),
-                opds_display_item,
-            },
-        })
-        IconItem.decorate(items[#items], icons.settings_opds)
+            checked_func = function()
+                return config.features.zen_opds ~= false
+            end,
+            callback = function(touchmenu_instance)
+                config.features.zen_opds = config.features.zen_opds == false
+                plugin:saveConfig()
+                if touchmenu_instance then touchmenu_instance:updateItems() end
+                settings_apply.prompt_restart()
+            end,
+            sub_item_table = { opds_display_item },
+        }
+        opds_item.checkmark_callback = opds_item.callback
+        table.insert(items, IconItem.decorate(opds_item, icons.settings_opds))
     end
 
     if Rakuyomi.is_available() then
@@ -110,7 +106,23 @@ function M.build(ctx)
         end
         table.insert(items, {
             text = _("Rakuyomi"),
+            icon_file = require("common/utils").resolveLocalIcon(
+                require("common/plugin_root") .. "/icons/", "tab_manga"),
             sub_item_table = {
+                {
+                    text = _("Exclude from Home"),
+                    checked_func = function()
+                        return config.rakuyomi.exclude_from_home == true
+                    end,
+                    callback = function(touchmenu_instance)
+                        config.rakuyomi.exclude_from_home =
+                            config.rakuyomi.exclude_from_home ~= true
+                        plugin:saveConfig()
+                        local home = settings_apply.get_shared(plugin, "home")
+                        if home and home.rebuildActive then home.rebuildActive() end
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                },
                 {
                     text = _("Return to chapter list on exit"),
                     checked_func = function()
@@ -125,7 +137,6 @@ function M.build(ctx)
                 },
             },
         })
-        IconItem.decorate(items[#items], icons.reading)
     end
 
     local global_items = global_settings.build_extras_items(ctx)
@@ -133,8 +144,8 @@ function M.build(ctx)
         table.insert(items, item)
     end
 
-    local custom_icons_enabled_item = IconItem.decorate({
-        text = _("Enable custom icons"),
+    local custom_icons_item = IconItem.decorate({
+        text = _("Custom icons"),
         help_text = _("When enabled, loose icons or a selected ZenOS icon pack override supported icons. Missing icons fall back to ZenOS, then KOReader."),
         checked_func = function()
             return config.features.custom_icons_enabled == true
@@ -145,7 +156,8 @@ function M.build(ctx)
             if touchmenu_instance then touchmenu_instance:updateItems() end
             settings_apply.prompt_restart()
         end,
-    }, icons.enable)
+    }, icons.custom_icons)
+    custom_icons_item.checkmark_callback = custom_icons_item.callback
 
     if type(config.custom_icons) ~= "table" then config.custom_icons = { active_pack = "" } end
     local function active_pack_id()
@@ -231,15 +243,10 @@ function M.build(ctx)
             return config.features.custom_icons_enabled == true
         end,
         sub_item_table_func = build_pack_items,
-    }, icons.icon)
+    }, icons.custom_icons)
 
-    table.insert(items, IconItem.decorate({
-        text = _("Custom icons"),
-        sub_item_table = {
-            custom_icons_enabled_item,
-            custom_icon_pack_item,
-        },
-    }, icons.icon))
+    custom_icons_item.sub_item_table = { custom_icon_pack_item }
+    table.insert(items, custom_icons_item)
 
     return items
 end

@@ -1,4 +1,5 @@
 dist
+kindle-launcher/
 .DS_Store
 ___pycache___
 *.pyc

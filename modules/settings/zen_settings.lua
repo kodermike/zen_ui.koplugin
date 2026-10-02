@@ -4,6 +4,7 @@ local UIManager = require("ui/uimanager")
 local settings_apply = require("modules/settings/zen_settings_apply")
 local updater        = require("modules/settings/zen_updater")
 local icons          = require("common/inline_icon_map")
+local plugin_root    = require("common/plugin_root")
 local IconItem       = require("common/ui/icon_menu_item")
 local utils          = require("modules/settings/zen_settings_utils")
 
@@ -14,8 +15,8 @@ local menu_section     = require("modules/settings/sections/menu_settings")
 local app_launcher_section = require("modules/settings/sections/app_launcher_settings")
 local reader_section   = require("modules/settings/sections/reader_settings")
 local extras_section   = require("modules/settings/sections/extras_settings")
+local general_section  = require("modules/settings/sections/general_settings")
 local about_section    = require("modules/settings/sections/about_settings")
-local updates_section  = require("modules/settings/sections/updates_settings")
 local shutdown         = require("common/shutdown")
 
 local M = {}
@@ -56,10 +57,10 @@ function M.build(plugin)
     local app_launcher_item = app_launcher_section.build(ctx)
     local reader_items         = reader_section.build(ctx)
     local extras_items      = extras_section.build(ctx)
-    local general_items     = about_section.build(ctx)
-    local updates_items     = updates_section.build(ctx)
+    local about_items     = about_section.build(ctx)
+    local general_items   = general_section.build(ctx, extras_items)
 
-    table.insert(general_items, IconItem.decorate({
+    table.insert(about_items, IconItem.decorate({
         text = _("Quit KOReader"),
         callback = function()
             UIManager:show(require("ui/widget/confirmbox"):new{
@@ -127,6 +128,29 @@ function M.build(plugin)
     -- Root menu assembly
     -- -------------------------------------------------------------------------
 
+    local function move_item(items, text, destination)
+        for i, item in ipairs(items) do
+            if item.text == text then
+                table.insert(destination, table.remove(items, i))
+                return
+            end
+        end
+    end
+
+    for _i, item in ipairs(general_items) do
+        if item.text == _("Advanced") then
+            move_item(item.sub_item_table, _("Double tap to open books"), filebrowser_items)
+            break
+        end
+    end
+
+    extras_items = utils.order_items_by_text(extras_items, {
+        _("Install ZenPM"),
+        _("Zen OPDS"),
+        _("Stats"),
+        _("Rakuyomi"),
+    })
+
     quick_settings_item.text = _("Controls")
     IconItem.decorate(quick_settings_item, icons.settings_quick)
     app_launcher_item.text = _("Launcher")
@@ -136,6 +160,19 @@ function M.build(plugin)
     IconItem.decorate(home_item, icons.settings_home)
     navbar_item.text = _("Navbar")
 
+    local interface_items = {
+        quick_settings_item,
+        app_launcher_item,
+        IconItem.decorate(navbar_item, icons.settings_navbar),
+    }
+    move_item(filebrowser_items, _("Status bar"), interface_items)
+    move_item(filebrowser_items, _("Font"), interface_items)
+    move_item(extras_items, _("Zen Keyboard"), interface_items)
+    move_item(filebrowser_items, _("Wallpaper"), interface_items)
+    move_item(extras_items, _("Custom icons"), interface_items)
+    move_item(quick_settings_item.sub_item_table, _("Blur menu background"), interface_items)
+    move_item(extras_items, _("Zen Search"), interface_items)
+
     local library_item = IconItem.decorate({
         text = _("Library"),
         sub_item_table = filebrowser_items,
@@ -143,18 +180,25 @@ function M.build(plugin)
     }, icons.settings_library)
 
     local root_items = {
-        quick_settings_item,
-        app_launcher_item,
         home_item,
         library_item,
-        IconItem.decorate(navbar_item, icons.settings_navbar),
         IconItem.decorate({ text = _("Reader"), sub_item_table = reader_items }, icons.settings_reader),
-        IconItem.decorate({ text = _("Extras"), sub_item_table = extras_items }, icons.fav_add),
-        IconItem.decorate({ text = _("Updates"), sub_item_table = updates_items }, icons.upgrade),
         IconItem.decorate({
-            text = _("About"),
-            sub_item_table = general_items,
-        }, icons.settings_about),
+            text = _("Interface"),
+            sub_item_table = interface_items,
+            _zen_settings_root = "interface",
+        }, icons.settings_global),
+        IconItem.decorate({ text = _("Extras"), sub_item_table = extras_items }, icons.fav_add),
+        IconItem.decorate({ text = _("General"), sub_item_table = general_items }, icons.settings),
+        {
+            text = _("KOReader"),
+            icon_file = plugin_root .. "/icons/koreader.png",
+            _zen_settings_root = "koreader",
+            sub_item_table_func = function()
+                return require("modules/menu/app_launcher/native_menu").settingsItems("active")
+            end,
+        },
+        IconItem.decorate({ text = _("About"), sub_item_table = about_items }, icons.settings_about),
     }
 
     root_items._zen_header_action_func = function()

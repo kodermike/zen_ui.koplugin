@@ -157,6 +157,10 @@ local function show_folder_from_filemanager(folder)
     local open_folder = rawget(_G, "__ZEN_UI_NAVBAR_OPEN_FOLDER")
     if type(open_folder) == "function" then return open_folder(folder) == true end
     require("common/utils").closeWidgetsAbove(fm)
+    local paths = require("common/paths")
+    local direct_archive = paths.isArchiveRoot(folder)
+    fm.file_chooser._zen_direct_archive_root = direct_archive and paths.getArchiveDir() or nil
+    fm.file_chooser._zen_opening_archive_root = direct_archive or nil
     fm.file_chooser:changeToPath(folder)
     return true
 end
@@ -520,6 +524,12 @@ function M.onDispatcherRegisterActions()
         title = _("ZenOS: Stats"),
         general = true,
     })
+    Dispatcher:registerAction("zen_ui_show_battery_stats", {
+        category = "none",
+        event = "ShowZenUIBatteryStats",
+        title = "ZenOS: " .. _("Battery Stats"),
+        general = true,
+    })
     -- Folder action stores its target path per-gesture (category="string" passes the
     -- stored value to the event). No section flag: the default menu loop skips it, so
     -- our _addItem patch renders a PathChooser in the General section instead of a fixed
@@ -682,6 +692,10 @@ function M.onShowZenUIStats(plugin)
     return show_zen_tab(plugin, "stats")
 end
 
+function M.onShowZenUIBatteryStats(plugin)
+    return require("modules/settings/battery_stats_menu").open(plugin)
+end
+
 function M.onShowZenUIFolder(plugin, folder)
     -- category="string": Dispatcher passes the per-action stored folder path as arg.
     return show_zen_folder(plugin, folder)
@@ -712,6 +726,7 @@ function M.install(target)
     target.onShowZenUITags = M.onShowZenUITags
     target.onShowZenUITag = M.onShowZenUITag
     target.onShowZenUIStats = M.onShowZenUIStats
+    target.onShowZenUIBatteryStats = M.onShowZenUIBatteryStats
     target.onShowZenUIFolder = M.onShowZenUIFolder
     target.onZenUIKOSyncSync = M.onZenUIKOSyncSync
     target.onShowZenUIToc = M.onShowZenUIToc

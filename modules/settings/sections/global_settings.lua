@@ -62,8 +62,7 @@ local function choose_sleep_screen_image()
         local current_dir = select(1, require("util").splitFilePathName(current_path))
         if current_dir ~= "" then path = current_dir end
     end
-    local PathChooser = require("ui/widget/pathchooser")
-    UIManager:show(PathChooser:new{
+    UIManager:show(utils.newImagePathChooser{
         select_directory = false,
         select_file = true,
         show_files = true,
@@ -377,24 +376,21 @@ function M.build(ctx)
     local items = {}
 
     -- Search section
-    table.insert(items, {
-        text = _("Search"),
+    local search_item = {
+        text = _("Zen Search"),
+        help_text = _("Use Zen Search in the file browser and reader. Disable to use KOReader's default search."),
+        checked_func = function()
+            return type(config.features) ~= "table"
+                or config.features.search ~= false
+        end,
+        callback = function(touchmenu_instance)
+            if type(config.features) ~= "table" then config.features = {} end
+            config.features.search = config.features.search == false
+            plugin:saveConfig()
+            if touchmenu_instance then touchmenu_instance:updateItems() end
+            settings_apply.prompt_restart()
+        end,
         sub_item_table = {
-            {
-                text = _("Enable Zen Search"),
-                help_text = _("Use Zen Search in the file browser and reader. Disable to use KOReader's default search."),
-                checked_func = function()
-                    return type(config.features) ~= "table"
-                        or config.features.search ~= false
-                end,
-                callback = function(touchmenu_instance)
-                    if type(config.features) ~= "table" then config.features = {} end
-                    config.features.search = config.features.search == false
-                    plugin:saveConfig()
-                    if touchmenu_instance then touchmenu_instance:updateItems() end
-                    settings_apply.prompt_restart()
-                end,
-            },
             {
                 text = _("Match whole words"),
                 help_text = _("When enabled, search matches whole words only. When disabled, substring matching is used (e.g., 'fish' matches 'fishing')."),
@@ -412,7 +408,9 @@ function M.build(ctx)
                 end,
             },
         },
-    })
+    }
+    search_item.checkmark_callback = search_item.callback
+    table.insert(items, search_item)
 
     -- Night mode schedule
     table.insert(items, {
@@ -942,6 +940,9 @@ function M.build(ctx)
 end
 
 function M.build_extras_items(ctx)
+    local config = ctx.config
+    local plugin = ctx.plugin
+    local settings_apply = ctx.settings_apply
     local global_items = M.build(ctx)
     local search_item = global_items[1]
     local night_schedule_item = global_items[2]
@@ -967,10 +968,26 @@ function M.build_extras_items(ctx)
         },
         sleep_item,
         lockdown_item,
+        {
+            text = _("Zen Keyboard"),
+            help_text = _("Enable ZenOS keyboard improvements."),
+            checked_func = function()
+                return type(config.features) ~= "table"
+                    or config.features.zen_keyboard ~= false
+            end,
+            callback = function(touchmenu_instance)
+                if type(config.features) ~= "table" then config.features = {} end
+                config.features.zen_keyboard = config.features.zen_keyboard == false
+                plugin:saveConfig()
+                if touchmenu_instance then touchmenu_instance:updateItems() end
+                settings_apply.prompt_restart()
+            end,
+        },
     }
     IconItem.decorate(items[1], icons.search)
     IconItem.decorate(items[2], icons.tbr)
     IconItem.decorate(items[4], icons.settings_lockdown)
+    IconItem.decorate(items[5], icons.keyboard)
     return items
 end
 

@@ -292,7 +292,7 @@ local function rebuild_icon_row(row)
         if item.radio == true then
             row.checkmark_widget = RadioMark:new{
                 checkable = true,
-                checked = item_checked == true,
+                checked = not not item_checked,
                 enabled = not item_disabled,
             }
         else
@@ -366,9 +366,20 @@ local function rebuild_icon_row(row)
     local row_items = {
         align = "center",
     }
-    table.insert(row_items, not arrange_enabled and item.icon_glyph
-        and IconItem.makeState(item.icon_glyph, icon_w, row.height, icon_face)
-        or HorizontalSpan:new{ width = icon_w })
+    local icon_state
+    if not arrange_enabled and item.icon_file then
+        icon_state = CenterContainer:new{
+            dimen = Geom:new{ w = icon_w, h = row.height },
+            IconWidget:new{
+                file = item.icon_file,
+                width = icon_face.size,
+                height = icon_face.size,
+            },
+        }
+    elseif not arrange_enabled and item.icon_glyph then
+        icon_state = IconItem.makeState(item.icon_glyph, icon_w, row.height, icon_face)
+    end
+    table.insert(row_items, icon_state or HorizontalSpan:new{ width = icon_w })
     table.insert(row_items, HorizontalSpan:new{ width = icon_gap })
     row._zen_settings_style = {
         row_height = row.height,

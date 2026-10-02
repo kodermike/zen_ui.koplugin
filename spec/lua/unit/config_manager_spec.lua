@@ -75,9 +75,11 @@ describe("config manager folder-path migration", function()
         assert.is_true(config.features.app_launcher)
         assert.is_true(config.features.zen_mode)
         assert.is_true(config.features.status_bar)
+        assert.are.same({ "bluetooth", "wifi", "battery" }, config.status_bar.right_order)
         assert.are.equal("90", config.quick_settings.rotate_action)
         assert.are.equal("", config.quick_settings.gyro_label)
         assert.are.equal("quick_rotate", config.quick_settings.gyro_icon)
+        assert.is_true(config.quick_settings.unified_light_slider)
         assert.is_false(config.quick_settings.tailscale_toggle_wifi)
         assert.are.equal("number", config.reader_footer.chapter_time_format)
         assert.is_false(config.reader_top_status_bar.wifi_hide_when_off)
@@ -92,6 +94,25 @@ describe("config manager folder-path migration", function()
         assert.is_false(config.metadata.epub_backup)
         assert.are.equal(1, google_key_ensures)
         assert.is_false(config._meta.quickstart_shown_for_version)
+    end)
+
+    it("preserves existing default status layouts", function()
+        settings_file.data = {
+            status_bar = { left_order = { "time" }, center_order = {}, right_order = { "wifi", "battery" } },
+        }
+        local config = Manager.load()
+        assert.are.same({ "time" }, config.status_bar.left_order)
+        assert.are.same({}, config.status_bar.center_order)
+        assert.are.same({ "wifi", "battery" }, config.status_bar.right_order)
+    end)
+
+    it("preserves customized status layouts when applying new defaults", function()
+        settings_file.data = {
+            status_bar = { left_order = { "bluetooth", "time" }, center_order = {}, right_order = { "wifi", "battery" } },
+        }
+        local config = Manager.load()
+        assert.are.same({ "bluetooth", "time" }, config.status_bar.left_order)
+        assert.are.same({ "wifi", "battery" }, config.status_bar.right_order)
     end)
 
     it("defaults search matching for the interface script", function()

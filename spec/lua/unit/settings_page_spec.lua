@@ -26,6 +26,7 @@ describe("Zen settings page", function()
         "modules/settings/zen_settings_apply",
         "common/ui/zen_settings_titlebar",
         "apps/filemanager/filemanager",
+        "apps/reader/readerui",
     }
 
     local Menu = {}
@@ -175,6 +176,41 @@ describe("Zen settings page", function()
         }
     end
 
+    it("repaints live Wi-Fi toggles on external network changes", function()
+        local wifi_on = false
+        local settings = make_page({{
+            text = "Wi-Fi", checked_func = function() return wifi_on end,
+        }})
+        local UIManager = require("ui/uimanager")
+        local top = settings
+        UIManager.topdown_widgets_iter = function()
+            local widgets = { top, { toast = true } }
+            return function() return table.remove(widgets) end
+        end
+        local painted_states = {}
+        UIManager.setDirty = function(_self, widget, refresh, region)
+            assert.are.equal(settings, widget)
+            assert.are.equal("ui", refresh)
+            assert.are.equal(settings.dimen, region)
+            painted_states[#painted_states + 1] = settings.item_table[1].checked_func()
+        end
+
+        wifi_on = true
+        settings:onNetworkConnected()
+        wifi_on = false
+        settings:onNetworkDisconnected()
+        wifi_on = true
+        settings:onNetworkStateChanged()
+        assert.are.same({ true, false, true }, painted_states)
+
+        top = { covers_fullscreen = true }
+        settings:onNetworkStateChanged()
+        top = settings
+        settings:closeMenu()
+        settings:onNetworkStateChanged()
+        assert.are.same({ true, false, true }, painted_states)
+    end)
+
     it("loads the settings builder only when opening Settings", function()
         local name = "modules/settings/zen_settings"
         local builder, preload = package.loaded[name], package.preload[name]
@@ -231,6 +267,25 @@ describe("Zen settings page", function()
         assert.is_true(settings.title_bar.search_visible)
     end)
 
+    it("honors disabled controls and resolves callback factories on each action", function()
+        local active, taps, holds = false, 0, 0
+        local item = {
+            text = "Control", keep_menu_open = true,
+            enabled_func = function() return active end,
+            callback_func = function() return function() taps = taps + 1 end end,
+            hold_callback_func = function() return function() holds = holds + 1 end end,
+        }
+        local settings = make_page({ item })
+        settings:onMenuSelect(item)
+        settings:onMenuHold(item)
+        assert.are.equal(0, taps + holds)
+        active = true
+        settings:onMenuSelect(item)
+        settings:onMenuHold(item)
+        assert.are.equal(1, taps)
+        assert.are.equal(1, holds)
+    end)
+
     it("shows a header action only at the settings root", function()
         local action = { text = "Update available" }
         local child = { text = "Child" }
@@ -247,10 +302,14 @@ describe("Zen settings page", function()
 
     it("toggles configurable submenu rows only from their outer switch", function()
         local active = false
+        local callback_menu
         local date = {
             text = "Date",
             checked_func = function() return active end,
-            checkmark_callback = function() active = not active end,
+            checkmark_callback = function(touch_menu)
+                callback_menu = touch_menu
+                active = not active
+            end,
             sub_item_table = {{ text = "MM/DD/YY" }},
             _zen_settings_control_bounds = { left = 0.75, right = 0.9 },
         }
@@ -258,6 +317,7 @@ describe("Zen settings page", function()
 
         settings:onMenuSelect(date, { x = 0.8 })
         assert.is_true(active)
+        assert.are.equal(settings, callback_menu)
         assert.are.equal(settings._root_items, settings.item_table)
 
         settings:onMenuSelect(date, { x = 0.95 })
@@ -265,7 +325,7 @@ describe("Zen settings page", function()
         assert.are.equal("Date", settings.title_bar.title)
     end)
 
-    it("returns to the settings root when the header Back button is held", function()
+    it("returns to the settings root on Back hold without forcing row focus", function()
         local detail = { text = "Detail", sub_item_table = {{ text = "Option" }} }
         local library = { text = "Library >", sub_item_table = { detail } }
         local settings = make_page({ library })
@@ -275,12 +335,29 @@ describe("Zen settings page", function()
         assert.are.equal("Detail", settings.title_bar.title)
         assert.is_function(settings.title_bar.back_hold_callback)
 
+        settings.itemnumber = 2
         settings.title_bar.back_hold_callback()
 
         assert.are.equal("Settings", settings.title_bar.title)
         assert.are.equal(settings._root_items, settings.item_table)
         assert.are.equal(0, #settings.item_table_stack)
         assert.is_false(settings.title_bar.back_visible)
+        assert.is_nil(settings.itemnumber)
+    end)
+
+    it("goes back from submenus on an east swipe starting in the west 33 percent", function()
+        local library = { text = "Library >", sub_item_table = {{ text = "Option" }} }
+        local settings = make_page({ library })
+        settings:onMenuSelect(library)
+
+        assert.is_true(settings:onSwipe(nil, { direction = "east", pos = { x = 198 } }))
+        assert.are.equal(settings._root_items, settings.item_table)
+
+        assert.is_true(settings:onSwipe(nil, { direction = "east", pos = { x = 199 } }))
+        assert.is_true(settings:onSwipe(nil, { direction = "west", pos = { x = 100 } }))
+        assert.is_true(settings:onSwipe(nil, { direction = "east", pos = { x = 100 } }))
+        assert.is_false(settings._closed)
+        assert.are.equal(3, settings.top_menu_swipes)
     end)
 
     it("shows full truncated row text on hold while preserving explicit help", function()
@@ -326,6 +403,37 @@ describe("Zen settings page", function()
         assert.are_not.equal(first, reopened)
         assert.are.equal(2, #shown_widgets)
         assert.are.equal(2, translation_refreshes)
+    end)
+
+    it("uses the Zen settings page for a standalone root with an X", function()
+        local plugin = { config = {} }
+        local root = {{ text = "Health", mandatory = "75%", sub_item_table = {{ text = "Current capacity" }} }}
+        local previous = PageModule.show(plugin)
+        local page = PageModule.show(plugin, { title = "Battery", root_items = root })
+
+        assert.is_true(previous._closed)
+        assert.are.equal(page, shown_widgets[2])
+        assert.are.equal("zen_settings", page.name)
+        assert.is_true(page.covers_fullscreen)
+        assert.are.equal(root, page.item_table)
+        assert.is_true(root[1]._zen_settings_row)
+        assert.is_true(root[1]._zen_has_submenu)
+        assert.is_false(page.title_bar.back_visible)
+        assert.is_false(page.title_bar.search_visible)
+        assert.is_function(page.title_bar.close_callback)
+
+        page:onMenuSelect(root[1])
+        assert.are.equal("Health", page.title_bar.title)
+        assert.is_true(page.title_bar.back_visible)
+        assert.is_false(page.title_bar.search_visible)
+        page.title_bar.back_callback()
+        assert.are.equal("Battery", page.title_bar.title)
+        page.title_bar.close_callback()
+        assert.is_true(page._closed)
+
+        local settings = PageModule.show(plugin)
+        assert.are.equal("Settings", settings.title_bar.title)
+        assert.is_true(settings.title_bar.search_visible)
     end)
 
     it("closes every arrange overlay without losing the deepest resume route", function()
@@ -461,6 +569,53 @@ describe("Zen settings page", function()
         settings:closeMenu()
 
         assert.are.equal(1, deferred_apply_flushes)
+    end)
+
+    it("refreshes the visible status bar and full screen after closing settings", function()
+        local UIManager = require("ui/uimanager")
+        local fm = require("apps/filemanager/filemanager").instance
+        local reader = {}
+        ZenSpec.replace("apps/reader/readerui", { instance = reader })
+        local refreshes = 0
+        local full_refreshes = 0
+        UIManager.setDirty = function(_self, widget, refresh, region)
+            if widget == "all" then
+                assert.are.equal("full", refresh)
+                assert.is_nil(region)
+                full_refreshes = full_refreshes + 1
+            else
+                assert.are.equal(reader, widget)
+                assert.are.equal("ui", refresh)
+                refreshes = refreshes + 1
+            end
+        end
+        fm._updateStatusBar = function() refreshes = refreshes + 1 end
+
+        UIManager._window_stack = { { widget = fm } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(1, refreshes)
+        assert.are.equal(1, full_refreshes)
+
+        local group = { _zen_status_refresh = function()
+            refreshes = refreshes + 1
+        end }
+        UIManager._window_stack = { { widget = fm }, { widget = group } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(2, refreshes)
+        assert.are.equal(2, full_refreshes)
+
+        local home = { _zen_home_refresh_clock_widgets = function()
+            refreshes = refreshes + 1
+        end }
+        UIManager._window_stack = { { widget = fm }, { widget = home }, { widget = { toast = true } } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(3, refreshes)
+        assert.are.equal(3, full_refreshes)
+
+        UIManager._window_stack = { { widget = reader } }
+        make_page({}):onCloseWidget()
+        assert.are.equal(4, refreshes)
+        assert.are.equal(4, full_refreshes)
     end)
 
     it("restores the last page for six seconds after closing", function()
@@ -668,6 +823,53 @@ describe("Zen settings page", function()
         assert.are.equal(1, settings.itemnumber)
     end)
 
+    it("does not build dynamic menus while typing a settings search", function()
+        local native_builds = 0
+        local settings = make_page({
+            {
+                text = "KOReader",
+                sub_item_table_func = function()
+                    native_builds = native_builds + 1
+                    return {{ text = "Native child" }}
+                end,
+            },
+            { text = "Other", sub_item_table = {{ text = "Zen child" }} },
+        })
+
+        settings:_onSearchChanged("Zen child")
+        assert.are.equal(0, native_builds)
+        assert.are.equal("Zen child", settings.item_table[1].text)
+
+        settings:_onSearchChanged("KOReader")
+        assert.are.equal(0, native_builds)
+        assert.is_true(settings.item_table[1]._zen_has_submenu)
+        settings:onMenuSelect(settings.item_table[1])
+        assert.are.equal(1, native_builds)
+        assert.are.equal("Native child", settings.item_table[1].text)
+    end)
+
+    it("indexes static labels without evaluating dynamic font labels", function()
+        local label_calls = 0
+        local font = {
+            _zen_search_text = "Font",
+            text_func = function()
+                label_calls = label_calls + 1
+                return "Font: custom"
+            end,
+            sub_item_table = {{ text = "Font face" }},
+        }
+        local settings = make_page({
+            { text = "Library", sub_item_table = { font } },
+        })
+
+        settings:_onSearchChanged("Font face")
+        assert.are.equal(0, label_calls)
+        assert.are.equal("Font face", settings.item_table[1].text)
+        settings:onMenuSelect(settings.item_table[1])
+        assert.are.equal(0, label_calls)
+        assert.are.equal("Font", settings._resume_path[2].text)
+    end)
+
     it("hides gated settings from menus and search", function()
         local visible_plugin = { text = "Visible plugin", show_func = function() return true end }
         local hidden_plugin = { text = "Hidden plugin", show_func = function() return false end }
@@ -719,6 +921,34 @@ describe("Zen settings page", function()
         assert.are.equal(1, deferred_apply_flushes)
     end)
 
+    it("preserves submenu titles when filtering an already filtered table", function()
+        local settings = make_page({})
+        local item = { text = "Controls", sub_item_table = {
+            { text = "Visible" },
+            { text = "Hidden", show_func = function() return false end },
+        } }
+        settings:onMenuSelect(item)
+        local filtered = settings:_resolveSubItems({ sub_item_table = settings.item_table })
+        assert.are.equal("Controls", filtered._zen_title)
+        assert.are.equal(1, #filtered)
+    end)
+
+    it("releases native selector views when navigating away during search", function()
+        for _i, action in ipairs({ "root", "close", "result" }) do
+            local released = 0
+            local settings = make_page({{ text = "Other", sub_item_table = {{ text = "Option" }} }})
+            settings:_openSubmenu({ text = "Selector" }, {
+                { text = "Value" },
+                _zen_on_leave = function() released = released + 1 end,
+            })
+            settings:_onSearchChanged("Other")
+            if action == "root" then settings:backToRootMenu()
+            elseif action == "close" then settings:closeMenu()
+            else settings:onMenuSelect(settings.item_table[1]) end
+            assert.are.equal(1, released)
+        end
+    end)
+
     it("collapses an empty search pill to an icon when opening a submenu", function()
         local controls = { text = "Controls", sub_item_table = {{ text = "Screen timeout" }} }
         local settings = make_page({ controls })
@@ -730,6 +960,23 @@ describe("Zen settings page", function()
         assert.are.equal("Controls", settings.title_bar.title)
         assert.is_true(settings.title_bar.search_visible)
         assert.is_true(settings.title_bar.search_collapsed)
+    end)
+
+    it("dispatches tap and hold input definitions and honors selected submenu IDs", function()
+        local settings = Page:new{ item_table = {}, title = "Settings" }
+        local inputs = {}
+        function settings:onInput(input) inputs[#inputs + 1] = input end
+        settings:onMenuSelect({ tap_input_func = function() return { title = "Tap input" } end, keep_menu_open = true })
+        settings:onMenuHold({ hold_input = { title = "Hold input" } })
+        assert.are.equal("Tap input", inputs[1].title)
+        assert.are.equal("Hold input", inputs[2].title)
+        local children = {
+            { text = "First", menu_item_id = "first" },
+            { text = "Selected", menu_item_id = "selected" },
+            open_on_menu_item_id_func = function() return "selected" end,
+        }
+        settings:onMenuSelect({ text = "Choices", sub_item_table = children })
+        assert.are.equal(2, settings.itemnumber)
     end)
 
     it("opens the KOReader menu from the physical Menu key", function()

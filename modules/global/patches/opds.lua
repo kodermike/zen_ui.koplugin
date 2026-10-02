@@ -17,6 +17,8 @@ local function apply_opds()
     local CenterContainer = require("ui/widget/container/centercontainer")
     local Font            = require("ui/font")
     local FrameContainer  = require("ui/widget/container/framecontainer")
+    local ffi             = require("ffi")
+    local FFIUtil         = require("ffi/util")
     local Geom            = require("ui/geometry")
     local GestureRange    = require("ui/gesturerange")
     local HGroup          = require("ui/widget/horizontalgroup")
@@ -25,6 +27,7 @@ local function apply_opds()
     local InputContainer  = require("ui/widget/container/inputcontainer")
     local LineWidget      = require("ui/widget/linewidget")
     local Menu            = require("ui/widget/menu")
+    local NetworkMgr      = require("ui/network/manager")
     local Size            = require("ui/size")
     local TextBoxWidget   = require("ui/widget/textboxwidget")
     local TextWidget      = require("ui/widget/textwidget")
@@ -55,10 +58,25 @@ local function apply_opds()
         close = utils.resolveLocalIcon(_icons_dir, "close"),
     }
 
-    -- Cover cache: [url] → { bb } | { failed = true }  (session-scoped)
+    -- Cover cache: [url] → { bb } | { failed = true }  (visible-page scoped)
     local _cover_cache = {}
 
-    -- Synchronous HTTP fetch; runs inside a UIManager-scheduled callback.
+    local function prune_cover_cache(keep, entries)
+        for _i, entry in ipairs(entries or {}) do
+            local cached = entry.cover_url and _cover_cache[entry.cover_url]
+            if cached and cached.bb == entry.cover_bb and not (keep and keep[entry.cover_url]) then
+                entry.cover_bb = nil
+            end
+        end
+        for url, cached in pairs(_cover_cache) do
+            if not (keep and keep[url]) then
+                if cached.bb then cached.bb:free() end
+                _cover_cache[url] = nil
+            end
+        end
+    end
+
+    -- HTTP fetch body; callers run it in a subprocess.
     local function fetch_bytes(cover_url, creds)
         local ok_h, http        = pcall(require, "socket.http")
         local ok_l, ltn12       = pcall(require, "ltn12")
@@ -89,7 +107,20 @@ local function apply_opds()
         logger.dbg("OPDS cover queue started, items=", #queue)
         local stopped = false
         local idx     = 1
-        local next_cover
+        local next_cover, poll_cover, pid, read_fd
+        local function collect_process(child_pid)
+            if not FFIUtil.isSubProcessDone(child_pid) then
+                UIManager:scheduleIn(1, function() collect_process(child_pid) end)
+            end
+        end
+        local function finish_process()
+            if read_fd then ffi.C.close(read_fd); read_fd = nil end
+            if pid then
+                collect_process(pid)
+                pid = nil
+                UIManager:allowStandby()
+            end
+        end
         next_cover = function()
             if stopped or idx > #queue then return end
             local item = queue[idx]; idx = idx + 1
@@ -105,41 +136,68 @@ local function apply_opds()
                 return
             end
             _cover_cache[u] = { loading = true }
-            local bytes = fetch_bytes(u, creds)
-            if stopped then return end
-            if bytes then
-                local ok_ri, RI = pcall(require, "ui/renderimage")
-                logger.dbg("OPDS cover renderimage require ok=", ok_ri, "size=", item.cover_w, "x", item.cover_h)
-                if ok_ri then
-                    local ok_bb, bb = pcall(function()
-                        return RI:renderImageData(bytes, #bytes, false,
-                            item.cover_w, item.cover_h)
-                    end)
-                    logger.dbg("OPDS cover renderImageData ok=", ok_bb, "bb=", bb ~= nil)
-                    if ok_bb and bb then
-                        _cover_cache[u] = { bb = bb }
-                        item.entry.cover_bb = bb
-                        if not stopped then item.widget:update() end
+            UIManager:preventStandby()
+            pid, read_fd = FFIUtil.runInSubProcess(function(_pid, write_fd)
+                FFIUtil.writeToFD(write_fd, fetch_bytes(u, creds) or "", true)
+            end, true)
+            if not pid then
+                read_fd = nil
+                UIManager:allowStandby()
+                _cover_cache[u] = { failed = true }
+                logger.warn("OPDS cover subprocess failed:", u)
+                UIManager:nextTick(next_cover)
+                return
+            end
+            poll_cover = function()
+                if stopped then return end
+                local done = FFIUtil.isSubProcessDone(pid)
+                local available = FFIUtil.getNonBlockingReadSize(read_fd)
+                if not done and not (available and available > 0) then
+                    UIManager:scheduleIn(0.25, poll_cover)
+                    return
+                end
+                -- The child writes only after HTTP completes; never wait on the network here.
+                local bytes = FFIUtil.readAllFromFD(read_fd)
+                read_fd = nil
+                finish_process()
+                if bytes and #bytes > 0 then
+                    local ok_ri, RI = pcall(require, "ui/renderimage")
+                    logger.dbg("OPDS cover renderimage require ok=", ok_ri, "size=", item.cover_w, "x", item.cover_h)
+                    if ok_ri then
+                        local ok_bb, bb = pcall(function()
+                            return RI:renderImageData(bytes, #bytes, false,
+                                item.cover_w, item.cover_h)
+                        end)
+                        logger.dbg("OPDS cover renderImageData ok=", ok_bb, "bb=", bb ~= nil)
+                        if ok_bb and bb then
+                            _cover_cache[u] = { bb = bb }
+                            item.entry.cover_bb = bb
+                            if not stopped then item.widget:update() end
+                        else
+                            logger.warn("OPDS cover renderImageData failed for:", u, ok_bb, bb)
+                            _cover_cache[u] = { failed = true }
+                        end
                     else
-                        logger.warn("OPDS cover renderImageData failed for:", u, ok_bb, bb)
+                        logger.warn("OPDS cover: failed to require ui/renderimage")
                         _cover_cache[u] = { failed = true }
                     end
                 else
-                    logger.warn("OPDS cover: failed to require ui/renderimage")
+                    logger.warn("OPDS cover fetch returned nil for:", u)
                     _cover_cache[u] = { failed = true }
                 end
-            else
-                logger.warn("OPDS cover fetch returned nil for:", u)
-                _cover_cache[u] = { failed = true }
+                if not stopped and idx <= #queue then
+                    UIManager:nextTick(next_cover)
+                end
             end
-            if not stopped and idx <= #queue then
-                UIManager:scheduleIn(0.15, next_cover)
-            end
+            UIManager:scheduleIn(0.25, poll_cover)
         end
         UIManager:scheduleIn(0.5, next_cover)
         return function()
             stopped = true
             UIManager:unschedule(next_cover)
+            if poll_cover then UIManager:unschedule(poll_cover) end
+            if pid then FFIUtil.terminateSubProcess(pid) end
+            finish_process()
             -- Clear stale 'loading' markers so interrupted items are re-queued on page revisit
             for u, v in pairs(_cover_cache) do
                 if v.loading then _cover_cache[u] = nil end
@@ -682,7 +740,9 @@ local function apply_opds()
         local display_mode = get_opds_display_mode()
         if display_mode == "classic" then
             if self._zen_halt then self._zen_halt(); self._zen_halt = nil end
-            return Menu.updateItems(self, select_number, no_recalculate_dimen)
+            local result = Menu.updateItems(self, select_number, no_recalculate_dimen)
+            prune_cover_cache(nil, self.item_table)
+            return result
         end
         -- Root screen: always list, 10 per page, grey placeholder covers.
         if #(self.paths or {}) == 0 then
@@ -691,6 +751,7 @@ local function apply_opds()
             local old_selected = snapshot_focus(self)
             self.layout = {}
             self.item_group:clear()
+            prune_cover_cache(nil, self.item_table)
             self.page_info:resetLayout()
             self.return_button:resetLayout()
             self.content_group:resetLayout()
@@ -791,6 +852,7 @@ local function apply_opds()
                 - Size.padding.button
         end
         local pending_covers = {}
+        local active_cover_urls = {}
 
         if mosaic_mode then
             -- Grid: match MosaicMenu spacing (item_margin around and between all cells).
@@ -832,6 +894,7 @@ local function apply_opds()
                     if entry then
                         entry.idx = idx
                         if entry.cover_url then
+                            active_cover_urls[entry.cover_url] = true
                             local cached = _cover_cache[entry.cover_url]
                             if cached and cached.bb then entry.cover_bb = cached.bb end
                         end
@@ -897,6 +960,7 @@ local function apply_opds()
                 if not entry then break end
                 entry.idx = idx
                 if entry.cover_url then
+                    active_cover_urls[entry.cover_url] = true
                     local cached = _cover_cache[entry.cover_url]
                     if cached and cached.bb then entry.cover_bb = cached.bb end
                 end
@@ -926,6 +990,7 @@ local function apply_opds()
         end
 
         self:updatePageInfo(select_number)
+        prune_cover_cache(active_cover_urls, self.item_table)
         self:mergeTitleBarIntoLayout()
         restore_focus(self, old_selected)
         UIManager:setDirty(self.show_parent, function()
@@ -943,12 +1008,15 @@ local function apply_opds()
     -- Cancel in-flight cover loads when the widget closes.
     local orig_onCloseWidget = Menu.onCloseWidget
     function OPDSBrowser:onCloseWidget()
+        self._zen_opds_closed = true
+        self._zen_network_action = nil
+        if self._zen_network_wait then
+            UIManager:unschedule(self._zen_network_wait)
+            self._zen_network_wait = nil
+        end
         if self._zen_halt then self._zen_halt(); self._zen_halt = nil end
         -- Owned by _cover_cache; free them here since image_disposable=false means widgets didn't.
-        for _u, v in pairs(_cover_cache) do
-            if v.bb then v.bb:free() end
-        end
-        _cover_cache = {}
+        prune_cover_cache(nil, self.item_table)
         orig_onCloseWidget(self)
     end
 
@@ -1174,9 +1242,8 @@ local function apply_opds()
                     break
                 end
             end
-            local NetworkMgr = require("ui/network/manager")
             UIManager:nextTick(function()
-                NetworkMgr:runWhenConnected(function()
+                self:runWhenConnected(function()
                     self:updateCatalog(default_url)
                 end)
             end)
@@ -1221,17 +1288,77 @@ local function apply_opds()
         return tag_downloaded_items(self, item_table)
     end
 
+    function OPDSBrowser:runWhenConnected(callback)
+        if self._zen_opds_closed then return end
+        if self._zen_network_wait then
+            UIManager:unschedule(self._zen_network_wait)
+            self._zen_network_wait = nil
+        end
+        local connected
+        connected = function()
+            if not self._zen_opds_closed and self._zen_network_action == connected then
+                self._zen_network_action = nil
+                return callback()
+            end
+        end
+        self._zen_network_action = connected
+        if NetworkMgr:isConnected() then return connected() end
+        if not (NetworkMgr.pending_connection or NetworkMgr.pending_connectivity_check) then
+            return NetworkMgr:runWhenConnected(connected)
+        end
+        -- KOReader drops callbacks on EBUSY; keep ours until the existing connection completes.
+        local attempts = 0
+        local wait_for_network
+        wait_for_network = function()
+            if self._zen_network_wait ~= wait_for_network or self._zen_opds_closed then return end
+            if NetworkMgr:isConnected() then
+                self._zen_network_wait = nil
+                return connected()
+            end
+            attempts = attempts + 1
+            if attempts >= 90 then
+                self._zen_network_wait = nil
+                self._zen_network_action = nil
+                UIManager:show(require("ui/widget/infomessage"):new{
+                    text = require("gettext")("Error connecting to the network"),
+                })
+                return
+            end
+            UIManager:scheduleIn(0.5, wait_for_network)
+        end
+        self._zen_network_wait = wait_for_network
+        UIManager:scheduleIn(0.5, wait_for_network)
+    end
+
+    local orig_onMenuSelect = OPDSBrowser.onMenuSelect
+    function OPDSBrowser:onMenuSelect(item)
+        if (item.acquisitions and item.acquisitions[1]) or (#self.paths == 0 and item.idx == 1) then
+            return orig_onMenuSelect(self, item)
+        end
+        self:runWhenConnected(function() orig_onMenuSelect(self, item) end)
+        return true
+    end
+
     -- Re-apply buttons after stock updateCatalog resets them.
     local orig_updateCatalog = OPDSBrowser.updateCatalog
     function OPDSBrowser:updateCatalog(item_url, paths_updated)
-        orig_updateCatalog(self, item_url, paths_updated)
-        fix_buttons(self)
+        return self:runWhenConnected(function()
+            orig_updateCatalog(self, item_url, paths_updated)
+            fix_buttons(self)
+        end)
+    end
+
+    local orig_onNextPage = OPDSBrowser.onNextPage
+    function OPDSBrowser:onNextPage(fill_only)
+        local hrefs = self.item_table.hrefs
+        if not (hrefs and hrefs.next) then return orig_onNextPage(self, fill_only) end
+        self:runWhenConnected(function() orig_onNextPage(self, fill_only) end)
+        return true
     end
 
     -- Anchor menus to the action button immediately left of Close.
     function OPDSBrowser:showOPDSMenu()
         local ButtonDialog = require("ui/widget/buttondialog")
-        local NetworkMgr   = require("ui/network/manager")
         local _            = require("gettext")
         local dialog
         dialog = ButtonDialog:new{
@@ -1244,14 +1371,14 @@ local function apply_opds()
                 {{ text = _("Sync all catalogs"), align = "left",
                     callback = function()
                         UIManager:close(dialog)
-                        NetworkMgr:runWhenConnected(function()
+                        self:runWhenConnected(function()
                             self.sync_force = false; self:checkSyncDownload()
                         end)
                     end }},
                 {{ text = _("Force sync all catalogs"), align = "left",
                     callback = function()
                         UIManager:close(dialog)
-                        NetworkMgr:runWhenConnected(function()
+                        self:runWhenConnected(function()
                             self.sync_force = true; self:checkSyncDownload()
                         end)
                     end }},
@@ -1353,7 +1480,6 @@ local function apply_opds()
         local ButtonDialog   = require("ui/widget/buttondialog")
         local ConfirmBox     = require("ui/widget/confirmbox")
         local LeftContainer  = require("ui/widget/container/leftcontainer")
-        local NetworkMgr     = require("ui/network/manager")
         local _              = require("gettext")
         local default_url    = get_opds_default_url()
         local is_default     = default_url == item.url
@@ -1416,7 +1542,7 @@ local function apply_opds()
                 {{ text = "\u{F04E6}  " .. _("Sync"), align = "left",
                     callback = function()
                         UIManager:close(dialog)
-                        NetworkMgr:runWhenConnected(function()
+                        self:runWhenConnected(function()
                             self.sync_force = false
                             self:checkSyncDownload(item.idx)
                         end)
@@ -1424,7 +1550,7 @@ local function apply_opds()
                 {{ text = "\u{F04E6}  " .. _("Force sync"), align = "left",
                     callback = function()
                         UIManager:close(dialog)
-                        NetworkMgr:runWhenConnected(function()
+                        self:runWhenConnected(function()
                             self.sync_force = true
                             self:checkSyncDownload(item.idx)
                         end)

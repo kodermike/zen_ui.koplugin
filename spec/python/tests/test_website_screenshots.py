@@ -106,9 +106,9 @@ def _color_cover_epub(
         archive.writestr("OPS/cover.png", cover.getvalue())
 
 
-def test_catalog_is_the_canonical_24_image_inventory() -> None:
+def test_catalog_is_the_canonical_27_image_inventory() -> None:
     catalog = load_catalog()
-    assert len(catalog) == 24
+    assert len(catalog) == 27
     assert {scenario.id for scenario in catalog} == EXPECTED_IDS
     assert [scenario.id for scenario in catalog if scenario.id.startswith("page_browser")] == [
         "page_browser_grid", "page_browser_carousel"
@@ -139,6 +139,36 @@ def test_catalog_is_the_canonical_24_image_inventory() -> None:
     assert launcher.options["navbar"] == "library_home_icons"
     quicksettings = next(scenario for scenario in catalog if scenario.id == "quicksettings")
     assert quicksettings.options["navbar"] == "library_home_icons"
+    minimal_controls = next(
+        scenario for scenario in catalog if scenario.id == "quicksettings_minimal"
+    )
+    assert minimal_controls.action == "menu_tab"
+    assert minimal_controls.options["tab"] == "quicksettings"
+    assert minimal_controls.options["minimal_controls"] is True
+    network_switcher = next(
+        scenario for scenario in catalog if scenario.id == "network_switcher"
+    )
+    assert network_switcher.action == "network_switcher"
+    assert network_switcher.options["wifi_names"] == [
+        "Moonlit Library",
+        "Pixel Harbor",
+        "Cedar & Static",
+        "Orbital Guest",
+        "Coffee Then Wi-Fi",
+        "NebulaNet",
+    ]
+    bluetooth_switcher = next(
+        scenario for scenario in catalog if scenario.id == "bluetooth_switcher"
+    )
+    assert bluetooth_switcher.action == "bluetooth_switcher"
+    assert bluetooth_switcher.options["device_names"] == [
+        "Luna Headphones",
+        "Paper Lantern Speaker",
+        "Cedar Keyboard",
+        "Pixel Stylus",
+        "Orbit Remote",
+        "Harbor Earbuds",
+    ]
     bookshelf = next(scenario for scenario in catalog if scenario.id == "home_bookshelf")
     assert bookshelf.options["navbar"] == "library_home_text"
     home_simple = next(scenario for scenario in catalog if scenario.id == "home_simple")

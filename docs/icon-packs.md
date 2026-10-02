@@ -1,8 +1,8 @@
 ---
 title: Custom Icon Packs
-category: Extras
+category: Interface
 summary: Install or create icon packs for ZenOS and its KOReader menu surfaces
-settingsPath: Zen Settings > Extras > Custom icon pack
+settingsPath: Zen Settings > Interface > Custom icons > Custom icon pack
 order: 65
 ---
 
@@ -23,7 +23,7 @@ A typical installation is:
 ```
 
 Copy either a pack folder or ZIP into `/koreader/icons/zen`, then restart
-KOReader or open **Zen Settings > Extras > Custom icon pack**. ZenOS validates and
+KOReader or open **Zen Settings > Interface > Custom icons > Custom icon pack**. ZenOS validates and
 unpacks ZIP files automatically. A successfully installed ZIP is deleted.
 
 If the same pack is already installed, a valid ZIP replaces it atomically. The
@@ -31,7 +31,7 @@ existing folder is restored if validation or extraction fails. Invalid ZIPs are
 kept so they can be inspected or replaced. Installation errors are shown in the
 pack submenu and written to the KOReader log.
 
-Turn on **Enable custom icons**, choose the unpacked pack, and restart KOReader.
+Turn on the **Custom icons** switch under **Zen Settings > Interface**, choose the unpacked pack, and restart KOReader.
 Packs are never selected automatically, so the bundled ZenOS and KOReader
 icons remain the default.
 
@@ -94,7 +94,7 @@ existing loose files directly under `/koreader/icons` continue to work.
 
 If a pack is removed while selected, ZenOS starts with fallback icons and
 shows the selection as unavailable. Choose another pack or **Loose icons**, or
-turn off **Enable custom icons**, then restart. A failed ZIP installation never
+turn off the **Custom icons** switch in **Interface**, then restart. A failed ZIP installation never
 removes the previously installed version.
 
 ZenOS normally recovers its own hidden `.zen-stage-<id>` and
