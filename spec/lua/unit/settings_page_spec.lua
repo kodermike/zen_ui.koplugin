@@ -325,7 +325,7 @@ describe("Zen settings page", function()
         assert.are.equal("Date", settings.title_bar.title)
     end)
 
-    it("returns to the settings root when the header Back button is held", function()
+    it("returns to the settings root on Back hold without forcing row focus", function()
         local detail = { text = "Detail", sub_item_table = {{ text = "Option" }} }
         local library = { text = "Library >", sub_item_table = { detail } }
         local settings = make_page({ library })
@@ -335,12 +335,14 @@ describe("Zen settings page", function()
         assert.are.equal("Detail", settings.title_bar.title)
         assert.is_function(settings.title_bar.back_hold_callback)
 
+        settings.itemnumber = 2
         settings.title_bar.back_hold_callback()
 
         assert.are.equal("Settings", settings.title_bar.title)
         assert.are.equal(settings._root_items, settings.item_table)
         assert.are.equal(0, #settings.item_table_stack)
         assert.is_false(settings.title_bar.back_visible)
+        assert.is_nil(settings.itemnumber)
     end)
 
     it("goes back from submenus on an east swipe starting in the west 33 percent", function()

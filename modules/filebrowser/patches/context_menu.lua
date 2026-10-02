@@ -139,7 +139,21 @@ local function apply_context_menu()
     end
 
     local function new_context_menu_dialog(options)
-        return align_button_dialog_icons(ButtonDialog:new(options))
+        local dialog = align_button_dialog_icons(ButtonDialog:new(options))
+        local cover = options._zen_cover_widget
+        if cover then
+            local orig_onShow = dialog.onShow
+            function dialog:onShow()
+                orig_onShow(self)
+                -- Wait for the opening repaint so only the cover flashes.
+                UIManager:tickAfterNext(function()
+                    if UIManager:getTopmostVisibleWidget() == self then
+                        UIManager:setDirty(nil, "full", cover.dimen, true)
+                    end
+                end)
+            end
+        end
+        return dialog
     end
 
     -- Keep every PathChooser navigable above a locked home folder.
@@ -791,6 +805,7 @@ local function apply_context_menu()
                 title_align = "center",
                 buttons = apply_button_group_font(buttons),
                 _added_widgets = header and { header } or nil,
+                _zen_cover_widget = folder_cover,
             }
             UIManager:show(action_dialog)
         end
@@ -1240,6 +1255,7 @@ local function apply_context_menu()
                 self_fc.file_dialog = new_context_menu_dialog{
                     buttons = apply_button_group_font(buttons),
                     _added_widgets = { header_widget },
+                    _zen_cover_widget = framed_gallery,
                 }
                 UIManager:show(self_fc.file_dialog)
                 return true
@@ -2898,6 +2914,7 @@ local function apply_context_menu()
                 title_align = "center",
                 buttons = apply_button_group_font(buttons),
                 _added_widgets = dialog_cover_widget and { dialog_cover_widget } or nil,
+                _zen_cover_widget = dialog_cover_widget and dialog_cover_widget[1][1],
             }
             UIManager:show(self_fc.file_dialog)
             return true

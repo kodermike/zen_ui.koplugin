@@ -612,7 +612,7 @@ function ZenSettingsPage:backToRootMenu()
     self.item_table = self._root_items
     self.parent_id = nil
     self._pending_navigation_title = nil
-    self.itemnumber = 1
+    self.itemnumber = nil
     self.page = 1
     self:updateItems(1)
     return true

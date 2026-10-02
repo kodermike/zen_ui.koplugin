@@ -655,6 +655,77 @@ describe("folder cover context-menu integration", function()
         assert.are.equal(6, home_rebuilds)
     end)
 
+    it("flashes only the painted context-menu cover and skips closed dialogs", function()
+        local scheduled, flashes = {}, {}
+        local top_widget
+        local opening_calls = 0
+        local ButtonDialog = widget_class()
+        function ButtonDialog:new(options)
+            options.onShow = function() opening_calls = opening_calls + 1 end
+            return options
+        end
+        local FileManager = { setupLayout = function() end, moveFile = function() end }
+        local chooser = { path = "/library", showFileDialog = function() end }
+        local fm = { file_chooser = chooser }
+        FileManager.instance = fm
+        install_stubs({
+            ButtonDialog = ButtonDialog,
+            FileChooser = { show_filter = {}, show_file = function() return true end },
+            FileManager = FileManager,
+            Files = { isManaged = function() return false end },
+            UIManager = {
+                show = function(_self, widget)
+                    top_widget = widget
+                    widget:onShow()
+                end,
+                tickAfterNext = function(_self, callback) scheduled[#scheduled + 1] = callback end,
+                getTopmostVisibleWidget = function() return top_widget end,
+                setDirty = function(_self, widget, mode, region, dither)
+                    flashes[#flashes + 1] = {
+                        widget = widget, mode = mode, region = region, dither = dither,
+                    }
+                end,
+            },
+            Cover = {
+                BORDER_SIZE = 1,
+                getRatio = function() return 2 / 3 end,
+                makeCover = function() return { paintTo = function() end }, 80, 120 end,
+            },
+            BookInfoManager = { getBookInfo = function() return { title = "Book", pages = 100 } end },
+            paths = {
+                getHomeDir = function() return "/library" end,
+                isInHomeDir = function() return true end,
+                isHomeRoot = function() return false end,
+                isPrimaryHomeRoot = function() return false end,
+            },
+        })
+        apply_patch()
+        FileManager.setupLayout(fm)
+
+        local items = {
+            { path = "/library/book.epub", is_file = true, _zen_collection_name = "Test" },
+            { path = "/library/folder", is_file = false },
+            { _zen_group_files = { "/library/book.epub" }, _zen_group_name = "Group" },
+        }
+        for index, item in ipairs(items) do
+            chooser:showFileDialog(item)
+            assert.are.equal(index, opening_calls)
+            assert.are.equal(index, #scheduled)
+            assert.are.equal(index - 1, #flashes)
+            local cover = top_widget._added_widgets[1][1][1]
+            cover.dimen = { x = 100, y = 200, w = 80, h = 120 }
+            scheduled[index]()
+            assert.are.same({ mode = "full", region = cover.dimen, dither = true }, flashes[index])
+        end
+
+        top_widget:onShow()
+        top_widget = nil
+        scheduled[#scheduled]()
+        assert.are.equal(3, #flashes)
+        chooser:showSortOrderDialog({ title = "Sort order" })
+        assert.are.equal(4, #scheduled)
+    end)
+
     it("keeps inline icons in plugin actions and preserves Edit ordering", function()
         local shown = {}
         local details_options
