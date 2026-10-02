@@ -9,6 +9,7 @@ local SAGE_RFKILL = "/sys/devices/platform/bt/rfkill/rfkill0/state"
 local SAGE_HCI_LOG = "/tmp/zenos-rtk-hciattach.log"
 local SAGE_BLUEZ_LOG = "/tmp/zenos-bluetoothd.log"
 local owned = false
+local mtk_bluetooth_used = false
 local standby_locked = false
 local pending
 local discovery_kind, discovery_poll
@@ -416,6 +417,7 @@ local function read_state(device_kind, verbose)
         .. " --dest=org.freedesktop.DBus /org/freedesktop/DBus"
         .. " org.freedesktop.DBus.NameHasOwner string:" .. destination(device_kind),
         "service-owner-" .. device_kind, verbose)
+    if device_kind == "mtk" and owner then mtk_bluetooth_used = true end
     local powered
     if owner == false then
         powered = false
@@ -550,6 +552,12 @@ function M.getState()
     return cached_state
 end
 
+function M.needsRebootOnExit()
+    if kind() ~= "mtk" then return false end
+    if not mtk_bluetooth_used then read_state("mtk", false) end
+    return mtk_bluetooth_used
+end
+
 function M.setEnabled(enabled, complete)
     local callback_started = false
     local function finish_callback(success, from_plugin)
@@ -590,6 +598,7 @@ function M.setEnabled(enabled, complete)
             finish_callback(success, true)
         end
         if enabled then
+            if Device.isMTK and Device:isMTK() then mtk_bluetooth_used = true end
             if complete then
                 timeout = function() plugin_done(false) end
                 UIManager:scheduleIn(15, timeout)
@@ -648,6 +657,7 @@ function M.setEnabled(enabled, complete)
     local function finish()
         logger.info("power request executing kind=", device_kind, "requested=", tostring(enabled))
         if not enabled then stop_discovery() end
+        if enabled and device_kind == "mtk" then mtk_bluetooth_used = true end
         local success = power(device_kind, enabled)
         cached_at = nil
         local verified = read_state(device_kind, true)

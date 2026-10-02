@@ -103,7 +103,10 @@ describe("file manager status bar visibility", function()
         })
         replace("common/status_bar_registry", {})
         replace("common/ui/background", {})
-        replace("modules/menu/bluetooth/bluetooth", {})
+        replace("modules/menu/bluetooth/bluetooth", {
+            getState = function() end,
+            getCachedState = function() end,
+        })
         replace("common/inline_icon_map", {})
         replace("ui/rendertext", {})
         replace("gettext", setmetatable({
@@ -262,6 +265,34 @@ describe("file manager status bar visibility", function()
         FileManager:onCloseWidget()
 
         assert.are.equal("filemanager_status_bar", unsubscribed)
+    end)
+
+    it("defaults Bluetooth before Wi-Fi and hides it when off or unsupported", function()
+        local status_api
+        require("common/shared_state").register = function(_plugin, api) status_api = api end
+        local cached_state
+        local state_reads = 0
+        local Bluetooth = require("modules/menu/bluetooth/bluetooth")
+        Bluetooth.getState = function()
+            state_reads = state_reads + 1
+            cached_state = true
+            return cached_state
+        end
+        Bluetooth.getCachedState = function() return cached_state end
+        require("common/inline_icon_map").bluetooth_on = "bluetooth-on"
+        _G.__ZEN_UI_PLUGIN.config.status_bar = { left_order = { "time" }, center_order = {} }
+        require("modules/filebrowser/patches/status_bar")()
+        assert.are.same({ "bluetooth", "wifi", "battery" }, _G.__ZEN_UI_PLUGIN.config.status_bar.right_order)
+
+        local build_group = get_upvalue(status_api.buildStatusRow, "_buildGroup")
+        assert.are.equal("bluetooth-on", build_group({ "bluetooth" }, { size = 14 }, false)[1].text)
+        assert.are.equal("bluetooth-on", build_group({ "bluetooth" }, { size = 14 }, false)[1].text)
+        assert.are.equal(1, state_reads)
+        cached_state = false
+        assert.is_nil(build_group({ "bluetooth" }, { size = 14 }, false))
+        cached_state = nil
+        assert.is_nil(build_group({ "bluetooth" }, { size = 14 }, false))
+        assert.are.equal(1, state_reads)
     end)
 
     it("only hides Wi-Fi when it is fully off", function()

@@ -584,6 +584,38 @@ describe("network switcher", function()
         assert.are.equal("Turning on Wi-Fi…", network_menu.item_table[1].text)
     end)
 
+    it("refreshes the Kobo status bar after the list toggle turns Wi-Fi off", function()
+        ZenSpec.replace("device", {
+            hasWifiManager = function() return true end,
+            isKobo = function() return true end,
+            isKindle = function() return false end,
+        })
+        NetworkMgr.getConfiguredNetworks = function() return {} end
+        local complete_shutdown
+        NetworkMgr.toggleWifiOff = function(_self, callback, interactive)
+            assert.is_true(interactive)
+            complete_shutdown = callback
+        end
+        assert.is_true(require("modules/menu/network_switcher").open(nil, true, {}))
+        scan_task()
+        local status_wifi_on = true
+        local status_refreshes = 0
+        network_menu._zen_status_refresh = function()
+            status_refreshes = status_refreshes + 1
+            status_wifi_on = NetworkMgr:isWifiOn()
+        end
+
+        network_menu.custom_title_bar.toggle.callback()
+        assert.are.equal(0, status_refreshes)
+        NetworkMgr:turnOffWifi()
+        complete_shutdown()
+
+        assert.are.equal("Off", network_menu.item_table[1].text)
+        assert.is_false(network_menu.custom_title_bar.toggle.value_func())
+        assert.are.equal(1, status_refreshes)
+        assert.is_false(status_wifi_on)
+    end)
+
     it("uses Kobo's saved-network reconnect from the title bar", function()
         ZenSpec.replace("device", {
             hasWifiManager = function() return true end,
@@ -1505,6 +1537,23 @@ describe("network switcher", function()
         assert.is_true(auth_client.closed)
         assert.are.equal(original_enable, methods.enableNetworkByID)
 
+        assert.is_true(adapter.disconnect(network, true))
+        local reconnected, reconnect_error = NetworkMgr:authenticateNetwork(network)
+        assert.is_false(reconnected)
+        assert.are.equal("Timed out", reconnect_error)
+        assert.is_true(disconnected)
+
+        Kobo.install(NetworkMgr)
+        local installed_authenticate = NetworkMgr.authenticateNetwork
+        Kobo.install(NetworkMgr)
+        assert.are.equal(installed_authenticate, NetworkMgr.authenticateNetwork)
+        assert.is_true(NetworkMgr:authenticateNetwork(network))
+        assert.is_false(disconnected)
+        assert.is_nil(password_dialog)
+        assert.is_true(other_enabled)
+        assert.is_true(auth_client.closed)
+        assert.are.equal(original_enable, methods.enableNetworkByID)
+
         local failure_events = 0
         methods.getConnectedNetwork = function() return nil, "4WAY_HANDSHAKE" end
         methods.readEvent = function()
@@ -1533,7 +1582,7 @@ describe("network switcher", function()
         assert.is_true(auth_client.closed)
         assert.are.equal(original_enable, methods.enableNetworkByID)
 
-        NetworkMgr.authenticateNetwork = function()
+        NetworkMgr._zen_kobo_authenticate = function()
             auth_client = WpaClient.new()
             auth_client:enableNetworkByID("9")
             error("authentication interrupted")

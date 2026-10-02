@@ -860,6 +860,7 @@ function M.open(on_connected, settings_subpage, plugin)
                 restore_started = true
                 show_status(_("Off"))
             end
+            if menu._zen_status_refresh then menu:_zen_status_refresh() end
             if on_connected then on_connected() end
         end, true)
     end

@@ -181,6 +181,7 @@ describe("Kobo Bluetooth control", function()
     it("powers MTK Bluetooth after waking Wi-Fi, then restores Wi-Fi and suspends safely", function()
         assert.is_true(bluetooth.isAvailable())
         assert.is_false(bluetooth.getState())
+        assert.is_false(bluetooth.needsRebootOnExit())
         assert.is_true(bluetooth.setEnabled(true))
         assert.are.equal(1, wifi_restored)
         assert.are.equal(1, #scheduled)
@@ -191,6 +192,7 @@ describe("Kobo Bluetooth control", function()
         assert.is_true(commands[1]:find("BluedroidManager1.On", 1, true) ~= nil)
         assert.is_true(commands[2]:find("variant:boolean:true", 1, true) ~= nil)
         assert.is_true(bluetooth.getState())
+        assert.is_true(bluetooth.needsRebootOnExit())
         assert.are.equal(1, wifi_disabled)
         assert.are.equal(1, prevented)
         assert.are.equal("BluetoothStateChanged", events[1].name)
@@ -198,9 +200,22 @@ describe("Kobo Bluetooth control", function()
 
         bluetooth.onSuspend()
         assert.is_false(bluetooth.getState())
+        owner = false
+        assert.is_true(bluetooth.needsRebootOnExit())
         assert.are.equal(1, allowed)
         assert.is_false(events[2].data.state)
         assert.is_true(table.concat(commands, "\n"):find("Adapter1.StopDiscovery", 1, true) ~= nil)
+    end)
+
+    it("remembers an initialized MTK Bluetooth service even when its radio is off", function()
+        assert.is_false(bluetooth.getState())
+        owner = true
+        assert.is_true(bluetooth.needsRebootOnExit())
+
+        owner = false
+        assert.is_true(bluetooth.needsRebootOnExit())
+        device.model = "Kobo_io"
+        assert.is_false(bluetooth.needsRebootOnExit())
     end)
 
     it("uses the Libra 2 BlueZ startup and shutdown path", function()
@@ -290,6 +305,7 @@ describe("Kobo Bluetooth control", function()
         assert.is_true(bluetooth.setEnabled(true))
         assert.are.same({ false }, calls)
         assert.are.equal(0, #commands)
+        assert.is_true(bluetooth.needsRebootOnExit())
     end)
 
     it("finds kobo.koplugin by its loader key and waits for Bluetooth startup", function()

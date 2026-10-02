@@ -4,6 +4,15 @@ function M.isSupported(Device)
     return Device.isKobo and Device:isKobo()
 end
 
+function M.install(NetworkMgr)
+    if NetworkMgr._zen_kobo_authenticate then return end
+    NetworkMgr._zen_kobo_authenticate = NetworkMgr.authenticateNetwork
+    local adapter = M.new(NetworkMgr, require("common/zen_logger").new("kobo"))
+    NetworkMgr.authenticateNetwork = function(_self, network)
+        return adapter.connect(network, true)
+    end
+end
+
 function M.new(NetworkMgr, logger)
     local ffiutil = require("ffi/util")
     local _ = require("gettext")
@@ -183,7 +192,8 @@ function M.new(NetworkMgr, logger)
                 "profile_id=", id, "accepted=", reply ~= nil and reply:sub(1, 2) == "OK")
             return reply, err
         end
-        local ok, authenticated, err = pcall(NetworkMgr.authenticateNetwork, NetworkMgr, network)
+        local authenticate = NetworkMgr._zen_kobo_authenticate or NetworkMgr.authenticateNetwork
+        local ok, authenticated, err = pcall(authenticate, NetworkMgr, network)
         methods.enableNetworkByID = enable
         if auth_client then
             finish_auth(auth_client, ok and authenticated == true)

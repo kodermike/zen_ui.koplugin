@@ -66,7 +66,7 @@ local function apply_status_bar()
         custom_separator = "  ",
         left_order   = { "time" },
         center_order = {},
-        right_order  = { "wifi", "battery" },
+        right_order  = { "bluetooth", "wifi", "battery" },
         date_format = "short",
         show_bottom_border = true,
         colored = false,
@@ -161,6 +161,7 @@ local function apply_status_bar()
     end
 
     local config = loadConfig()
+    Bluetooth.getState()
 
     local function getSeparator()
         if config.separator_key == "custom" then

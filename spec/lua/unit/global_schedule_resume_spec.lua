@@ -5,6 +5,10 @@ describe("global schedule resume hook", function()
     local scheduled
     local responsive_keyboard_applies
     local original_reader_settings
+    local original_kobo_bluetooth
+    local original_kobo_network
+    local original_network_manager
+    local kobo_network_installs
     local patched_modules = {
         "modules/global/patches/night_mode_schedule",
         "modules/global/patches/warmth_schedule",
@@ -21,6 +25,14 @@ describe("global schedule resume hook", function()
 
     before_each(function()
         original_reader_settings = _G.G_reader_settings
+        original_kobo_bluetooth = package.loaded["modules/menu/bluetooth/kobo_bluetooth"]
+        original_kobo_network = package.loaded["modules/menu/network_adapters/kobo"]
+        original_network_manager = package.loaded["ui/network/manager"]
+        ZenSpec.replace("ui/network/manager", {})
+        kobo_network_installs = 0
+        ZenSpec.replace("modules/menu/network_adapters/kobo", { install = function()
+            kobo_network_installs = kobo_network_installs + 1
+        end })
         _G.__ZEN_UI_NIGHT_SCHEDULE = { force_reschedule = function()
             _G.night_reschedules = (_G.night_reschedules or 0) + 1
         end }
@@ -61,6 +73,7 @@ describe("global schedule resume hook", function()
         ZenSpec.replace("modules/global/patches/responsive_keyboard", function()
             responsive_keyboard_applies = responsive_keyboard_applies + 1
         end)
+        ZenSpec.unload("modules/global/patches/kobo_bluetooth_fix")
         ZenSpec.unload("modules/global/global")
         global = require("modules/global/global")
     end)
@@ -69,6 +82,7 @@ describe("global schedule resume hook", function()
         for _i, name in ipairs(patched_modules) do
             ZenSpec.unload(name)
         end
+        ZenSpec.unload("modules/global/patches/kobo_bluetooth_fix")
         ZenSpec.unload("modules/global/global")
         ZenSpec.unload("ui/uimanager")
         ZenSpec.unload("device")
@@ -79,6 +93,118 @@ describe("global schedule resume hook", function()
         _G.brightness_reschedules = nil
         _G.warmth_reschedules = nil
         _G.G_reader_settings = original_reader_settings
+        package.loaded["modules/menu/bluetooth/kobo_bluetooth"] = original_kobo_bluetooth
+        package.loaded["modules/menu/network_adapters/kobo"] = original_kobo_network
+        package.loaded["ui/network/manager"] = original_network_manager
+    end)
+
+    it("leaves Kobo device shutdown unchanged", function()
+        local calls = {}
+        device.isKobo = function() return true end
+        local exit = function(self, code)
+            assert.are.equal(device, self)
+            calls[#calls + 1] = "exit"
+            return code, "finished"
+        end
+        device.exit = exit
+        local plugin = { config = { features = {} } }
+        assert.is_true(global.init(nil, plugin))
+        assert.is_true(global.init(nil, plugin))
+        assert.are.equal(1, kobo_network_installs)
+        assert.is_nil(package.loaded["modules/global/patches/kobo_bluetooth_fix"])
+        assert.are.equal(exit, device.exit)
+        assert.are.same({}, calls)
+
+        local code, result = device:exit(85)
+
+        assert.are.same({ "exit" }, calls)
+        assert.are.equal(85, code)
+        assert.are.equal("finished", result)
+    end)
+
+    it("leaves non-Kobo device shutdown unchanged", function()
+        device.isKobo = function() return false end
+        device.isMTK = function() return true end
+        local exit = function() return "finished" end
+        device.exit = exit
+        assert.is_true(global.init(nil, { config = { features = {} } }))
+
+        assert.are.equal(0, kobo_network_installs)
+        assert.is_nil(package.loaded["modules/global/patches/kobo_bluetooth_fix"])
+        assert.are.equal(exit, device.exit)
+        assert.are.equal("finished", device:exit())
+    end)
+
+    it("reboots on normal MTK exit after Bluetooth use without recursing", function()
+        local used_bluetooth = false
+        local quits, reboots = {}, 0
+        device.isKobo = function() return true end
+        device.isMTK = function() return true end
+        device.exit = function() return "finished" end
+        local exit = device.exit
+        ui_manager.quit = function(_self, code, implicit)
+            quits[#quits + 1] = { code, implicit }
+            return code
+        end
+        ui_manager.reboot_action = function()
+            reboots = reboots + 1
+            ui_manager._entered_poweroff_stage = true
+            ui_manager:scheduleIn(0, function() ui_manager:quit(88) end)
+        end
+        ZenSpec.replace("modules/menu/bluetooth/kobo_bluetooth", {
+            needsRebootOnExit = function() return used_bluetooth end,
+        })
+        local plugin = { config = { features = {} } }
+        assert.is_true(global.init(nil, plugin))
+        assert.is_true(global.init(nil, plugin))
+        assert.is_function(package.loaded["modules/global/patches/kobo_bluetooth_fix"])
+        assert.are.equal(exit, device.exit)
+
+        local patched_quit = ui_manager.quit
+        require("modules/global/patches/kobo_bluetooth_fix")()
+        assert.are.equal(patched_quit, ui_manager.quit)
+
+        assert.are.equal(0, ui_manager:quit(0, true))
+        assert.are.equal(0, reboots)
+        used_bluetooth = true
+        assert.is_nil(ui_manager:quit(nil, true))
+        assert.are.equal(1, reboots)
+        assert.are.same({ { 0, true } }, quits)
+        scheduled[1].callback()
+        assert.are.same({ { 0, true }, { 88 } }, quits)
+        assert.are.equal("finished", device:exit())
+    end)
+
+    it("preserves special exit codes and an existing shutdown on MTK", function()
+        device.isKobo = function() return true end
+        device.isMTK = function() return true end
+        device.exit = function() end
+        ui_manager.quit = function(_self, code) return code end
+        ui_manager.reboot_action = function() error("unexpected reboot") end
+        ZenSpec.replace("modules/menu/bluetooth/kobo_bluetooth", {
+            needsRebootOnExit = function() return true end,
+        })
+        assert.is_true(global.init(nil, { config = { features = {} } }))
+
+        for _i, code in ipairs({ 85, 86, 88, false }) do
+            assert.are.equal(code, ui_manager:quit(code))
+        end
+        ui_manager._exit_code = 85
+        assert.is_nil(ui_manager:quit())
+        ui_manager._entered_poweroff_stage = true
+        assert.are.equal(0, ui_manager:quit(0))
+    end)
+
+    it("does not change normal exit on non-MTK Kobos", function()
+        device.isKobo = function() return true end
+        device.isMTK = function() return false end
+        device.exit = function() end
+        local quit = function() return 0 end
+        ui_manager.quit = quit
+        assert.is_true(global.init(nil, { config = { features = {} } }))
+
+        assert.is_nil(package.loaded["modules/global/patches/kobo_bluetooth_fix"])
+        assert.are.equal(quit, ui_manager.quit)
     end)
 
     it("retries frontlight schedules after Resume even when another widget handled it", function()
