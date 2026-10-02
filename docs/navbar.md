@@ -3,7 +3,7 @@ title: Navbar
 category: Interface
 summary: The customizable bottom navigation bar
 settingsPath: Zen Settings > Interface > Navbar
-order: 35
+order: 48
 ---
 
 <!-- Documentation current through ZenOS v3.3.0. -->
