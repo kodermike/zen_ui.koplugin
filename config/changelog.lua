@@ -382,5 +382,6 @@ return {
         "Bug fixes & performance improvements",
      },
       ["4.0.1"] = {
+        "Add option to align Reader Status Bars with book margins"
       }
 }
