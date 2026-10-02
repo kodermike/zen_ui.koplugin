@@ -655,7 +655,7 @@ describe("folder cover context-menu integration", function()
         assert.are.equal(6, home_rebuilds)
     end)
 
-    it("shows plugin actions as an iconless list and preserves Edit ordering", function()
+    it("keeps inline icons in plugin actions and preserves Edit ordering", function()
         local shown = {}
         local details_options
         local editor_options
@@ -694,6 +694,7 @@ describe("folder cover context-menu integration", function()
                         {
                             text_func = function() return "\u{F140B}  Dynamic action" end,
                         },
+                        { text = "\u{F048A}  ZenFM Send" },
                     }
                 end,
                 function() error("broken plugin") end,
@@ -716,7 +717,21 @@ describe("folder cover context-menu integration", function()
             config = { context_menu = context_menu_config },
         }
 
+        local ButtonDialog = widget_class()
+        function ButtonDialog:new(options)
+            options.buttontable = { buttons_layout = options.buttons }
+            for _i, row in ipairs(options.buttons) do
+                for _j, button in ipairs(row) do
+                    button.text = button.text_func and button.text_func() or button.text
+                    button.label_widget = { face = {}, free = function() end }
+                    button.label_container = { dimen = { w = 400, h = 40 } }
+                end
+            end
+            return options
+        end
+
         install_stubs({
+            ButtonDialog = ButtonDialog,
             FileChooser = FileChooser,
             FileManager = FileManager,
             Files = { isManaged = function() return false end },
@@ -790,13 +805,19 @@ describe("folder cover context-menu integration", function()
         assert.are.equal("/library/book.epub", plugin_args[1])
         assert.is_true(plugin_args[2])
         assert.are.equal("Book", plugin_args[3].title)
-        assert.are.equal(2, #more_dialog.buttons)
+        assert.are.equal(3, #more_dialog.buttons)
         assert.are.equal(1, #more_dialog.buttons[1])
         assert.are.equal(1, #more_dialog.buttons[2])
-        assert.are.equal("Incognito", more_dialog.buttons[1][1].text)
+        assert.are.equal("\u{F05F9}  Incognito", more_dialog.buttons[1][1].text)
+        assert.are.equal("Incognito", more_dialog.buttons[1][1].label_widget.text)
+        assert.is_true(has_widget_text(more_dialog.buttons[1][1].label_container, "\u{F05F9}"))
         assert.is_nil(more_dialog.buttons[1][1].icon)
         assert.are.equal("left", more_dialog.buttons[1][1].align)
-        assert.are.equal("Dynamic action", more_dialog.buttons[2][1].text_func())
+        assert.are.equal("\u{F140B}  Dynamic action", more_dialog.buttons[2][1].text_func())
+        assert.are.equal("Dynamic action", more_dialog.buttons[2][1].label_widget.text)
+        assert.is_true(has_widget_text(more_dialog.buttons[2][1].label_container, "\u{F140B}"))
+        assert.are.equal("ZenFM Send", more_dialog.buttons[3][1].label_widget.text)
+        assert.is_true(has_widget_text(more_dialog.buttons[3][1].label_container, "\u{F048A}"))
         assert(find_button(more_dialog, "Incognito")).callback()
         assert.is_true(plugin_action_called)
 

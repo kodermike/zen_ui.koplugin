@@ -2193,20 +2193,6 @@ local function apply_context_menu()
                                 clean_button.align = "left"
                                 clean_button.icon = nil
                                 clean_button.icon_func = nil
-                                local glyph, text
-                                if type(clean_button.text) == "string" then
-                                    glyph, text = split_inline_icon(clean_button.text)
-                                end
-                                if glyph then clean_button.text = text end
-                                local text_func = clean_button.text_func
-                                if type(text_func) == "function" then
-                                    clean_button.text_func = function()
-                                        local dynamic = text_func()
-                                        if type(dynamic) ~= "string" then return dynamic end
-                                        local dynamic_glyph, dynamic_text = split_inline_icon(dynamic)
-                                        return dynamic_glyph and dynamic_text or dynamic
-                                    end
-                                end
                                 table.insert(rows, { clean_button })
                             end
                         end
@@ -2217,7 +2203,7 @@ local function apply_context_menu()
 
             local function showPluginActionsSubmenu()
                 close_dialog()
-                self_fc.file_dialog = ButtonDialog:new{
+                self_fc.file_dialog = new_context_menu_dialog{
                     buttons = apply_button_group_font(plugin_action_rows),
                 }
                 UIManager:show(self_fc.file_dialog)
