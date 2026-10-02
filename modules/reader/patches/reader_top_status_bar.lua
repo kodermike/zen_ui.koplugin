@@ -613,7 +613,7 @@ local function apply_reader_top_status_bar()
             and ((footer_settings and footer_settings.text_font_face) or "NotoSans-Regular.ttf")
             or face_cfg
         local font_size = type(cfg) == "table" and cfg.font_size or 14
-        return Font:getFace(font_name, font_size)
+        return Font:getFace(font_name, font_size) or Font:getFace("cfont", font_size)
     end
 
     local function getReservedHeaderHeight(view)

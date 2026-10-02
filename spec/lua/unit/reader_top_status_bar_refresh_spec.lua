@@ -334,6 +334,27 @@ describe("reader top status bar refresh", function()
         assert.same({ "clear", "header", "dogear", "dirty" }, paint_order)
     end
 
+    it("uses the default header face when the selected or inherited font is unavailable", function()
+        local get_header_face = get_upvalue(build_header, "getHeaderFace")
+        local Font = get_upvalue(get_header_face, "Font")
+        local fallback = {}
+        local calls = {}
+        Font.getFace = function(_self, name, size)
+            calls[#calls + 1] = { name, size }
+            if name == "cfont" then return fallback end
+        end
+        local missing = "/missing/Hyperreadable-SemiBold.ttf"
+
+        assert.are.equal(fallback, get_header_face({ font_face = missing, font_size = 14 }))
+        local footer = _G.G_reader_settings:readSetting("footer")
+        _G.G_reader_settings:saveSetting("footer", { text_font_face = missing })
+        local inherited = get_header_face({ font_face = "default", font_size = 14 })
+        _G.G_reader_settings:saveSetting("footer", footer)
+        assert.are.equal(fallback, inherited)
+        assert.same({ { missing, 14 }, { "cfont", 14 },
+            { missing, 14 }, { "cfont", 14 } }, calls)
+    end)
+
     local function make_typeset(view_mode)
         local document = {}
         local typeset = setmetatable({
