@@ -13,6 +13,7 @@ local function apply_nonblocking_wifi()
     local active
     local connection_failure
     local wifi_notice
+    local connection_notice
     local queued = {}
     local start_next
     local reported_changing = false
@@ -34,6 +35,8 @@ local function apply_nonblocking_wifi()
     end
 
     local function cancel()
+        if connection_notice then UIManager:unschedule(connection_notice) end
+        connection_notice = nil
         queued = {}
         connection_failure = nil
         if active and not active.cancelled then
@@ -183,6 +186,8 @@ local function apply_nonblocking_wifi()
 
     NetworkMgr._zen_nonblocking_wifi = true
     NetworkMgr.showWifiNotice = function(_self, text)
+        if connection_notice then UIManager:unschedule(connection_notice) end
+        connection_notice = nil
         if wifi_notice then UIManager:close(wifi_notice) end
         wifi_notice = require("ui/widget/infomessage"):new{
             text = text,
@@ -243,10 +248,28 @@ local function apply_nonblocking_wifi()
             local after_connected, after_failed = complete_callback, on_failure
             complete_callback = function()
                 if after_connected then after_connected() end
-                local ssid = self.lease_ssid or (self:getCurrentNetwork() or {}).ssid
-                self:showWifiNotice(ssid and ssid ~= ""
-                    and ffiutil.template(require("gettext")("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), ssid)
-                    or require("gettext")("Connected."):gsub("%.$", ""):gsub("。$", ""))
+                local attempts = 0
+                local function show_connected()
+                    if connection_notice ~= show_connected then return end
+                    if not self:isWifiOn() or not self:isConnected() then
+                        connection_notice = nil
+                        return
+                    end
+                    local ssid = self.lease_ssid
+                    if not ssid or ssid == "" then ssid = (self:getCurrentNetwork() or {}).ssid end
+                    local has_ssid = type(ssid) == "string" and ssid ~= ""
+                    -- Kindle can report an address before wifid publishes the SSID.
+                    if not has_ssid and Device.isKindle and Device:isKindle() and attempts < 8 then
+                        attempts = attempts + 1
+                        UIManager:scheduleIn(5 / 8, show_connected)
+                        return
+                    end
+                    self:showWifiNotice(has_ssid
+                        and ffiutil.template(require("gettext")("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), ssid)
+                        or require("gettext")("Connected."):gsub("%.$", ""):gsub("。$", ""))
+                end
+                connection_notice = show_connected
+                show_connected()
             end
             on_failure = function(no_known_networks)
                 if after_failed then after_failed() end

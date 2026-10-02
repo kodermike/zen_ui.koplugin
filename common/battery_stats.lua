@@ -85,9 +85,49 @@ local function device_capacity()
 end
 
 local function trim(events)
-    while #events > MAX_EVENTS do
-        table.remove(events, 1)
+    if #events <= MAX_EVENTS then return end
+    local stats = M.snapshot(false)
+    local gaps = 0
+    for i = 2, #events do
+        if events[i].gap then gaps = gaps + 1 end
     end
+    local summary = {
+        version = 1,
+        start_time = events[1].time, end_time = events[#events].time,
+        start_level_pct = events[1].level, end_level_pct = events[#events].level,
+        samples = #events, gaps = gaps,
+        discharge_pct_per_hour = stats.overall,
+        awake_pct_per_hour = stats.awake, asleep_pct_per_hour = stats.asleep,
+        discharge_loss_pct = stats.discharge_loss,
+        awake_loss_pct = stats.awake_loss, asleep_loss_pct = stats.asleep_loss,
+        discharge_seconds = stats.discharge_time,
+        awake_discharge_seconds = stats.awake_discharge_time,
+        asleep_discharge_seconds = stats.asleep_discharge_time,
+        awake_seconds = stats.awake_time, asleep_seconds = stats.asleep_time,
+        last_charge_pct_per_hour = stats.charge_rate, last_charge_gain_pct = stats.charge_gain,
+        last_full_charge_seconds = stats.full_charge_time,
+        full_capacity_mah = stats.full_mah, design_capacity_mah = stats.design_mah,
+        health_pct = stats.health,
+    }
+    local encoded = require("json").encode(summary)
+    local file, err = io.open(PresetStore.rootDir() .. "/battery_history", "a")
+    local saved
+    if file then
+        saved, err = file:write(encoded .. "\n")
+        if saved then saved, err = file:flush() end
+        if saved then
+            local ffiutil = require("ffi/util")
+            saved, err = ffiutil.fsyncOpenedFile(file)
+            if saved then saved, err = ffiutil.fsyncDirectory(PresetStore.rootDir()) end
+        end
+        local closed, close_err = file:close()
+        if not closed then saved, err = nil, close_err end
+    end
+    if not saved then
+        require("common/zen_logger").new("battery_stats").warn("Could not save battery history:", err)
+        return
+    end
+    settings:saveSetting("events", { events[#events] }) -- Keep the next window's starting sample.
 end
 
 local function charging_session(previous, event, session)
@@ -212,10 +252,10 @@ function M.reset()
     return true
 end
 
-function M.snapshot()
+function M.snapshot(include_current)
     if not settings then return nil end
     local events = settings:readSetting("events")
-    local current = capture()
+    local current = include_current ~= false and capture() or nil
     local previous = events[#events]
     local session = settings:readSetting("charge_session")
     if current then
@@ -267,6 +307,7 @@ function M.snapshot()
         health = health,
         charging = current and current.charging,
         charge_rate = charge_rate,
+        charge_gain = session and charge_gain,
         -- ponytail: linear estimate; use charge-level bands if taper accuracy matters.
         time_to_full = current and current.charging and (session.full and 0
             or charge_rate and (100 - current.level) * 3600 / charge_rate) or nil,
@@ -278,6 +319,12 @@ function M.snapshot()
         asleep = rate(asleep),
         awake_time = awake.elapsed,
         asleep_time = asleep.elapsed,
+        discharge_loss = total.loss,
+        awake_loss = awake.loss,
+        asleep_loss = asleep.loss,
+        discharge_time = total.time,
+        awake_discharge_time = awake.time,
+        asleep_discharge_time = asleep.time,
         remaining = overall and overall > 0 and current and current.level * 3600 / overall or nil,
         since_charge = type(unplug) == "number" and current and current.time >= unplug
             and current.time - unplug or nil,

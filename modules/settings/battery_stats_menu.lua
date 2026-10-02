@@ -34,12 +34,15 @@ function M.buildItems()
         row(_("Screen off time"), duration(stats.asleep_time)),
     }
     local charging_items = {
-        row(_("Estimated time to full charge"), duration(stats.time_to_full)),
-        row(_("Charged per hour"), rate(stats.charge_rate)),
+        row(_("Previous charge, per hour"), rate(stats.charge_rate)),
+        row(_("Previous charge, total"), stats.charge_gain and stats.charge_gain .. "%" or missing),
         row(_("Total time to full charge"), duration(stats.full_charge_time)),
         row(_("Time since last charge"), stats.charging and _("Charging") or duration(stats.since_charge)),
         row(_("Time since last full charge"), duration(stats.since_full_charge)),
     }
+    if stats.charging then
+        table.insert(charging_items, 1, row(_("Estimated time to complete charge"), duration(stats.time_to_full)))
+    end
     local items
     local settings_items = {
         row(_("Tracked samples"), tostring(stats.samples)),
@@ -77,7 +80,7 @@ function M.buildItems()
         },
         {
             text = _("Charging"),
-            mandatory = duration(stats.time_to_full),
+            mandatory = stats.charging and duration(stats.time_to_full) or nil,
             sub_item_table = charging_items,
         },
         { text = _("Estimated battery life"), mandatory = duration(stats.remaining), keep_menu_open = true },

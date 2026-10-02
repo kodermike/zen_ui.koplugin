@@ -334,6 +334,70 @@ describe("background Wi-Fi toggles", function()
         assert.are.equal("Connected", shown[2].text)
     end)
 
+    for _i, missing_ssid in ipairs({ false, "" }) do
+        it("waits for the Kindle SSID when initially " .. tostring(missing_ssid), function()
+            Device.isKobo = function() return false end
+            Device.isKindle = function() return true end
+            local ssid = missing_ssid
+            NetworkMgr.getCurrentNetwork = function() return ssid ~= false and { ssid = ssid } or nil end
+            local completed = 0
+            NetworkMgr:toggleWifiOn(function() completed = completed + 1 end, false, true)
+            finish_worker()
+            NetworkMgr.lease_ssid = nil
+            tick()
+            assert.are.equal(1, completed)
+            assert.is_false(NetworkMgr.pending_connection)
+            assert.are.equal(1, notices)
+            assert.are.equal(1, #scheduled)
+            ssid = "Home."
+            tick()
+            assert.are.equal("Connected to Home.", shown[2].text)
+            assert.are.equal(0, #scheduled)
+            assert.are.equal(1, completed)
+        end)
+    end
+
+    it("bounds Kindle SSID retries to five seconds before showing Connected", function()
+        Device.isKobo = function() return false end
+        Device.isKindle = function() return true end
+        NetworkMgr.getCurrentNetwork = function() return { ssid = "" } end
+        NetworkMgr:toggleWifiOn(nil, false, true)
+        finish_worker()
+        tick()
+        local retry_time = 0
+        for _i = 1, 8 do
+            assert.are.equal(1, #scheduled)
+            retry_time = retry_time + scheduled[1].delay
+            tick()
+        end
+        assert.are.equal(5, retry_time)
+        assert.are.equal("Connected", shown[2].text)
+        assert.are.equal(0, #scheduled)
+    end)
+
+    for _i, action in ipairs({ "off", "notice" }) do
+        it("cancels a delayed Kindle connection notice on " .. action, function()
+            Device.isKobo = function() return false end
+            Device.isKindle = function() return true end
+            NetworkMgr.getCurrentNetwork = function() return { ssid = "" } end
+            NetworkMgr:toggleWifiOn(nil, false, true)
+            finish_worker()
+            tick()
+            assert.are.equal(1, #scheduled)
+            local pending = scheduled[1].callback
+            if action == "off" then
+                NetworkMgr:toggleWifiOff(nil, true)
+                finish_worker()
+            else
+                NetworkMgr:showWifiNotice("New notice")
+            end
+            for _j, task in ipairs(scheduled) do assert.not_equal(pending, task.callback) end
+            pending()
+            assert.are.equal(action == "off" and 1 or 2, notices)
+            assert.are.equal(0, #scheduled)
+        end)
+    end
+
     it("shows a two-second tap-dismissable notice without cancelling the connection", function()
         local completed = 0
         NetworkMgr:toggleWifiOn(function() completed = completed + 1 end, false, true)

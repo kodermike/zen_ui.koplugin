@@ -1,17 +1,29 @@
 describe("battery stats", function()
     local originals, original_time, now, level, charging, charged, stored, writes, scheduled, battery_path, log_path
-    local BatteryStats
+    local BatteryStats, settings_path, history_path
+
+    local function read_history()
+        local summaries = {}
+        local file = assert(io.open(history_path, "r"))
+        for line in file:lines() do summaries[#summaries + 1] = require("json").decode(line) end
+        file:close()
+        return summaries
+    end
 
     before_each(function()
         originals = {}
         for _i, name in ipairs({
             "device", "luasettings", "config/preset_store", "ui/uimanager", "common/battery_stats",
+            "ffi/util", "common/zen_logger",
         }) do originals[name] = { value = package.loaded[name] } end
         original_time = os.time
         now, level, charging, stored, writes, scheduled = 1000000, 100, false, { events = {} }, 0, {}
         charged = false
         battery_path = nil
-        log_path = os.tmpname()
+        settings_path = os.tmpname()
+        os.remove(settings_path)
+        assert.is_true(require("libs/libkoreader-lfs").mkdir(settings_path))
+        log_path, history_path = settings_path .. "/battery.lua", settings_path .. "/battery_history"
         rawset(os, "time", function() return now end)
         ZenSpec.replace("device", {
             hasBattery = function() return true end,
@@ -35,7 +47,7 @@ describe("battery stats", function()
                 }
             end,
         })
-        ZenSpec.replace("config/preset_store", { rootDir = function() return "/tmp" end })
+        ZenSpec.replace("config/preset_store", { rootDir = function() return settings_path end })
         ZenSpec.replace("ui/uimanager", {
             scheduleIn = function(_, delay, callback)
                 scheduled[#scheduled + 1] = { delay = delay, callback = callback }
@@ -50,6 +62,8 @@ describe("battery stats", function()
         rawset(os, "time", original_time)
         os.remove(log_path)
         os.remove(log_path .. ".old")
+        os.remove(history_path)
+        require("libs/libkoreader-lfs").rmdir(settings_path)
         if battery_path then
             for _i, name in ipairs({
                 "type", "charge_now", "charge_full", "charge_full_design", "charge_empty",
@@ -139,12 +153,14 @@ describe("battery stats", function()
         BatteryStats.chargingChanged()
         scheduled[#scheduled].callback()
         assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.are.equal(0, BatteryStats.snapshot().charge_gain)
         assert.is_nil(BatteryStats.snapshot().time_to_full)
 
         now, level = now + 1800, 40
         local before = writes
         local stats = BatteryStats.snapshot()
         assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(20, stats.charge_gain)
         assert.are.equal(5400, stats.time_to_full)
         assert.are.equal(before, writes)
         assert.are.equal(20, stored.charge_session.level)
@@ -154,6 +170,7 @@ describe("battery stats", function()
         scheduled[#scheduled].callback()
         stats = BatteryStats.snapshot()
         assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(80, stats.charge_gain)
         assert.are.equal(0, stats.time_to_full)
         assert.are.equal(7200, stats.full_charge_time)
         assert.are.equal(0, stats.since_full_charge)
@@ -162,6 +179,7 @@ describe("battery stats", function()
         scheduled[#scheduled].callback()
         stats = BatteryStats.snapshot()
         assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(80, stats.charge_gain)
         assert.are.equal(7200, stats.full_charge_time)
         assert.are.equal(3600, stats.since_full_charge)
 
@@ -190,6 +208,7 @@ describe("battery stats", function()
         scheduled[#scheduled].callback()
         local stats = BatteryStats.snapshot()
         assert.are.equal(30, stats.charge_rate)
+        assert.are.equal(30, stats.charge_gain)
         assert.is_nil(stats.time_to_full)
         assert.is_nil(stats.full_charge_time)
         assert.is_nil(stats.since_full_charge)
@@ -198,9 +217,11 @@ describe("battery stats", function()
         BatteryStats.chargingChanged()
         scheduled[#scheduled].callback()
         assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.are.equal(0, BatteryStats.snapshot().charge_gain)
         now, level = now + 1800, 55
         scheduled[#scheduled].callback()
         assert.are.equal(20, BatteryStats.snapshot().charge_rate)
+        assert.are.equal(10, BatteryStats.snapshot().charge_gain)
         assert.are.equal(8100, BatteryStats.snapshot().time_to_full)
     end)
 
@@ -216,8 +237,10 @@ describe("battery stats", function()
         assert.are.equal(20, BatteryStats.snapshot().charge_rate)
         now, level, charging = now + 1800, 50, false
         assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().charge_gain)
         scheduled[#scheduled].callback()
         assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().charge_gain)
         assert.is_nil(BatteryStats.snapshot().full_charge_time)
     end)
 
@@ -281,16 +304,142 @@ describe("battery stats", function()
         assert.are.equal(4 * 3600, stats.full_charge_time)
     end)
 
-    it("caps the log and does not write when statistics are viewed", function()
+    it("archives an oversized log at startup and does not write when statistics are viewed", function()
         for i = 1, 520 do
             stored.events[i] = { time = now - (521 - i) * 1800, level = 80,
                 charging = false, sleeping = false }
         end
+        local reads = 0
+        rawset(os, "time", function() reads = reads + 1; return now + reads - 1 end)
         BatteryStats.start()
-        assert.are.equal(512, #stored.events)
+        assert.are.equal(1, reads)
+        assert.are.equal(1, #stored.events)
+        local history = read_history()
+        assert.are.equal(1, #history)
+        assert.are.equal(521, history[1].samples)
+        assert.are.equal(now - 520 * 1800, history[1].start_time)
+        assert.are.equal(now, history[1].end_time)
+        assert.are.equal(1, history[1].gaps)
+        assert.are.equal(519 * 1800, history[1].awake_seconds)
+        assert.are.equal(0, history[1].discharge_loss_pct)
         local before = writes
         BatteryStats.snapshot()
         assert.are.equal(before, writes)
+        assert.are.equal(1, #read_history())
+    end)
+
+    it("appends drain and charging summaries while preserving consecutive window boundaries", function()
+        BatteryStats.start()
+        for i = 1, 505 do
+            now = now + 1800
+            scheduled[#scheduled].callback()
+        end
+        now, level = now + 3600, 90
+        scheduled[#scheduled].callback()
+        BatteryStats.suspend()
+        now, level = now + 7200, 88
+        BatteryStats.resume()
+        charging = true
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        now, level = now + 3600, 100
+        scheduled[#scheduled].callback()
+        charging = false
+        BatteryStats.chargingChanged()
+        scheduled[#scheduled].callback()
+        assert.are.equal(512, #stored.events)
+        assert.is_nil(io.open(history_path, "r"))
+
+        now, level = now + 3600, 95
+        scheduled[#scheduled].callback()
+        local history = read_history()
+        local first = history[1]
+        assert.are.equal(1, #history)
+        assert.are.equal(1, first.version)
+        assert.are.equal(1000000, first.start_time)
+        assert.are.equal(now, first.end_time)
+        assert.are.equal(100, first.start_level_pct)
+        assert.are.equal(95, first.end_level_pct)
+        assert.are.equal(513, first.samples)
+        assert.are.equal(0, first.gaps)
+        assert.are.equal(505 * 1800 + 7200, first.awake_seconds)
+        assert.are.equal(7200, first.asleep_seconds)
+        assert.are.equal(first.awake_seconds, first.awake_discharge_seconds)
+        assert.are.equal(first.asleep_seconds, first.asleep_discharge_seconds)
+        assert.are.equal(first.awake_seconds + 7200, first.discharge_seconds)
+        assert.are.equal(15, first.awake_loss_pct)
+        assert.are.equal(2, first.asleep_loss_pct)
+        assert.are.equal(17, first.discharge_loss_pct)
+        assert.is_true(math.abs(15 * 3600 / first.awake_seconds - first.awake_pct_per_hour) < 1e-12)
+        assert.are.equal(1, first.asleep_pct_per_hour)
+        assert.is_true(math.abs(17 * 3600 / first.discharge_seconds - first.discharge_pct_per_hour) < 1e-12)
+        assert.are.equal(12, first.last_charge_pct_per_hour)
+        assert.are.equal(12, first.last_charge_gain_pct)
+        assert.are.equal(3600, first.last_full_charge_seconds)
+        assert.is_nil(first.health_pct)
+        assert.are.equal(1, #stored.events)
+        assert.are.equal(now, stored.events[1].time)
+        assert.are.equal(12, BatteryStats.snapshot().charge_rate)
+
+        for i = 1, 2 do
+            now, level = now + 1800, level - 1
+            scheduled[#scheduled].callback()
+        end
+        assert.are.equal(2, BatteryStats.snapshot().awake)
+        assert.are.equal(1, #read_history())
+        BatteryStats.stop()
+        BatteryStats.start()
+        for i = 1, 509 do
+            now = now + 1800
+            scheduled[#scheduled].callback()
+        end
+        history = read_history()
+        assert.are.equal(2, #history)
+        assert.are.same(first, history[1])
+        assert.are.equal(first.end_time, history[2].start_time)
+        assert.are.equal(2, history[2].awake_loss_pct)
+        assert.are.equal(511 * 1800, history[2].awake_seconds)
+        assert.are.equal(1, history[2].gaps)
+        assert.are.equal(1, #stored.events)
+        assert.is_true(BatteryStats.reset())
+        assert.are.same(history, read_history())
+    end)
+
+    it("keeps samples if history cannot be opened, written, flushed, synced, or closed", function()
+        local original_open = io.open
+        ZenSpec.replace("common/zen_logger", { new = function() return { warn = function() end } end })
+        BatteryStats.start()
+        for i = 2, 512 do
+            now = now + 1800
+            scheduled[#scheduled].callback()
+        end
+        for _i, failure in ipairs({ "open", "write", "flush", "sync", "directory", "close" }) do
+            local closed = false
+            ZenSpec.replace("ffi/util", {
+                fsyncOpenedFile = function() return failure ~= "sync" end,
+                fsyncDirectory = function() return failure ~= "directory" end,
+            })
+            rawset(io, "open", function(path, mode)
+                if path ~= history_path or mode ~= "a" then return original_open(path, mode) end
+                if failure == "open" then return nil, "unavailable" end
+                return {
+                    write = function() return failure ~= "write" end,
+                    flush = function() return failure ~= "flush" end,
+                    close = function() closed = true; return failure ~= "close" end,
+                }
+            end)
+            now = now + 1800
+            local ok, err = pcall(scheduled[#scheduled].callback)
+            rawset(io, "open", original_open)
+            assert.is_true(ok, err)
+            assert.are.equal(512 + _i, #stored.events)
+            assert.are.equal(failure ~= "open", closed)
+        end
+        package.loaded["ffi/util"] = originals["ffi/util"].value
+        now = now + 1800
+        scheduled[#scheduled].callback()
+        assert.are.equal(1, #stored.events)
+        assert.are.equal(519, read_history()[1].samples)
     end)
 
     it("keeps old samples and counts intervals longer than 30 days", function()
@@ -323,6 +472,7 @@ describe("battery stats", function()
         assert.are.equal(0, BatteryStats.snapshot().asleep_time)
         assert.is_nil(BatteryStats.snapshot().since_charge)
         assert.is_nil(BatteryStats.snapshot().charge_rate)
+        assert.is_nil(BatteryStats.snapshot().charge_gain)
         assert.is_nil(BatteryStats.snapshot().full_charge_time)
         assert.is_nil(BatteryStats.snapshot().since_full_charge)
         assert.is_nil(io.open(log_path .. ".old", "r"))
@@ -358,6 +508,15 @@ describe("battery stats", function()
 
         os.remove(battery_path .. "/type")
         assert.are.equal(1200, BatteryStats.snapshot().full_mah)
+
+        for i = 1, 512 do
+            now = now + 1800
+            scheduled[#scheduled].callback()
+        end
+        local summary = read_history()[1]
+        assert.are.equal(1200, summary.full_capacity_mah)
+        assert.are.equal(1600, summary.design_capacity_mah)
+        assert.are.equal(75, summary.health_pct)
 
         os.remove(battery_path .. "/charge_now")
         level = 50

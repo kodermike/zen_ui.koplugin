@@ -1111,12 +1111,6 @@ msgid "Chapter marks"
 msgstr "Chapter marks"
 
 #. Type: setting
-#. Context: row(_("Estimated time to full charge"), duration(stats.time_to_full)), row(_("Charged per hour"), rate(stats.charge_rate)), row(_("Total time to full charge"), duration(stats.full_charge_time)),
-#: battery_stats_menu.lua:38
-msgid "Charged per hour"
-msgstr "Charged per hour"
-
-#. Type: setting
 #. Context: { text = _("Time since last charge"), mandatory = stats.charging and _("Charging") or duration(stats.since_charge), keep_menu_open = true },
 #: battery_stats_menu.lua:73
 msgid "Charging"
@@ -2341,10 +2335,10 @@ msgid "Estimated battery life"
 msgstr "Estimated battery life"
 
 #. Type: setting
-#. Context: local charging_items = { row(_("Estimated time to full charge"), duration(stats.time_to_full)), row(_("Charged per hour"), rate(stats.charge_rate)),
-#: battery_stats_menu.lua:37
-msgid "Estimated time to full charge"
-msgstr "Estimated time to full charge"
+#. Context: if stats.charging then table.insert(charging_items, 1, row(_("Estimated time to complete charge"), duration(stats.time_to_full))) end
+#: battery_stats_menu.lua:44
+msgid "Estimated time to complete charge"
+msgstr "Estimated time to complete charge"
 
 #. Type: label
 #. Context: parts[#parts + 1] = provider_label(work._provider) if work.exact_edition then parts[#parts + 1] = _("Exact ISBN match") end parts[#parts + 1] = table.concat(
@@ -4477,6 +4471,18 @@ msgid "Prev"
 msgstr "Prev"
 
 #. Type: setting
+#. Context: local charging_items = { row(_("Previous charge, per hour"), rate(stats.charge_rate)), row(_("Previous charge, total"), stats.charge_gain and stats.charge_gain .. "%" or missing),
+#: battery_stats_menu.lua:37
+msgid "Previous charge, per hour"
+msgstr "Previous charge, per hour"
+
+#. Type: setting
+#. Context: row(_("Previous charge, per hour"), rate(stats.charge_rate)), row(_("Previous charge, total"), stats.charge_gain and stats.charge_gain .. "%" or missing), row(_("Total time to full charge"), duration(stats.full_charge_time)),
+#: battery_stats_menu.lua:38
+msgid "Previous charge, total"
+msgstr "Previous charge, total"
+
+#. Type: setting
 #. Context: { id = "exit", text = _("Exit") }, { id = "page_left", text = _("Previous page") }, { id = "page_right", text = _("Next page") },
 #: nav_button_model.lua:25 navbar_settings.lua:185
 msgid "Previous page"
@@ -6253,7 +6259,7 @@ msgid "Total time"
 msgstr "Total time"
 
 #. Type: setting
-#. Context: row(_("Charged per hour"), rate(stats.charge_rate)), row(_("Total time to full charge"), duration(stats.full_charge_time)), row(_("Time since last charge"), stats.charging and _("Charging") or duration(stats.since_charge)),
+#. Context: row(_("Previous charge, total"), stats.charge_gain and stats.charge_gain .. "%" or missing), row(_("Total time to full charge"), duration(stats.full_charge_time)), row(_("Time since last charge"), stats.charging and _("Charging") or dura...
 #: battery_stats_menu.lua:39
 msgid "Total time to full charge"
 msgstr "Total time to full charge"
