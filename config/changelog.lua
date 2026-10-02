@@ -380,5 +380,7 @@ return {
         "Open KOReader + menu outside home in context menu",
         "Fix even home widget spacing",
         "Bug fixes & performance improvements",
-     }
+     },
+      ["4.0.1"] = {
+      }
 }

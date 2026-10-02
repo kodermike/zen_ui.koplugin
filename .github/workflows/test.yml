@@ -17,6 +17,9 @@ on:
         required: false
         default: full
         type: string
+      ref:
+        required: false
+        type: string
 
 jobs:
   stable:
@@ -29,6 +32,8 @@ jobs:
       KOREADER_CACHE_VERSION: 3
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -97,6 +102,8 @@ jobs:
       KOREADER_CACHE_VERSION: 3
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v5
         with:
@@ -152,6 +159,8 @@ jobs:
       ZEN_UI_KOREADER_CACHE: ${{ github.workspace }}/spec/.cache/koreader
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v5
         with:
