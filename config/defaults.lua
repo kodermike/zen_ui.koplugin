@@ -21,6 +21,7 @@ local defaults = {
         library_font_hyperreadable_default_migrated = false,
         lookup_plugin_items_default_migrated = false,
         tbr_collection_migrated = false,
+        kindle_launcher_added = false,
     },
     updater = {
         just_updated_version = "",
