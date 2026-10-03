@@ -324,7 +324,9 @@ describe("background Wi-Fi toggles", function()
             })
             local init_network = Device.initNetworkManager
             Device.initNetworkManager = function(self, manager)
+                local get_interface, has_address = manager.getNetworkInterfaceName, manager.ifHasAnAddress
                 init_network(self, manager)
+                manager.getNetworkInterfaceName, manager.ifHasAnAddress = get_interface, has_address
                 local function keepWifiAlive()
                     UIManager:unschedule(keepWifiAlive)
                     if wifi_on then
@@ -356,6 +358,7 @@ describe("background Wi-Fi toggles", function()
         end)
 
         it("runs power changes in workers and keeps the native timer in the UI process", function()
+            assert.is_nil(NetworkMgr.interface)
             local completed = 0
             local refresh = function()
                 assert.is_false(in_child)
@@ -386,6 +389,31 @@ describe("background Wi-Fi toggles", function()
             assert.are.equal(2, completed)
             assert.are.equal(0, #scheduled)
             assert.are.equal(0, standby)
+        end)
+
+        it("checks route and DNS without an interface in the worker", function()
+            wifi_on, connected = true, true
+            local cases = {
+                { route = false, dns = true, text = "no default route" },
+                { route = true, dns = false, text = "DNS lookup failed" },
+            }
+            for _i, case in ipairs(cases) do
+                NetworkMgr.hasDefaultRoute = function()
+                    assert.is_true(in_child)
+                    return case.route
+                end
+                NetworkMgr.canResolveHostnames = function()
+                    assert.is_true(in_child)
+                    assert.is_true(case.route)
+                    return case.dns
+                end
+                NetworkMgr:showWifiConnected()
+                finish_worker()
+                assert.is_truthy(shown[#shown].text:find(case.text, 1, true))
+                assert.is_true(wifi_on)
+                assert.are.equal(0, off_calls)
+                assert.are.equal(0, standby)
+            end
         end)
 
         for _i, result in ipairs({ "failed", "no_route" }) do

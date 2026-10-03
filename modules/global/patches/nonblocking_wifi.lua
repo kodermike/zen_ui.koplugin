@@ -44,7 +44,8 @@ local function apply_nonblocking_wifi()
     end
 
     local function address_error(self)
-        if not self:ifHasAnAddress() then
+        -- Firmware-managed Wi-Fi may not expose an interface name.
+        if self.interface and not self:ifHasAnAddress() then
             return _("Wi-Fi connected, but no IP address was assigned. Try reconnecting.")
         end
         if not self:hasDefaultRoute() then
@@ -283,7 +284,7 @@ local function apply_nonblocking_wifi()
                 self:showWifiNotice(problem, 8)
                 return
             end
-            logger.dbg("Wi-Fi address, route and DNS checks passed")
+            logger.dbg("Wi-Fi connection checks passed")
             self:showWifiNotice(ssid and ssid ~= ""
                 and ffiutil.template(_("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), ssid)
                 or _("Connected."):gsub("%.$", ""):gsub("。$", ""))
