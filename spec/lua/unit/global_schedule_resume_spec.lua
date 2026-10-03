@@ -228,6 +228,55 @@ describe("global schedule resume hook", function()
         assert.are.equal(1, responsive_keyboard_applies)
     end)
 
+    it("avoids redundant Kindle frontlight writes on resume but applies changed values", function()
+        local intensity_writes, warmth_writes = 0, 0
+        device.isKindle = function() return true end
+        device.hasFrontlight = function() return true end
+        device.hasNaturalLight = function() return true end
+        device.screen = { night_mode = false }
+        device.powerd = setmetatable({
+            device = device,
+            fl_max = 24,
+            fl_intensity = 9,
+            fl_warmth_max = 24,
+            warmth_scale = 100 / 24,
+            fl_warmth = 33,
+            is_fl_on = true,
+            setIntensityHW = function() intensity_writes = intensity_writes + 1 end,
+            setWarmthHW = function() warmth_writes = warmth_writes + 1 end,
+            stateChanged = function() end,
+        }, { __index = require("device/generic/powerd") })
+        _G.__ZEN_UI_BRIGHTNESS_SCHEDULE = nil
+        _G.__ZEN_UI_WARMTH_SCHEDULE = nil
+        ZenSpec.unload("modules/global/patches/brightness_schedule")
+        ZenSpec.unload("modules/global/patches/warmth_schedule")
+        local plugin = { config = {
+            features = {},
+            brightness_schedule = { use_mode_values = true, day_value = 9 },
+            warmth_schedule = { use_mode_values = true, day_value = 8 },
+        } }
+        assert.is_true(global.init(nil, plugin))
+        assert.are.equal(0, intensity_writes)
+        assert.are.equal(0, warmth_writes)
+
+        ui_manager:broadcastEvent({ handler = "onResume" })
+        scheduled[1].callback()
+        scheduled[2].callback()
+        assert.are.equal(0, intensity_writes)
+        assert.are.equal(0, warmth_writes)
+        assert.are.equal(1, _G.night_reschedules)
+
+        plugin.config.brightness_schedule.day_value = 12
+        plugin.config.warmth_schedule.day_value = 10
+        ui_manager:broadcastEvent({ handler = "onResume" })
+        scheduled[1].callback()
+        scheduled[2].callback()
+        assert.are.equal(1, intensity_writes)
+        assert.are.equal(1, warmth_writes)
+        assert.are.equal(12, device.powerd.fl_intensity)
+        assert.are.equal(42, device.powerd.fl_warmth)
+    end)
+
     it("skips Zen Keyboard when disabled", function()
         assert.is_true(global.init(nil, {
             config = { features = { zen_keyboard = false } },

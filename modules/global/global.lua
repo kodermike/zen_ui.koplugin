@@ -168,6 +168,10 @@ function M.init(logger, plugin)
             local state = rawget(_G, name)
             if type(state) == "table" then
                 local fn = state.force_reschedule or state.reschedule
+                -- Avoid redundant synchronous LIPC writes while Kindle powerd is waking.
+                if name ~= "__ZEN_UI_NIGHT_SCHEDULE" and Device.isKindle and Device:isKindle() then
+                    fn = state.reschedule
+                end
                 if type(fn) == "function" then pcall(fn) end
             end
         end
