@@ -388,6 +388,7 @@ return {
         "Fix Pocketbook Wi-Fi toggling on",
         "Fix stale navbar after disabling wallpaper",
         "Fix KLC flashing when wallpaper enabled",
+        "Fix themed reader status bar backgrounds after waking on Colorsoft",
         "Fix Android reader bottom status bar painting over the page browser",
         "Fix History gestures not working",
         "Fix rare bug in autoresume on kindle after deep sleep"

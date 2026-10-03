@@ -76,7 +76,7 @@ local function apply_reader_top_status_bar()
             return true
         end
         local parent = top_widget.show_parent
-        return parent == view.ui or parent == view.ui.show_parent
+        return parent ~= nil and (parent == view.ui or parent == view.ui.show_parent)
     end
 
     -- Stable reference so suspend/resume can cancel/restart the timer.
@@ -967,10 +967,18 @@ local function apply_reader_top_status_bar()
         local refresh_dither = top_widget and top_widget.dithered or nil
         local bb = Screen.bb
         if bb then
+            local page_buffer = view.render_mode == nil and view.document and view.document.buffer
+            local offset = view.state and view.state.offset
             local background = type(ReaderThemes.getBackgroundColor) == "function"
                 and ReaderThemes.getBackgroundColor(zen_plugin) or Blitbuffer.COLOR_WHITE
             for _i, region in ipairs(refresh_regions) do
-                bb:paintRectRGB32(region.x, region.y, region.w, region.h, background)
+                if page_buffer and offset then
+                    -- Restore the rendered backdrop with the page's exact colors and inversion.
+                    bb:blitFrom(page_buffer, region.x, region.y,
+                        region.x - dimen.x - offset.x, region.y - dimen.y - offset.y, region.w, region.h)
+                else
+                    bb:paintRectRGB32(region.x, region.y, region.w, region.h, background)
+                end
             end
         end
         UIManager:widgetRepaint(header, dimen.x, dimen.y)
@@ -990,11 +998,17 @@ local function apply_reader_top_status_bar()
         return reader and reader.view
     end
 
-    local function repaintActiveHeaderSlots(item_keys, rui)
+    local function repaintActiveHeaderSlots(item_keys, rui, repaint_reader)
         local view = activeReaderView(rui)
         if not (view and view.ui and view.ui.document) or not should_show(view) then return end
         if is_view_active_top(view) then
-            repaintHeaderSlots(view, item_keys)
+            if repaint_reader then
+                -- Match page turns: repaint the page and transparent header together.
+                DBG("resume reader repaint", "mode=ui")
+                UIManager:setDirty(view.ui.show_parent or view.ui, "ui")
+            else
+                repaintHeaderSlots(view, item_keys)
+            end
         end
     end
 
@@ -1088,15 +1102,21 @@ local function apply_reader_top_status_bar()
             UIManager:unschedule(_autoRefresh)
             if _resume_refresh_timer_1 then UIManager:unschedule(_resume_refresh_timer_1) end
             if _resume_refresh_timer_2 then UIManager:unschedule(_resume_refresh_timer_2) end
-            _resume_refresh_timer_1 = function()
+            local repaint_reader = view.render_mode == nil and Device:isKindle()
+                and Device:hasColorScreen() and ReaderThemes.getBackgroundColor(zen_plugin)
+            if not repaint_reader then
+                _resume_refresh_timer_1 = function()
+                    _resume_refresh_timer_1 = nil
+                    repaintActiveHeaderSlots(RESUME_REFRESH_ITEMS)
+                end
+                UIManager:scheduleIn(0.6, _resume_refresh_timer_1)
+            else
                 _resume_refresh_timer_1 = nil
-                repaintActiveHeaderSlots(RESUME_REFRESH_ITEMS)
             end
             _resume_refresh_timer_2 = function()
                 _resume_refresh_timer_2 = nil
-                repaintActiveHeaderSlots(RESUME_REFRESH_ITEMS)
+                repaintActiveHeaderSlots(RESUME_REFRESH_ITEMS, nil, repaint_reader)
             end
-            UIManager:scheduleIn(0.6, _resume_refresh_timer_1)
             UIManager:scheduleIn(1.8, _resume_refresh_timer_2)
             local now_t = os.date("*t")
             UIManager:scheduleIn(61 - now_t.sec, _autoRefresh)

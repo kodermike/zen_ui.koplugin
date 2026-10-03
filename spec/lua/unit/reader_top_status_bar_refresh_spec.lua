@@ -1,3 +1,5 @@
+local Blitbuffer = require("ffi/blitbuffer")
+
 describe("reader top status bar refresh", function()
     local ReaderUI
     local ReaderTypeset
@@ -22,6 +24,7 @@ describe("reader top status bar refresh", function()
     local bluetooth_enabled
     local clock_text
     local battery_capacity
+    local color_kindle
 
     local dependencies = {
         "apps/reader/modules/readerview",
@@ -102,6 +105,7 @@ describe("reader top status bar refresh", function()
         saved_settings = G_reader_settings
         scheduled = {}
         unscheduled = {}
+        color_kindle = false
         clock_text = "12:34"
         battery_capacity = 73
         reset_paint_log()
@@ -115,6 +119,12 @@ describe("reader top status bar refresh", function()
         screen_bb.paintRectRGB32 = function(self, ...)
             self:paintRect(...)
             paint_rects[#paint_rects].rgb = true
+        end
+        screen_bb.blitFrom = function(_self, source, x, y, sx, sy, w, h)
+            paint_rects[#paint_rects + 1] = {
+                source = source, x = x, y = y, sx = sx, sy = sy, w = w, h = h,
+            }
+            paint_order[#paint_order + 1] = "restore"
         end
         local screen = {
             bb = screen_bb,
@@ -185,6 +195,8 @@ describe("reader top status bar refresh", function()
         replace("datetime", { secondsToHour = function() return clock_text end })
         replace("device", {
             screen = screen,
+            isKindle = function() return color_kindle end,
+            hasColorScreen = function() return color_kindle end,
             hasBattery = function() return true end,
             getPowerDevice = function()
                 return {
@@ -840,5 +852,130 @@ describe("reader top status bar refresh", function()
         assert.is_nil(dirty_calls[1].widget)
         assert.is_true(dirty_calls[1].dither)
         assert.same({ "clear", "header", "dogear", "dirty" }, paint_order)
+    end)
+
+    it("restores only changed slots from the rendered page on resume and minute updates", function()
+        local view = make_view()
+        view.state = { offset = { x = -10, y = -5 } }
+        view._zen_header_dimen.x, view._zen_header_dimen.y = 30, 20
+        for _i, slot in pairs(view._zen_header_slots) do
+            slot.x, slot.y = slot.x + 30, slot.y + 20
+        end
+        for _i, background in ipairs({ "sepia", "dark_gray" }) do
+            local buffer = { background = background }
+            view.document.buffer = buffer
+            package.loaded["common/reader_themes"].getBackgroundColor = function() return "different" end
+            ReaderUI.onResume({})
+            reset_paint_log()
+            scheduled[#scheduled - 2].callback()
+            scheduled[#scheduled - 1].callback()
+
+            assert.are.equal(6, #paint_rects)
+            assert.are.equal(6, #dirty_calls)
+            for _j, rect in ipairs(paint_rects) do
+                assert.are.equal(buffer, rect.source)
+                assert.are.equal(100, rect.w)
+                assert.are.equal(20, rect.h)
+                assert.are.equal(rect.x - 20, rect.sx)
+                assert.are.equal(20, rect.y)
+                assert.are.equal(5, rect.sy)
+                assert.is_nil(rect.color)
+            end
+            for _j, call in ipairs(dirty_calls) do
+                assert.is_nil(call.widget)
+                assert.are.equal("ui", call.mode)
+                assert.are.equal(100, call.region.w)
+            end
+        end
+
+        reset_paint_log()
+        clock_text = "12:35"
+        scheduled[#scheduled].callback()
+        assert.are.equal(1, #paint_rects)
+        assert.are.equal(view.document.buffer, paint_rects[1].source)
+        assert.same({ "restore", "header", "dogear", "dirty" }, paint_order)
+        assert.are.equal("ui", dirty_calls[1].mode)
+        assert.is_nil(dirty_calls[1].widget)
+    end)
+
+    it("repaints the whole themed Colorsoft reader once after wake without flashing", function()
+        color_kindle = true
+        local view = make_view()
+        for _i, background in ipairs({
+            Blitbuffer.ColorRGB32(0xFF, 0xC7, 0x01, 0xFF),
+            Blitbuffer.ColorRGB32(0x2F, 0x2F, 0x2F, 0xFF),
+        }) do
+            package.loaded["common/reader_themes"].getBackgroundColor = function() return background end
+            local scheduled_before = #scheduled
+            ReaderUI.onResume(view.ui)
+
+            assert.are.equal(scheduled_before + 2, #scheduled) -- Wake repaint and minute timer.
+            assert.are.equal(1.8, scheduled[scheduled_before + 1].delay)
+            assert.are.equal(0, #dirty_calls)
+            scheduled[scheduled_before + 1].callback()
+
+            assert.are.equal(1, #dirty_calls)
+            assert.are.equal(view.ui.show_parent or view.ui, dirty_calls[1].widget)
+            assert.are.equal("ui", dirty_calls[1].mode)
+            assert.is_nil(dirty_calls[1].region)
+            assert.are.equal(0, #paint_rects)
+            reset_paint_log()
+            view.ui.show_parent = {}
+            UIManager._window_stack = { { widget = view.ui.show_parent } }
+        end
+
+        local scheduled_before = #scheduled
+        ReaderUI.onResume(view.ui)
+        local wake_repaint = scheduled[scheduled_before + 1].callback
+        ReaderUI.onSuspend(view.ui)
+        assert.is_true(unscheduled[wake_repaint])
+        UIManager._window_stack[#UIManager._window_stack + 1] = { widget = {} }
+        wake_repaint()
+        assert.are.equal(0, #dirty_calls)
+    end)
+
+    it("keeps non-flashing wake refreshes on other devices and without a theme", function()
+        make_view()
+        for _i, use_color_kindle in ipairs({ false, true }) do
+            color_kindle = use_color_kindle
+            package.loaded["common/reader_themes"].getBackgroundColor = function()
+                return not use_color_kindle and "sepia" or nil
+            end
+            ReaderUI.onResume({})
+            reset_paint_log()
+            scheduled[#scheduled - 2].callback()
+            assert.are.equal(3, #dirty_calls)
+            for _j, call in ipairs(dirty_calls) do
+                assert.are.equal("ui", call.mode)
+                assert.are.equal(100, call.region.w)
+            end
+        end
+    end)
+
+    it("keeps solid slot backgrounds for fixed-layout documents", function()
+        local view = make_view()
+        view.render_mode = 1
+        view.state = { offset = { x = 0, y = 0 } }
+        view.document.buffer = {}
+        package.loaded["common/reader_themes"].getBackgroundColor = function() return "sepia" end
+        clock_text = "12:35"
+
+        scheduled[1].callback()
+
+        assert.are.equal("sepia", paint_rects[1].color)
+        assert.is_nil(paint_rects[1].source)
+    end)
+
+    it("skips the wake repair while another screen covers the reader", function()
+        make_view()
+        package.loaded["common/reader_themes"].getBackgroundColor = function() return "sepia" end
+        ReaderUI.onResume({})
+        UIManager._window_stack[#UIManager._window_stack + 1] = { widget = {} }
+
+        scheduled[#scheduled - 2].callback()
+        scheduled[#scheduled - 1].callback()
+
+        assert.are.equal(0, #paint_rects)
+        assert.are.equal(0, #dirty_calls)
     end)
 end)
