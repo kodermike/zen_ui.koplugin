@@ -336,6 +336,11 @@ msgstr "Culoare filă activă"
 msgid "Active tab color: "
 msgstr "Culoare filă activă: "
 
+#. Type: setting
+#: navbar_settings.lua:1669
+msgid "Active tab outline color"
+msgstr "Culoarea conturului filei active"
+
 #. Type: title
 #. Context: end, dialog_title = _("Active tab RGB"), presets = {
 #: navbar_settings.lua:1650
@@ -413,6 +418,12 @@ msgstr "Adaugă în colecție"
 #: dict_quick_lookup.lua:74
 msgid "Add to vocabulary builder"
 msgstr "Adaugă în generatorul de vocabular"
+
+#. Type: setting
+#. Context: table.insert(items, { text = _("Align status bars with book margins"), checked_func = function()
+#: reader_settings.lua:1523
+msgid "Align status bars with book margins"
+msgstr "Aliniază barele de stare cu marginile cărții"
 
 #. Type: label
 #. Context: .. (already_in and " \u{2713}" or ""), mandatory = already_in and _("added") or nil, dim = already_in,
@@ -2472,6 +2483,16 @@ msgstr "Pluginul Filebrowser nu este instalat."
 msgid "Filename"
 msgstr "Nume de fișier"
 
+#. Type: setting
+#: navbar_settings.lua:1658
+msgid "Fill color"
+msgstr "Culoarea umplerii"
+
+#. Type: setting
+#: navbar_settings.lua:1648
+msgid "Filled"
+msgstr "Umplut"
+
 #. Type: label
 #. Context: table.insert(buttons, {{ text = icons.filter .. " " .. _("Filter") .. (n_gf > 0 and " (" .. n_gf .. ")" or "")
 #: context_menu.lua:1219 context_menu.lua:2824
@@ -4241,6 +4262,11 @@ msgstr "Ordonează cărțile de citit"
 #: stats_settings.lua:230
 msgid "Outline"
 msgstr "Contur"
+
+#. Type: setting
+#: navbar_settings.lua:1657
+msgid "Outline color"
+msgstr "Culoarea conturului"
 
 #. Type: setting
 #. Context: { text = _("Outlined boxes"), radio = true,

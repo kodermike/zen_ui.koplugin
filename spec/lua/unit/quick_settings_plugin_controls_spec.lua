@@ -575,16 +575,32 @@ describe("quick settings plugin controls", function()
         assert.are.same({ { airplanemode_toggle = true } }, dispatched_actions)
     end)
 
-    it("opens Zen Settings from its control", function()
+    it("closes Controls and opens Zen Settings in the same UI tick", function()
         local closes = 0
+        local callbacks = {}
+        local UIManager = require("ui/uimanager")
+        UIManager.nextTick = function(_self, callback)
+            callbacks[#callbacks + 1] = callback
+        end
         assert.is_true(_G.__ZEN_UI_QUICK_SETTINGS.activate("zen_settings", {
-            closeMenu = function() closes = closes + 1 end,
+            closeMenu = function()
+                closes = closes + 1
+                UIManager:nextTick(function()
+                    assert.are.equal(1, settings_shows)
+                end)
+            end,
             updateItems = function() end,
             item_table = { panel = true },
         }))
 
+        assert.are.equal(0, closes)
+        assert.are.equal(0, settings_shows)
+        assert.are.equal(1, #callbacks)
+        callbacks[1]()
         assert.are.equal(1, closes)
         assert.are.equal(1, settings_shows)
+        assert.are.equal(2, #callbacks)
+        callbacks[2]()
     end)
 
     it("keeps the Zen Settings control inert when Lockdown disables settings", function()

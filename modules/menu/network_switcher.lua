@@ -28,6 +28,15 @@ function M.toggleWifi(touch_menu, on_connected, settings_subpage, plugin, show_n
         -- Background shutdowns can leave KOReader's connection checks pending.
         NetworkMgr:disableWifi(nil, true)
     end
+    if Device.isPocketBook and Device:isPocketBook() then
+        -- PocketBook reconnects using firmware-saved networks.
+        logger.dbg("PocketBook Wi-Fi power toggle", "wifi_on=", wifi_on)
+        local refresh = function() touch_menu:updateItems() end
+        if wifi_on then
+            return NetworkMgr:toggleWifiOff(refresh, true)
+        end
+        return NetworkMgr:toggleWifiOn(refresh, false, true)
+    end
     if not connected then
         local no_saved = not kindle and not kobo and not wifi_on
             and next(NetworkMgr:getAllSavedNetworks().data) == nil

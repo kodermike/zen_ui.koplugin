@@ -342,6 +342,11 @@ msgstr "Color de la pestaña activa"
 msgid "Active tab color: "
 msgstr "Color de la pestaña activa: "
 
+#. Type: setting
+#: navbar_settings.lua:1669
+msgid "Active tab outline color"
+msgstr "Color del contorno de la pestaña activa"
+
 #. Type: title
 #. Context: end, dialog_title = _("Active tab RGB"), presets = {
 #: navbar_settings.lua:1650
@@ -419,6 +424,12 @@ msgstr "Añadir a la colección"
 #: dict_quick_lookup.lua:74
 msgid "Add to vocabulary builder"
 msgstr "Añadir al vocabulario"
+
+#. Type: setting
+#. Context: table.insert(items, { text = _("Align status bars with book margins"), checked_func = function()
+#: reader_settings.lua:1523
+msgid "Align status bars with book margins"
+msgstr "Alinear las barras de estado con los márgenes del libro"
 
 #. Type: label
 #. Context: .. (already_in and " \u{2713}" or ""), mandatory = already_in and _("added") or nil, dim = already_in,
@@ -2478,6 +2489,16 @@ msgstr "El complemento Filebrowser no está instalado."
 msgid "Filename"
 msgstr "Nombre del archivo"
 
+#. Type: setting
+#: navbar_settings.lua:1658
+msgid "Fill color"
+msgstr "Color de relleno"
+
+#. Type: setting
+#: navbar_settings.lua:1648
+msgid "Filled"
+msgstr "Relleno"
+
 #. Type: label
 #. Context: table.insert(buttons, {{ text = icons.filter .. " " .. _("Filter") .. (n_gf > 0 and " (" .. n_gf .. ")" or "")
 #: context_menu.lua:1219 context_menu.lua:2824
@@ -4247,6 +4268,11 @@ msgstr "Ordenar los libros por leer"
 #: stats_settings.lua:230
 msgid "Outline"
 msgstr "Contorno"
+
+#. Type: setting
+#: navbar_settings.lua:1657
+msgid "Outline color"
+msgstr "Color del contorno"
 
 #. Type: setting
 #. Context: { text = _("Outlined boxes"), radio = true,

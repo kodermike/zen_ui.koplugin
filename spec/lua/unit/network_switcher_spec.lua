@@ -1218,6 +1218,52 @@ describe("network switcher", function()
         assert.are.equal(1, switcher_calls)
     end)
 
+    for _i, settings_subpage in ipairs({ false, true }) do
+        it("toggles PocketBook Wi-Fi from " .. (settings_subpage and "Settings" or "Controls")
+                .. " without opening settings", function()
+            ZenSpec.replace("device", {
+                isPocketBook = function() return true end,
+            })
+            NetworkMgr.wifi_on = false
+            NetworkMgr.current_ssid = nil
+            NetworkMgr.getAllSavedNetworks = function()
+                error("PocketBook uses firmware-saved networks")
+            end
+            NetworkMgr.getWifiMenuTable = function()
+                error("PocketBook power toggles should not prompt to connect")
+            end
+            local starts, stops, updates = 0, 0, 0
+            NetworkMgr.toggleWifiOn = function(self, callback, long_press, interactive)
+                assert.is_false(long_press)
+                assert.is_true(interactive)
+                starts = starts + 1
+                self:turnOnWifi()
+                callback()
+            end
+            NetworkMgr.toggleWifiOff = function(self, callback, interactive)
+                assert.is_true(interactive)
+                stops = stops + 1
+                self:turnOffWifi()
+                callback()
+            end
+            local Switcher = require("modules/menu/network_switcher")
+            Switcher.open = function() error("Power toggles must not open PocketBook settings") end
+            local touch_menu = { updateItems = function() updates = updates + 1 end }
+
+            Switcher.toggleWifi(touch_menu, nil, settings_subpage, {})
+            assert.is_true(NetworkMgr.wifi_on)
+            assert.is_false(NetworkMgr:isConnected())
+            Switcher.toggleWifi(touch_menu, nil, settings_subpage, {})
+            assert.is_false(NetworkMgr.wifi_on)
+            Switcher.toggleWifi(touch_menu, nil, settings_subpage, {})
+            NetworkMgr.current_ssid = "Home"
+            Switcher.toggleWifi(touch_menu, nil, settings_subpage, {})
+            assert.is_false(NetworkMgr.wifi_on)
+            assert.are.same({ 2, 2, 4 }, { starts, stops, updates })
+            assert.are.same({}, shown)
+        end)
+    end
+
     it("opens PocketBook settings without changing an active connection", function()
         ZenSpec.replace("device", {
             model = "PB700",

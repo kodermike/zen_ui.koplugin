@@ -8,6 +8,7 @@ local PATCH_MODULES = {
     menu_top_swipe         = "modules/global/patches/menu_top_swipe",
     opds                   = "modules/global/patches/opds",
     cloud_storage_home     = "modules/global/patches/cloud_storage_home",
+    kindle_autosuspend_resume = "modules/global/patches/kindle_autosuspend_resume",
     kindle_network_profile_guard = "modules/global/patches/kindle_network_profile_guard",
     kobo_bluetooth_fix     = "modules/global/patches/kobo_bluetooth_fix",
     nonblocking_wifi       = "modules/global/patches/nonblocking_wifi",
@@ -107,6 +108,11 @@ function M.init(logger, plugin)
         run_patch(logger, plugin, "cloud_storage_home", cloud_storage_home_fn)
     end
 
+    local kindle_autosuspend_resume_fn = load_patch("kindle_autosuspend_resume")
+    if kindle_autosuspend_resume_fn then
+        run_patch(logger, plugin, "kindle_autosuspend_resume", kindle_autosuspend_resume_fn)
+    end
+
     local kindle_network_profile_guard_fn = load_patch("kindle_network_profile_guard")
     if kindle_network_profile_guard_fn then
         run_patch(logger, plugin, "kindle_network_profile_guard", kindle_network_profile_guard_fn)
@@ -168,6 +174,10 @@ function M.init(logger, plugin)
             local state = rawget(_G, name)
             if type(state) == "table" then
                 local fn = state.force_reschedule or state.reschedule
+                -- Avoid redundant synchronous LIPC writes while Kindle powerd is waking.
+                if name ~= "__ZEN_UI_NIGHT_SCHEDULE" and Device.isKindle and Device:isKindle() then
+                    fn = state.reschedule
+                end
                 if type(fn) == "function" then pcall(fn) end
             end
         end

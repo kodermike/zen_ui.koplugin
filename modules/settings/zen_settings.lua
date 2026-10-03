@@ -109,7 +109,7 @@ function M.build(plugin)
 
     utils.reorder_nested_items_by_text({ navbar_item }, _("Active tab"), {
         _("Underline"),
-        _("Underline above icon"),
+        _("Filled"),
         _("Colored"),
         _("Active tab color"),
     })

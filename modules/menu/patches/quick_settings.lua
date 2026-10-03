@@ -840,8 +840,8 @@ local function apply_quick_settings()
                     and type(features) == "table" and features.lockdown_mode == true
             end,
             callback = function(touch_menu)
-                touch_menu:closeMenu()
                 UIManager:nextTick(function()
+                    touch_menu:closeMenu()
                     require("modules/settings/zen_settings_page").show(zen_plugin)
                 end)
             end,

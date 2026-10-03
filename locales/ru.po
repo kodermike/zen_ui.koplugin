@@ -337,6 +337,11 @@ msgstr "Цвет активной вкладки"
 msgid "Active tab color: "
 msgstr "Цвет активной вкладки: "
 
+#. Type: setting
+#: navbar_settings.lua:1669
+msgid "Active tab outline color"
+msgstr "Цвет контура активной вкладки"
+
 #. Type: title
 #. Context: end, dialog_title = _("Active tab RGB"), presets = {
 #: navbar_settings.lua:1650
@@ -414,6 +419,12 @@ msgstr "Добавить в коллекцию"
 #: dict_quick_lookup.lua:74
 msgid "Add to vocabulary builder"
 msgstr "Добавить в конструктор словаря"
+
+#. Type: setting
+#. Context: table.insert(items, { text = _("Align status bars with book margins"), checked_func = function()
+#: reader_settings.lua:1523
+msgid "Align status bars with book margins"
+msgstr "Выровнять строки состояния по полям книги"
 
 #. Type: label
 #. Context: .. (already_in and " \u{2713}" or ""), mandatory = already_in and _("added") or nil, dim = already_in,
@@ -2473,6 +2484,16 @@ msgstr "Плагин Filebrowser не установлен."
 msgid "Filename"
 msgstr "Имя файла"
 
+#. Type: setting
+#: navbar_settings.lua:1658
+msgid "Fill color"
+msgstr "Цвет заливки"
+
+#. Type: setting
+#: navbar_settings.lua:1648
+msgid "Filled"
+msgstr "Заливка"
+
 #. Type: label
 #. Context: table.insert(buttons, {{ text = icons.filter .. " " .. _("Filter") .. (n_gf > 0 and " (" .. n_gf .. ")" or "")
 #: context_menu.lua:1219 context_menu.lua:2824
@@ -4242,6 +4263,11 @@ msgstr "Упорядочить список «К прочтению»"
 #: stats_settings.lua:230
 msgid "Outline"
 msgstr "Контур"
+
+#. Type: setting
+#: navbar_settings.lua:1657
+msgid "Outline color"
+msgstr "Цвет контура"
 
 #. Type: setting
 #. Context: { text = _("Outlined boxes"), radio = true,

@@ -1,6 +1,7 @@
 local function apply_nonblocking_wifi()
     local Device = require("device")
-    if not ((Device.isKobo and Device:isKobo()) or (Device.isKindle and Device:isKindle())) then return end
+    local pocketbook = Device.isPocketBook and Device:isPocketBook()
+    if not (pocketbook or (Device.isKobo and Device:isKobo()) or (Device.isKindle and Device:isKindle())) then return end
     local NetworkMgr = require("ui/network/manager")
     if NetworkMgr._zen_nonblocking_wifi then return end
 
@@ -19,9 +20,32 @@ local function apply_nonblocking_wifi()
     local queued = {}
     local start_next
     local reported_changing = false
+    local pocketbook_keepalive
+    local pocketbook_turn_on
+    if pocketbook then
+        local inkview = require("ffi/inkview")
+        ffi.cdef[[int NetConnectSilent(const char *name);]]
+        pocketbook_turn_on = function(_self, callback)
+            inkview.WiFiPower(1)
+            -- NetConnect() can wait for firmware UI inside a forked worker.
+            local status = tonumber(inkview.NetConnectSilent(nil))
+            logger.dbg("PocketBook silent reconnect result", "status=", status)
+            if status ~= ffi.C.NET_OK then return false end
+            if callback then callback() end
+            return true
+        end
+        local index = 1
+        while true do
+            local name, value = debug.getupvalue(NetworkMgr.turnOnWifi, index)
+            if not name then break end
+            if name == "keepWifiAlive" then pocketbook_keepalive = value; break end
+            index = index + 1
+        end
+    end
 
     local function address_error(self)
-        if not self:ifHasAnAddress() then
+        -- Firmware-managed Wi-Fi may not expose an interface name.
+        if self.interface and not self:ifHasAnAddress() then
             return _("Wi-Fi connected, but no IP address was assigned. Try reconnecting.")
         end
         if not self:hasDefaultRoute() then
@@ -82,6 +106,7 @@ local function apply_nonblocking_wifi()
             UIManager.close = function() end
             UIManager.forceRePaint = function() end
             UIManager.scheduleIn = function(_self, delay, callback, ...)
+                if callback == pocketbook_keepalive then return end
                 ffiutil.usleep(delay * 1000000)
                 callback(...)
             end
@@ -155,6 +180,7 @@ local function apply_nonblocking_wifi()
                 elseif result and not result.failed and not job.timed_out
                         and (not job.enabling or result.completed or result.show_menu) then
                     if job.enabling then NetworkMgr.lease_ssid = result.lease_ssid end
+                    if job.enabling and result.completed and pocketbook_keepalive then pocketbook_keepalive() end
                     if result.completed and job.complete_callback then
                         if job.enabling and not result.show_menu then connection_failure = job.on_failure end
                         job.complete_callback()
@@ -182,7 +208,7 @@ local function apply_nonblocking_wifi()
         local method = self[method_name]
         self[method_name] = function(_self, complete_callback)
             queued[#queued + 1] = {
-                method = method,
+                method = pocketbook and method_name == "turnOnWifi" and pocketbook_turn_on or method,
                 method_name = method_name,
                 enabling = method_name == "turnOnWifi",
                 complete_callback = complete_callback or after,
@@ -258,7 +284,7 @@ local function apply_nonblocking_wifi()
                 self:showWifiNotice(problem, 8)
                 return
             end
-            logger.dbg("Wi-Fi address, route and DNS checks passed")
+            logger.dbg("Wi-Fi connection checks passed")
             self:showWifiNotice(ssid and ssid ~= ""
                 and ffiutil.template(_("Connected to %1."):gsub("%.$", ""):gsub("。$", ""), ssid)
                 or _("Connected."):gsub("%.$", ""):gsub("。$", ""))
@@ -267,6 +293,7 @@ local function apply_nonblocking_wifi()
     local disableWifi = NetworkMgr.disableWifi
     NetworkMgr.disableWifi = function(self, ...)
         cancel()
+        if pocketbook_keepalive then UIManager:unschedule(pocketbook_keepalive) end
         return disableWifi(self, ...)
     end
     local abortWifiConnection = NetworkMgr._abortWifiConnection
@@ -279,6 +306,11 @@ local function apply_nonblocking_wifi()
     end
     local connectivityCheck = NetworkMgr.connectivityCheck
     NetworkMgr.connectivityCheck = function(self, iter, ...)
+        -- Resume starts this timer while the worker is still authenticating.
+        if active and active.enabling and not active.cancelled then
+            UIManager:scheduleIn(0.25, self.connectivityCheck, self, iter, ...)
+            return
+        end
         if iter >= 180 and connection_failure and self:isWifiOn() then
             local current = self:getCurrentNetwork()
             local problem = current and current.ssid and current.ssid ~= "" and address_error(self)
@@ -297,6 +329,7 @@ local function apply_nonblocking_wifi()
         self.wifi_toggle_long_press = long_press
         local chooser_callback = complete_callback
         on_failure = interactive and (on_failure or function()
+            if pocketbook then return chooser_callback and chooser_callback() end
             require("modules/menu/network_switcher").open(chooser_callback)
         end) or nil
         if interactive ~= false then

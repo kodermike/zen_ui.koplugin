@@ -589,13 +589,15 @@ local function apply_cover_preload()
         return region, grid
     end
 
-    local function cover_refresh_mode(mode, dither)
-        -- Color REAGL without UIManager's periodic full-flash promotion.
-        if (mode == "ui" or mode == "flashui") and dither and Device.isKobo and Device:isKobo()
-                and Device.hasColorScreen and Device:hasColorScreen() then
-            return "[partial]"
-        end
-        return mode
+    local function kindle_color_light_mode()
+        return Device.isKindle and Device:isKindle()
+            and Device.hasColorScreen and Device:hasColorScreen()
+            and Device.screen and not Device.screen.night_mode
+    end
+
+    local function cover_refresh_dither(dither)
+        -- TODO: remove once upstream fixes https://github.com/koreader/koreader/issues/14729.
+        return dither and not kindle_color_light_mode()
     end
 
     local function call_with_scoped_dirty(menu, region, reveal, fn, ...)
@@ -609,7 +611,7 @@ local function apply_cover_preload()
                     local original_refresh = refreshtype
                     refreshtype = function()
                         local refresh = { original_refresh() }
-                        return cover_refresh_mode(refresh[1], refresh[3]), region, refresh[3]
+                        return refresh[1], region, cover_refresh_dither(refresh[3])
                     end
                 end
                 if reveal then
@@ -634,9 +636,8 @@ local function apply_cover_preload()
         fast = 1,
         partial = 2,
         ui = 3,
-        ["[partial]"] = 4,
-        flashui = 5,
-        full = 6,
+        flashui = 4,
+        full = 5,
     }
 
     local function flush_reveal(menu, reveal, reason, hydrated, failed)
@@ -671,12 +672,12 @@ local function apply_cover_preload()
         local combined_refresh = #reveal.dirty_calls > 0 and menu.show_parent ~= nil
             and not fullscreen_overlay_covers_filemanager(menu)
         if combined_refresh then
-            if hydrated > 0 then menu.show_parent.dithered = true end
+            menu.show_parent.dithered = cover_refresh_dither(hydrated > 0 or menu.show_parent.dithered)
             local final_region = copy_region(reveal.refresh_region)
             if not final_region and not full_region then final_region = refresh_region end
             UIManager:setDirty(menu.show_parent, function()
                 local dither = refresh_dither or hydrated > 0 or menu.show_parent.dithered == true
-                return cover_refresh_mode(refresh_mode or "ui", dither), final_region, dither
+                return refresh_mode or "ui", final_region, cover_refresh_dither(dither)
             end)
         end
         local revealed_at = now()
@@ -742,16 +743,17 @@ local function apply_cover_preload()
             return false
         end
         menu._zen_cover_refresh_submitted_generation = generation
-        if hydrated > 0 then menu.show_parent.dithered = true end
+        menu.show_parent.dithered = cover_refresh_dither(hydrated > 0 or menu.show_parent.dithered)
         local full_color_refresh = hydrated > 0
             and Device.hasColorScreen and Device:hasColorScreen()
             and not (Device.isKobo and Device:isKobo())
+            and not kindle_color_light_mode()
         local refresh_region = region
         if full_color_refresh then refresh_region = nil end
         UIManager:setDirty(menu.show_parent, function()
             local refreshtype = BookInfoManager:getSetting("flash_ui_cover_images")
                 and "flashui" or "ui"
-            return cover_refresh_mode(refreshtype, hydrated > 0), refresh_region, hydrated > 0
+            return refreshtype, refresh_region, cover_refresh_dither(hydrated > 0)
         end)
         local full_area = menu.dimen and menu.dimen.w and menu.dimen.h
             and menu.dimen.w * menu.dimen.h or 0
@@ -1091,7 +1093,7 @@ local function apply_cover_preload()
             state.processed = state.processed + 1
             if ok and item._has_cover_image then
                 state.warmed = state.warmed + 1
-                if menu.show_parent then menu.show_parent.dithered = true end
+                if menu.show_parent then menu.show_parent.dithered = cover_refresh_dither(true) end
             else
                 state.failed = state.failed + 1
                 item._zen_cover_hydration_queued = true
@@ -2176,6 +2178,10 @@ local function apply_cover_preload()
                 menu, refresh_region, reveal, defer_extraction_launch, menu, original, ...)
         else
             result = defer_extraction_launch(menu, original, ...)
+        end
+        -- UIManager inherits this hint before it runs refresh callbacks.
+        if menu.show_parent then
+            menu.show_parent.dithered = cover_refresh_dither(menu.show_parent.dithered)
         end
         local resolved_region, current_grid = page_refresh_region(menu, previous_grid)
         menu._zen_cover_last_grid_region = current_grid

@@ -336,6 +336,11 @@ msgstr "活动标签颜色"
 msgid "Active tab color: "
 msgstr "活动标签颜色: "
 
+#. Type: setting
+#: navbar_settings.lua:1669
+msgid "Active tab outline color"
+msgstr "活动标签轮廓颜色"
+
 #. Type: title
 #. Context: end, dialog_title = _("Active tab RGB"), presets = {
 #: navbar_settings.lua:1650
@@ -413,6 +418,12 @@ msgstr "添加到合集"
 #: dict_quick_lookup.lua:74
 msgid "Add to vocabulary builder"
 msgstr "添加到生词本"
+
+#. Type: setting
+#. Context: table.insert(items, { text = _("Align status bars with book margins"), checked_func = function()
+#: reader_settings.lua:1523
+msgid "Align status bars with book margins"
+msgstr "将状态栏与书籍页边距对齐"
 
 #. Type: label
 #. Context: .. (already_in and " \u{2713}" or ""), mandatory = already_in and _("added") or nil, dim = already_in,
@@ -2472,6 +2483,16 @@ msgstr "Filebrowser 插件未安装。"
 msgid "Filename"
 msgstr "文件名"
 
+#. Type: setting
+#: navbar_settings.lua:1658
+msgid "Fill color"
+msgstr "填充颜色"
+
+#. Type: setting
+#: navbar_settings.lua:1648
+msgid "Filled"
+msgstr "填充"
+
 #. Type: label
 #. Context: table.insert(buttons, {{ text = icons.filter .. " " .. _("Filter") .. (n_gf > 0 and " (" .. n_gf .. ")" or "")
 #: context_menu.lua:1219 context_menu.lua:2824
@@ -4241,6 +4262,11 @@ msgstr "排序待读书籍"
 #: stats_settings.lua:230
 msgid "Outline"
 msgstr "大纲"
+
+#. Type: setting
+#: navbar_settings.lua:1657
+msgid "Outline color"
+msgstr "轮廓颜色"
 
 #. Type: setting
 #. Context: { text = _("Outlined boxes"), radio = true,
