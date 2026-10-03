@@ -2295,6 +2295,37 @@ describe("file browser navbar navigation", function()
         assert.are.same({ "top_menu" }, calls)
     end)
 
+    it("restores the standalone frame fill after disabling wallpaper", function()
+        local fm = make_instance()
+        fm[1] = { fm.file_chooser }
+        local home_menu
+        home_show_callback = function(inject)
+            home_menu = {
+                name = "home",
+                dimen = { w = 800, h = 600 },
+                inner_dimen = { w = 800, h = 600 },
+                updateItems = function() end,
+                { dimen = { w = 800, h = 560 } },
+            }
+            inject(home_menu, "home")
+        end
+        assert.is_true(_G.__ZEN_UI_NAVBAR_OPEN_TAB("home"))
+        local frame = home_menu[1]
+        local body = frame[1][1]
+        local old_navbar = frame[1][2]
+        assert.are.equal("white", frame.background)
+
+        frame.background = nil -- Wallpaper painting clears the retained frame's fill.
+        _G.__ZEN_UI_PLUGIN.config.library_background = { enabled = false }
+        UIManager._window_stack = { { widget = fm }, { widget = home_menu } }
+        _G.__ZEN_UI_REINJECT_NAVBARS()
+
+        assert.are.equal(frame, home_menu[1])
+        assert.are.equal(body, frame[1][1])
+        assert.are_not.equal(old_navbar, frame[1][2])
+        assert.are.equal("white", frame.background)
+    end)
+
     it("uses rendered tab centers when tapping a standalone navbar background", function()
         local fm = make_instance()
         fm[1] = { fm.file_chooser }

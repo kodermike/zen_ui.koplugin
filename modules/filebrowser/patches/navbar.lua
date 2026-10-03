@@ -3139,6 +3139,7 @@ local function apply_navbar()
             menu._zen_navbar_height = new_h
             vg[2] = new_nb
             resizeStandaloneBody(new_h)
+            menu[1].background = Blitbuffer.COLOR_WHITE -- Wallpaper painting clears this retained fill.
             UIManager:setDirty(menu, "ui")
         end
 
