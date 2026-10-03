@@ -6,7 +6,8 @@
 
 local JSON = require("json")
 local _ = require("gettext")
-local logger = require("common/zen_logger").new("zen_bugreporter")
+local ZenLogger = require("common/zen_logger")
+local logger = ZenLogger.new("zen_bugreporter")
 local UIManager = require("ui/uimanager")
 local restart = require("common/restart")
 local zen_utils = require("common/utils")
@@ -346,6 +347,7 @@ function M._do_submit(ctx, bug_title, description, github_username)
         local ok_ds, DataStorage = pcall(require, "datastorage")
         local data_dir = ok_ds and DataStorage:getDataDir() or nil
         local crash_log_full = data_dir and read_file_content(data_dir .. "/crash.log")
+        if crash_log_full then crash_log_full = ZenLogger.redactNetworkLog(crash_log_full) end
 
         -- Upload the bounded log; shorten it further for inline fallback.
         local log_url = crash_log_full and upload_crash_log(crash_log_full)
