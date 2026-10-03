@@ -340,8 +340,9 @@ local function apply_reader_footer()
     local function book_margin_width(self)
         if not ReaderStatusBar.isMarginAlignmentEnabled(zen_plugin) then return end
         local document = self.ui and self.ui.document
-        local margins = document and document.configurable and document.configurable.h_page_margins
-        return margins and (margins[1] + margins[2]) / 2
+        local left, right = ReaderStatusBar.getHorizontalMargins(document, nil, zen_plugin)
+        -- KOReader scales progress_margin_width itself; convert rendered pixels back.
+        return left and (left + right) / 2 / (Screen:scaleBySize(1000000) / 1000000)
     end
 
     local orig_updateFooterContainer = ReaderFooter.updateFooterContainer

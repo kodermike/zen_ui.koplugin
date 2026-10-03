@@ -15,6 +15,7 @@ describe("global schedule resume hook", function()
         "modules/global/patches/brightness_schedule",
         "modules/global/patches/menu_top_swipe",
         "modules/global/patches/opds",
+        "modules/global/patches/kindle_autosuspend_resume",
         "modules/global/patches/kindle_network_profile_guard",
         "modules/global/patches/nonblocking_wifi",
         "modules/global/patches/lockdown_mode",

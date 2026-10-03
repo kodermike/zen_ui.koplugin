@@ -142,25 +142,8 @@ describe("reader footer patches", function()
         assert.is_false(merge)
     end)
 
-    it("trims dynamic filler and repairs a stale generator reference", function()
+    it("preserves native dynamic filler spacing for full and compact chapter time", function()
         local original_filler = function() return "          ", true end
-        local skipped
-        local ReaderFooter = {
-            textGeneratorMap = {
-                chapter_time_to_read = function() return "stock" end,
-                dynamic_filler = original_filler,
-            },
-            genAllFooterText = function(_, skip_gen)
-                skipped = skip_gen
-                return "all"
-            end,
-        }
-        ZenSpec.replace("apps/reader/modules/readerfooter", ReaderFooter)
-        _G.__ZEN_UI_PLUGIN = {
-            config = { reader_footer = { chapter_time_format = "full" } },
-        }
-        apply_patch("modules/reader/patches/reader_footer_time_format")
-
         local footer = {
             pageno = 1,
             footerTextGenerators = { original_filler },
@@ -170,14 +153,24 @@ describe("reader footer patches", function()
                 document = { getTotalPagesLeft = function() return 1 end },
             },
         }
-        local wrapper = ReaderFooter.textGeneratorMap.dynamic_filler
-        local text, merge = wrapper(footer)
-        assert.are.equal("    ", text)
-        assert.is_true(merge)
+        for _i, format in ipairs({ "full", "compact" }) do
+            local ReaderFooter = {
+                textGeneratorMap = {
+                    chapter_time_to_read = function() return "stock" end,
+                    dynamic_filler = original_filler,
+                },
+            }
+            ZenSpec.replace("apps/reader/modules/readerfooter", ReaderFooter)
+            _G.__ZEN_UI_PLUGIN = {
+                config = { reader_footer = { chapter_time_format = format } },
+            }
+            apply_patch("modules/reader/patches/reader_footer_time_format")
 
-        assert.are.equal("all", ReaderFooter.genAllFooterText(footer, wrapper))
-        assert.are.equal(wrapper, footer.footerTextGenerators[1])
-        assert.are.equal(wrapper, skipped)
+            local text, merge = ReaderFooter.textGeneratorMap.dynamic_filler(footer)
+            assert.are.equal("          ", text)
+            assert.is_true(merge)
+            assert.are.equal(original_filler, ReaderFooter.textGeneratorMap.dynamic_filler)
+        end
     end)
 
     it("preserves KOReader's dynamic filler marker in verbose mode", function()
@@ -473,6 +466,24 @@ describe("reader footer patches", function()
         assert.are.equal(10, fixed_footer.settings.progress_margin_width)
         fixed_footer.vertical_frame:paintTo({}, 100, 0)
         assert.are.equal(100, painted_x)
+
+        document.getPageMargins = function() return { left = 30, right = 50 } end
+        footer:updateFooterContainer()
+        assert.are.equal(40, footer.horizontal_margin)
+        footer.vertical_frame:paintTo({}, 100, 0)
+        assert.are.equal(90, painted_x)
+        footer:_updateFooterText()
+        assert.are.equal(20, text_margin)
+        assert.are.equal(10, footer.settings.progress_margin_width)
+
+        local screen = package.loaded["device"].screen
+        screen.scaleBySize = function(_self, value) return math.ceil(value * 1264 / 600) end
+        document.getPageMargins = function() return { left = 64, right = 64 } end
+        footer:updateFooterContainer()
+        assert.are.equal(64, footer.horizontal_margin)
+        footer:_updateFooterText()
+        assert.are.equal(64, screen:scaleBySize(text_margin))
+        assert.are.equal(10, footer.settings.progress_margin_width)
     end)
 
     it("keeps the progress anchor out of cycling and uses the Zen arrange list", function()

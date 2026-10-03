@@ -191,6 +191,8 @@ describe("battery stats", function()
         now = now + 3600
         BatteryStats.start()
         stats = BatteryStats.snapshot()
+        assert.are.equal(40, stats.charge_rate)
+        assert.are.equal(80, stats.charge_gain)
         assert.is_nil(stats.time_to_full)
         assert.are.equal(7200, stats.full_charge_time)
         assert.are.equal(10800, stats.since_full_charge)
@@ -213,6 +215,14 @@ describe("battery stats", function()
         assert.is_nil(stats.full_charge_time)
         assert.is_nil(stats.since_full_charge)
 
+        BatteryStats.stop()
+        now, level = now + 1800, 48
+        BatteryStats.start()
+        stats = BatteryStats.snapshot()
+        assert.are.equal(30, stats.charge_rate)
+        assert.are.equal(30, stats.charge_gain)
+        assert.is_nil(stats.time_to_full)
+
         now, level, charging = now + 3600, 45, true
         BatteryStats.chargingChanged()
         scheduled[#scheduled].callback()
@@ -225,7 +235,7 @@ describe("battery stats", function()
         assert.are.equal(8100, BatteryStats.snapshot().time_to_full)
     end)
 
-    it("does not estimate without a charge gain or across an unobserved unplug", function()
+    it("keeps measured charging history across an unobserved unplug without extending it", function()
         level, charging = 20, true
         BatteryStats.start()
         now = now + 1800
@@ -236,11 +246,17 @@ describe("battery stats", function()
         scheduled[#scheduled].callback()
         assert.are.equal(20, BatteryStats.snapshot().charge_rate)
         now, level, charging = now + 1800, 50, false
-        assert.is_nil(BatteryStats.snapshot().charge_rate)
-        assert.is_nil(BatteryStats.snapshot().charge_gain)
+        local before = writes
+        local stats = BatteryStats.snapshot()
+        assert.are.equal(20, stats.charge_rate)
+        assert.are.equal(20, stats.charge_gain)
+        assert.is_nil(stats.time_to_full)
+        assert.are.equal(before, writes)
+        assert.are.equal(40, stored.charge_session.level)
         scheduled[#scheduled].callback()
-        assert.is_nil(BatteryStats.snapshot().charge_rate)
-        assert.is_nil(BatteryStats.snapshot().charge_gain)
+        assert.are.equal(20, BatteryStats.snapshot().charge_rate)
+        assert.are.equal(20, BatteryStats.snapshot().charge_gain)
+        assert.is_nil(BatteryStats.snapshot().time_to_full)
         assert.is_nil(BatteryStats.snapshot().full_charge_time)
     end)
 

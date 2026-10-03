@@ -970,7 +970,7 @@ local function apply_reader_top_status_bar()
             local background = type(ReaderThemes.getBackgroundColor) == "function"
                 and ReaderThemes.getBackgroundColor(zen_plugin) or Blitbuffer.COLOR_WHITE
             for _i, region in ipairs(refresh_regions) do
-                bb:paintRect(region.x, region.y, region.w, region.h, background)
+                bb:paintRectRGB32(region.x, region.y, region.w, region.h, background)
             end
         end
         UIManager:widgetRepaint(header, dimen.x, dimen.y)

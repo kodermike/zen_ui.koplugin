@@ -306,6 +306,11 @@ local function apply_nonblocking_wifi()
     end
     local connectivityCheck = NetworkMgr.connectivityCheck
     NetworkMgr.connectivityCheck = function(self, iter, ...)
+        -- Resume starts this timer while the worker is still authenticating.
+        if active and active.enabling and not active.cancelled then
+            UIManager:scheduleIn(0.25, self.connectivityCheck, self, iter, ...)
+            return
+        end
         if iter >= 180 and connection_failure and self:isWifiOn() then
             local current = self:getCurrentNetwork()
             local problem = current and current.ssid and current.ssid ~= "" and address_error(self)

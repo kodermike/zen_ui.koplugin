@@ -4,8 +4,11 @@ describe("reader themes", function()
     local next_tick_callback
     local promote_partial
     local force_repaints
+    local saved_version
 
     before_each(function()
+        saved_version = package.loaded.version
+        ZenSpec.replace("version", { getNormalizedCurrentVersion = function() return 202607000000 end })
         dirty_calls = {}
         next_tick_callback = nil
         promote_partial = false
@@ -35,6 +38,10 @@ describe("reader themes", function()
         })
         ZenSpec.unload("common/reader_themes")
         Themes = require("common/reader_themes")
+    end)
+
+    after_each(function()
+        package.loaded.version = saved_version
     end)
 
     it("appends the selected theme and removes it when disabled", function()
@@ -214,6 +221,40 @@ describe("reader themes", function()
         plugin.config.features.reader_themes = false
         Themes.applyFooterColors(footer, plugin)
         assert.is_not_nil(footer.footer_content.background)
+    end)
+
+    it("pre-inverts dark theme colors once for CSS, margins and status bars", function()
+        local plugin = {
+            config = {
+                features = { reader_themes = true },
+                reader_themes = { dark_mode = "light_tan", light_mode = "light_tan" },
+            },
+        }
+        local document = { render_color = true, _nightmode_images = true }
+        G_reader_settings:saveSetting("night_mode", true)
+        local css = Themes.appendCss(plugin, "base", document)
+        assert.matches("#e8dcc5", css, 1, true)
+        assert.matches("#473b2d", css, 1, true)
+
+        local background
+        document.setBackgroundColor = function(_self, color) background = color end
+        Themes.applyBackground({ document = document }, plugin)
+        assert.are.equal(0x17233a, background)
+
+        document.render_color = false
+        assert.matches("#17233a", Themes.appendCss(plugin, "base", document), 1, true)
+        document.render_color = true
+        document._nightmode_images = false
+        assert.matches("#17233a", Themes.appendCss(plugin, "base", document), 1, true)
+        document._nightmode_images = true
+        plugin.config.reader_themes.dark_mode = "dark_graphite"
+        assert.matches("#dadada", Themes.appendCss(plugin, "base", document), 1, true)
+
+        ZenSpec.replace("version", { getNormalizedCurrentVersion = function() return 202603000000 end })
+        ZenSpec.unload("common/reader_themes")
+        local older_themes = require("common/reader_themes")
+        plugin.config.reader_themes.dark_mode = "light_tan"
+        assert.matches("#17233a", older_themes.appendCss(plugin, "base", document), 1, true)
     end)
 
     it("wraps CRE stylesheets only while the feature is enabled", function()

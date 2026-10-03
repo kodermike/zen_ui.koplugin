@@ -276,6 +276,28 @@ describe("background Wi-Fi toggles", function()
         assert.are.equal(2, inherited_flags)
     end)
 
+    it("waits for resume authentication before starting the connectivity timeout", function()
+        NetworkMgr:restoreWifiAsync()
+        NetworkMgr:scheduleConnectivityCheck()
+
+        for _i = 1, 400 do tick() end -- More than 45 seconds with both timers running.
+
+        assert.is_false(workers[1].done)
+        assert.are.equal(1, #workers)
+        assert.are.equal(0, off_calls)
+        assert.is_true(NetworkMgr.pending_connection)
+        finish_worker()
+        for _i = 1, 3 do
+            if not NetworkMgr.pending_connection then break end
+            tick()
+        end
+        assert.is_true(connected)
+        assert.is_false(NetworkMgr.pending_connection)
+        assert.is_false(NetworkMgr.pending_connectivity_check)
+        assert.is_true(G_reader_settings:isTrue("wifi_was_on"))
+        assert.are.equal(0, standby)
+    end)
+
     it("turns off Kindle Wi-Fi in the worker and preserves its delayed completion callback", function()
         Device.isKindle = function() return true end
         wifi_on, connected = true, true

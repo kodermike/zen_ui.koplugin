@@ -131,6 +131,7 @@ local function trim(events)
 end
 
 local function charging_session(previous, event, session)
+    if event.gap and not event.charging then return session end
     if event.gap or (previous and (event.time < previous.time
         or (event.charging and event.level < previous.level))) then session = nil end
     if event.charging and (not session or not previous or not previous.charging) then

@@ -336,6 +336,11 @@ msgstr "Active tab color"
 msgid "Active tab color: "
 msgstr "Active tab color: "
 
+#. Type: setting
+#: navbar_settings.lua:1669
+msgid "Active tab outline color"
+msgstr "Active tab outline color"
+
 #. Type: title
 #. Context: end, dialog_title = _("Active tab RGB"), presets = {
 #: navbar_settings.lua:1650
@@ -2478,6 +2483,16 @@ msgstr "Filebrowser plugin is not installed."
 msgid "Filename"
 msgstr "Filename"
 
+#. Type: setting
+#: navbar_settings.lua:1658
+msgid "Fill color"
+msgstr "Fill color"
+
+#. Type: setting
+#: navbar_settings.lua:1648
+msgid "Filled"
+msgstr "Filled"
+
 #. Type: label
 #. Context: table.insert(buttons, {{ text = icons.filter .. " " .. _("Filter") .. (n_gf > 0 and " (" .. n_gf .. ")" or "")
 #: context_menu.lua:1219 context_menu.lua:2824
@@ -4247,6 +4262,11 @@ msgstr "Order TBR"
 #: stats_settings.lua:230
 msgid "Outline"
 msgstr "Outline"
+
+#. Type: setting
+#: navbar_settings.lua:1657
+msgid "Outline color"
+msgstr "Outline color"
 
 #. Type: setting
 #. Context: { text = _("Outlined boxes"), radio = true,

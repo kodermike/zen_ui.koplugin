@@ -13,7 +13,7 @@ local function apply_reader_themes()
 
     local orig_setStyleSheet = CreDocument.setStyleSheet
     CreDocument.setStyleSheet = function(self, css_file, appended_css)
-        return orig_setStyleSheet(self, css_file, ReaderThemes.appendCss(plugin, appended_css))
+        return orig_setStyleSheet(self, css_file, ReaderThemes.appendCss(plugin, appended_css, self))
     end
 
     local reader_refresh_depth = 0

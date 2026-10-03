@@ -112,6 +112,10 @@ describe("reader top status bar refresh", function()
                 paint_order[#paint_order + 1] = "clear"
             end,
         }
+        screen_bb.paintRectRGB32 = function(self, ...)
+            self:paintRect(...)
+            paint_rects[#paint_rects].rgb = true
+        end
         local screen = {
             bb = screen_bb,
             getWidth = function() return 600 end,
@@ -328,7 +332,7 @@ describe("reader top status bar refresh", function()
 
     local function assert_single_slot(expected_x)
         assert.are.equal(1, #paint_rects)
-        assert.same({ x = expected_x, y = 0, w = 100, h = 20, color = "white" }, paint_rects[1])
+        assert.same({ x = expected_x, y = 0, w = 100, h = 20, color = "white", rgb = true }, paint_rects[1])
         assert.are.equal(1, #dirty_calls)
         assert.is_nil(dirty_calls[1].widget)
         assert.are.equal("ui", dirty_calls[1].mode)
@@ -614,6 +618,15 @@ describe("reader top status bar refresh", function()
             assert.are.equal(70, slots.right.w)
             if #center_order > 0 then assert.are.equal(280, slots.center.x) end
 
+            local rendered_header = build_header({
+                ui = { document = {
+                    configurable = { h_page_margins = { 100, 100 } },
+                    getPageMargins = function() return { left = 20, right = 80 } end,
+                } },
+            })
+            assert.are.equal(20, rendered_header[1][1][1].width)
+            assert.are.equal(80, rendered_header[#rendered_header][1][2].width)
+
             local wider_margin_header = build_header({
                 ui = { document = { configurable = { h_page_margins = { 30, 90 } } } },
                 dogear = { icon = { width = 50, dimen = { x = 530, w = 50 } } },
@@ -823,6 +836,7 @@ describe("reader top status bar refresh", function()
         scheduled[1].callback()
 
         assert.are.equal("sepia", paint_rects[1].color)
+        assert.is_true(paint_rects[1].rgb)
         assert.is_nil(dirty_calls[1].widget)
         assert.is_true(dirty_calls[1].dither)
         assert.same({ "clear", "header", "dogear", "dirty" }, paint_order)

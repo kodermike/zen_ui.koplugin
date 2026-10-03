@@ -8,6 +8,7 @@ local PATCH_MODULES = {
     menu_top_swipe         = "modules/global/patches/menu_top_swipe",
     opds                   = "modules/global/patches/opds",
     cloud_storage_home     = "modules/global/patches/cloud_storage_home",
+    kindle_autosuspend_resume = "modules/global/patches/kindle_autosuspend_resume",
     kindle_network_profile_guard = "modules/global/patches/kindle_network_profile_guard",
     kobo_bluetooth_fix     = "modules/global/patches/kobo_bluetooth_fix",
     nonblocking_wifi       = "modules/global/patches/nonblocking_wifi",
@@ -105,6 +106,11 @@ function M.init(logger, plugin)
     local cloud_storage_home_fn = load_patch("cloud_storage_home")
     if cloud_storage_home_fn then
         run_patch(logger, plugin, "cloud_storage_home", cloud_storage_home_fn)
+    end
+
+    local kindle_autosuspend_resume_fn = load_patch("kindle_autosuspend_resume")
+    if kindle_autosuspend_resume_fn then
+        run_patch(logger, plugin, "kindle_autosuspend_resume", kindle_autosuspend_resume_fn)
     end
 
     local kindle_network_profile_guard_fn = load_patch("kindle_network_profile_guard")
