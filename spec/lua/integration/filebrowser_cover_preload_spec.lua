@@ -1784,20 +1784,31 @@ describe("filebrowser cover preloading", function()
     for _i, case in ipairs({
         { name = "Kobo color", kobo = true, color = true, flash = true, covers = true, background = true, mode = "flashui" },
         { name = "Kobo monochrome", kobo = true, color = false, flash = true, covers = true, mode = "flashui" },
-        { name = "Kindle color", kobo = false, color = true, flash = true, covers = true, background = true, mode = "flashui" },
-        { name = "Kindle color with UI refreshes", kobo = false, color = true, flash = false, covers = true, background = true, mode = "ui" },
+        { name = "Kindle color light with wallpaper", kindle = true, color = true, flash = true, covers = true, background = true, mode = "flashui" },
+        { name = "Kindle color light without wallpaper", kindle = true, color = true, flash = true, covers = true, mode = "flashui" },
+        { name = "Kindle color light list with wallpaper", kindle = true, color = true, flash = true, covers = true, background = true, display = "list", mode = "flashui" },
+        { name = "Kindle color light list without wallpaper", kindle = true, color = true, flash = true, covers = true, display = "list", mode = "flashui" },
+        { name = "Kindle color dark", kindle = true, color = true, night = true, flash = true, covers = true, mode = "flashui" },
+        { name = "Kindle color dark list", kindle = true, color = true, night = true, flash = true, covers = true, display = "list", mode = "flashui" },
+        { name = "Kindle monochrome", kindle = true, color = false, flash = true, covers = true, mode = "flashui" },
+        { name = "other color device", color = true, flash = true, covers = true, mode = "flashui" },
+        { name = "Kindle color explicit full refresh", kindle = true, color = true, covers = true, input_mode = "full", mode = "full" },
+        { name = "Kindle color with UI refreshes", kindle = true, color = true, flash = false, covers = true, background = true, mode = "ui" },
         { name = "Kobo color with UI refreshes", kobo = true, color = true, flash = false, covers = true, mode = "ui" },
         { name = "Kobo color list", kobo = true, color = true, flash = true, covers = true, background = true, display = "list", mode = "flashui" },
         { name = "Kobo color without images", kobo = true, color = true, flash = true, covers = false, mode = "ui" },
+        { name = "Kindle color without images", kindle = true, color = true, flash = true, covers = false, mode = "ui" },
     }) do
-        it("uses one " .. case.mode .. " refresh per cached page on " .. case.name, function()
+        it("uses one " .. case.mode .. " refresh per cached page turn on " .. case.name, function()
             local CoverMenu = require("covermenu")
             local FileChooser = require("ui/widget/filechooser")
             local Menu = require("ui/widget/menu")
             local UIManager = require("ui/uimanager")
             local BookInfoManager = require("bookinfomanager")
             device.isKobo = function() return case.kobo end
+            device.isKindle = function() return case.kindle == true end
             device.hasColorScreen = function() return case.color end
+            device.screen = { night_mode = case.night == true, hw_dithering = true }
             require("common/ui/background").library_active = function() return case.background == true end
             BookInfoManager.getSetting = function(_self, key)
                 return key == "flash_ui_cover_images" and case.flash
@@ -1814,11 +1825,26 @@ describe("filebrowser cover preloading", function()
                 menu.page = page
                 return CoverMenu.updateItems(menu)
             end
+            local stock_mode = case.input_mode or case.covers and case.flash and "flashui" or "ui"
+            local expected_dither = case.covers and not (case.kindle and case.color and not case.night)
+            local queued_refreshes = {}
+            UIManager.setDirty = function(_self, widget, callback)
+                queued_refreshes[#queued_refreshes + 1] = { widget = widget, callback = callback }
+            end
+            local function repaint()
+                for _j, call in ipairs(queued_refreshes) do
+                    -- UIManager inherits the parent's hint before running callbacks.
+                    local painted_dither = call.widget.dithered == true
+                    local mode, region, dither = call.callback()
+                    dirty[#dirty + 1] = { mode = mode, region = region, dither = dither or painted_dither }
+                end
+                queued_refreshes = {}
+            end
             update_items = function(menu)
+                menu._has_cover_images = case.covers
+                menu.show_parent.dithered = case.covers
                 UIManager:setDirty(menu.show_parent, function()
-                    local mode = case.covers and BookInfoManager:getSetting("flash_ui_cover_images")
-                        and "flashui" or "ui"
-                    return mode, menu.dimen, case.covers
+                    return stock_mode, menu.dimen, menu.show_parent.dithered
                 end)
             end
             require("modules/filebrowser/patches/cover_preload")()
@@ -1841,22 +1867,39 @@ describe("filebrowser cover preloading", function()
             }
 
             CoverMenu.updateItems(menu)
+            repaint()
             Menu.onNextPage(menu)
             if not case.display then
                 assert.are.equal(0, scheduled_delays[1])
                 settle_page_turn(menu)
             end
+            repaint()
             FileChooser.onPrevPage(menu)
             if not case.display then settle_page_turn(menu) end
+            repaint()
             CoverMenu.onGotoPage(menu, 2)
             if not case.display then settle_page_turn(menu) end
+            repaint()
 
             assert.are.equal(4, #dirty)
             for index, call in ipairs(dirty) do
                 assert.are.equal(case.mode, call.mode)
-                assert.are.equal(case.covers, call.dither)
+                assert.are.equal(expected_dither, call.dither)
                 assert.are.same(index == 1 and menu.dimen
                     or { x = 0, y = 50, w = 600, h = 750 }, call.region)
+            end
+            assert.are.equal(case.covers, menu._has_cover_images)
+            assert.are.equal(expected_dither, menu.show_parent.dithered)
+            assert.is_true(device.screen.hw_dithering)
+            if case.kindle and case.color then
+                device.screen.night_mode = not device.screen.night_mode
+                CoverMenu.updateItems(menu)
+                repaint()
+                local toggled_dither = case.covers and device.screen.night_mode
+                assert.are.equal(case.mode, dirty[5].mode)
+                assert.are.equal(toggled_dither, dirty[5].dither)
+                assert.are.equal(toggled_dither, menu.show_parent.dithered)
+                assert.is_true(device.screen.hw_dithering)
             end
         end)
     end
@@ -3050,32 +3093,57 @@ describe("filebrowser cover preloading", function()
 
     for _i, case in ipairs({
         { name = "Kobo cover flashes", kobo = true, flash = true, mode = "flashui" },
-        { name = "Kindle cover flashes", kobo = false, flash = true, mode = "flashui" },
+        { name = "Kindle light covers with wallpaper", kindle = true, flash = true, background = true, mode = "flashui" },
+        { name = "Kindle light covers without wallpaper", kindle = true, flash = true, mode = "flashui" },
+        { name = "Kindle light list with wallpaper", kindle = true, flash = true, background = true, display = "list", mode = "flashui" },
+        { name = "Kindle light list without wallpaper", kindle = true, flash = true, display = "list", mode = "flashui" },
+        { name = "Kindle light extracted covers", kindle = true, extracted = true, flash = false, mode = "ui" },
+        { name = "Kindle light extracted list covers", kindle = true, extracted = true, display = "list", flash = false, mode = "ui" },
+        { name = "Kindle dark cover flashes", kindle = true, night = true, flash = true, fullscreen = true, mode = "flashui" },
+        { name = "Kindle monochrome cover flashes", kindle = true, color = false, flash = true, mode = "flashui" },
+        { name = "other color device cover flashes", flash = true, fullscreen = true, mode = "flashui" },
         { name = "Kobo UI refreshes", kobo = true, flash = false, mode = "ui" },
-        { name = "Kindle UI refreshes", kobo = false, flash = false, mode = "ui" },
+        { name = "Kindle light UI refreshes", kindle = true, flash = false, mode = "ui" },
+        { name = "Kindle dark UI refreshes", kindle = true, night = true, flash = false, fullscreen = true, mode = "ui" },
     }) do
         it("uses " .. case.mode .. " after hydration with " .. case.name, function()
             local CoverMenu = require("covermenu")
             local Geom = require("ui/geometry")
+            local UIManager = require("ui/uimanager")
             device.isKobo = function() return case.kobo end
-            device.hasColorScreen = function() return true end
+            device.isKindle = function() return case.kindle == true end
+            device.hasColorScreen = function() return case.color ~= false end
+            device.screen = { night_mode = case.night == true, hw_dithering = true }
+            require("common/ui/background").library_active = function() return case.background == true end
             require("bookinfomanager").getSetting = function(_self, key)
                 return key == "flash_ui_cover_images" and case.flash
             end
             update_items = function(menu)
-                menu._zen_cover_hydration_items[1] = {
+                local item = {
                     menu = menu,
                     _zen_cover_hydration_queued = true,
                     dimen = Geom:new{ x = 10, y = 20, w = 90, h = 120 },
                     update = function(self) self._has_cover_image = true end,
                 }
-                menu:_zen_request_cover_hydration()
+                if case.extracted then
+                    menu.items_to_update = { item }
+                    menu.items_update_action = function()
+                        menu.show_parent.dithered = true
+                        table.remove(menu.items_to_update, 1)
+                        UIManager:setDirty(menu.show_parent, function()
+                            return case.flash and "flashui" or "ui", item.dimen, true
+                        end)
+                    end
+                else
+                    menu._zen_cover_hydration_items[1] = item
+                    menu:_zen_request_cover_hydration()
+                end
             end
             require("modules/filebrowser/patches/cover_preload")()
             local menu = {
                 item_table = { { is_file = true, path = "/book.epub" } },
                 page = 1, page_num = 1, perpage = 1,
-                display_mode_type = "mosaic", show_parent = {},
+                display_mode_type = case.display or "mosaic", show_parent = {},
                 dimen = Geom:new{ x = 0, y = 0, w = 600, h = 800 },
                 cover_specs = { max_cover_w = 100, max_cover_h = 150 },
             }
@@ -3085,13 +3153,16 @@ describe("filebrowser cover preloading", function()
 
             assert.are.equal(1, #dirty)
             assert.are.equal(case.mode, dirty[1].mode)
-            if case.kobo then
-                assert.are.same({ x = 10, y = 20, w = 90, h = 120 }, dirty[1].region)
-            else
+            if case.fullscreen then
                 assert.is_nil(dirty[1].region)
+            else
+                assert.are.same({ x = 10, y = 20, w = 90, h = 120 }, dirty[1].region)
             end
-            assert.is_true(dirty[1].dither)
-            assert.are.equal(case.kobo and 2.3 or 100,
+            local expected_dither = not (case.kindle and case.color ~= false and not case.night)
+            assert.are.equal(expected_dither, dirty[1].dither)
+            assert.are.equal(expected_dither, menu.show_parent.dithered)
+            assert.is_true(device.screen.hw_dithering)
+            assert.are.equal(case.fullscreen and 100 or 2.3,
                 metric_value(measurements[#measurements], "region_pct="))
         end)
     end
