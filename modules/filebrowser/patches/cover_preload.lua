@@ -589,15 +589,6 @@ local function apply_cover_preload()
         return region, grid
     end
 
-    local function cover_refresh_mode(mode, dither)
-        -- Color REAGL without UIManager's periodic full-flash promotion.
-        if (mode == "ui" or mode == "flashui") and dither and Device.isKobo and Device:isKobo()
-                and Device.hasColorScreen and Device:hasColorScreen() then
-            return "[partial]"
-        end
-        return mode
-    end
-
     local function call_with_scoped_dirty(menu, region, reveal, fn, ...)
         local args = { ... }
         local original_setDirty = UIManager.setDirty
@@ -609,7 +600,7 @@ local function apply_cover_preload()
                     local original_refresh = refreshtype
                     refreshtype = function()
                         local refresh = { original_refresh() }
-                        return cover_refresh_mode(refresh[1], refresh[3]), region, refresh[3]
+                        return refresh[1], region, refresh[3]
                     end
                 end
                 if reveal then
@@ -634,9 +625,8 @@ local function apply_cover_preload()
         fast = 1,
         partial = 2,
         ui = 3,
-        ["[partial]"] = 4,
-        flashui = 5,
-        full = 6,
+        flashui = 4,
+        full = 5,
     }
 
     local function flush_reveal(menu, reveal, reason, hydrated, failed)
@@ -676,7 +666,7 @@ local function apply_cover_preload()
             if not final_region and not full_region then final_region = refresh_region end
             UIManager:setDirty(menu.show_parent, function()
                 local dither = refresh_dither or hydrated > 0 or menu.show_parent.dithered == true
-                return cover_refresh_mode(refresh_mode or "ui", dither), final_region, dither
+                return refresh_mode or "ui", final_region, dither
             end)
         end
         local revealed_at = now()
@@ -751,7 +741,7 @@ local function apply_cover_preload()
         UIManager:setDirty(menu.show_parent, function()
             local refreshtype = BookInfoManager:getSetting("flash_ui_cover_images")
                 and "flashui" or "ui"
-            return cover_refresh_mode(refreshtype, hydrated > 0), refresh_region, hydrated > 0
+            return refreshtype, refresh_region, hydrated > 0
         end)
         local full_area = menu.dimen and menu.dimen.w and menu.dimen.h
             and menu.dimen.w * menu.dimen.h or 0

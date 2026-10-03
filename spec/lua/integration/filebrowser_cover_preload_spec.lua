@@ -1782,13 +1782,15 @@ describe("filebrowser cover preloading", function()
     end)
 
     for _i, case in ipairs({
-        { name = "Kobo color", kobo = true, color = true, flash = true, covers = true, mode = "[partial]" },
+        { name = "Kobo color", kobo = true, color = true, flash = true, covers = true, background = true, mode = "flashui" },
         { name = "Kobo monochrome", kobo = true, color = false, flash = true, covers = true, mode = "flashui" },
-        { name = "Kindle color", kobo = false, color = true, flash = true, covers = true, mode = "flashui" },
-        { name = "Kobo color with UI refreshes", kobo = true, color = true, flash = false, covers = true, mode = "[partial]" },
+        { name = "Kindle color", kobo = false, color = true, flash = true, covers = true, background = true, mode = "flashui" },
+        { name = "Kindle color with UI refreshes", kobo = false, color = true, flash = false, covers = true, background = true, mode = "ui" },
+        { name = "Kobo color with UI refreshes", kobo = true, color = true, flash = false, covers = true, mode = "ui" },
+        { name = "Kobo color list", kobo = true, color = true, flash = true, covers = true, background = true, display = "list", mode = "flashui" },
         { name = "Kobo color without images", kobo = true, color = true, flash = true, covers = false, mode = "ui" },
     }) do
-        it("uses " .. case.mode .. " for cached mosaic pages on " .. case.name, function()
+        it("uses one " .. case.mode .. " refresh per cached page on " .. case.name, function()
             local CoverMenu = require("covermenu")
             local FileChooser = require("ui/widget/filechooser")
             local Menu = require("ui/widget/menu")
@@ -1796,6 +1798,7 @@ describe("filebrowser cover preloading", function()
             local BookInfoManager = require("bookinfomanager")
             device.isKobo = function() return case.kobo end
             device.hasColorScreen = function() return case.color end
+            require("common/ui/background").library_active = function() return case.background == true end
             BookInfoManager.getSetting = function(_self, key)
                 return key == "flash_ui_cover_images" and case.flash
             end
@@ -1823,22 +1826,30 @@ describe("filebrowser cover preloading", function()
                 item_table = {
                     { is_file = true, path = "/one.epub" },
                     { is_file = true, path = "/two.epub" },
+                    { is_file = true, path = "/three.epub" },
+                    { is_file = true, path = "/four.epub" },
                 },
-                page = 1, page_num = 2, perpage = 1,
-                display_mode_type = "mosaic", show_parent = {},
+                page = 1, page_num = 2, perpage = 2,
+                display_mode_type = case.display or "mosaic", show_parent = {},
                 dimen = { x = 0, y = 0, w = 600, h = 800 },
                 title_bar = { dimen = { h = 50 } },
                 cover_specs = { max_cover_w = 100, max_cover_h = 150 },
+                layout = { {
+                    { dimen = { x = 20, y = 80, w = 250, h = 300 } },
+                    { dimen = { x = 330, y = 80, w = 250, h = 300 } },
+                } },
             }
 
             CoverMenu.updateItems(menu)
             Menu.onNextPage(menu)
-            assert.are.equal(0, scheduled_delays[1])
-            settle_page_turn(menu)
+            if not case.display then
+                assert.are.equal(0, scheduled_delays[1])
+                settle_page_turn(menu)
+            end
             FileChooser.onPrevPage(menu)
-            settle_page_turn(menu)
+            if not case.display then settle_page_turn(menu) end
             CoverMenu.onGotoPage(menu, 2)
-            settle_page_turn(menu)
+            if not case.display then settle_page_turn(menu) end
 
             assert.are.equal(4, #dirty)
             for index, call in ipairs(dirty) do
@@ -1850,7 +1861,7 @@ describe("filebrowser cover preloading", function()
         end)
     end
 
-    it("selects the Kobo color waveform when painting reveals image content", function()
+    it("preserves the stock waveform when painting reveals image content", function()
         local CoverMenu = require("covermenu")
         local UIManager = require("ui/uimanager")
         local refresh_callback
@@ -1877,7 +1888,7 @@ describe("filebrowser cover preloading", function()
         menu.show_parent.dithered = true
         local mode, region, dither = refresh_callback()
 
-        assert.are.equal("[partial]", mode)
+        assert.are.equal("ui", mode)
         assert.are.same(menu.dimen, region)
         assert.is_true(dither)
     end)
@@ -3038,9 +3049,10 @@ describe("filebrowser cover preloading", function()
     end)
 
     for _i, case in ipairs({
-        { name = "Kobo cover flashes", kobo = true, flash = true, mode = "[partial]" },
+        { name = "Kobo cover flashes", kobo = true, flash = true, mode = "flashui" },
         { name = "Kindle cover flashes", kobo = false, flash = true, mode = "flashui" },
-        { name = "Kobo UI refreshes", kobo = true, flash = false, mode = "[partial]" },
+        { name = "Kobo UI refreshes", kobo = true, flash = false, mode = "ui" },
+        { name = "Kindle UI refreshes", kobo = false, flash = false, mode = "ui" },
     }) do
         it("uses " .. case.mode .. " after hydration with " .. case.name, function()
             local CoverMenu = require("covermenu")
