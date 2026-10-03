@@ -257,6 +257,66 @@ describe("reader themes", function()
         assert.matches("#17233a", older_themes.appendCss(plugin, "base", document), 1, true)
     end)
 
+    it("uses the normal full waveform only when opening a themed book in dark mode", function()
+        local Screen = require("device").screen
+        Screen.waveform_full = 2
+        Screen.waveform_flashnight = 8
+        local plugin = {
+            config = {
+                features = { reader_themes = true },
+                reader_themes = { dark_mode = "dark_graphite", light_mode = "light_tan" },
+            },
+        }
+        _G.__ZEN_UI_PLUGIN = plugin
+        ZenSpec.replace("document/credocument", {})
+        ZenSpec.replace("apps/reader/modules/readertypeset", {})
+        ZenSpec.replace("apps/reader/modules/readerfooter", {})
+        local ReaderUI = {
+            doShowReader = function(self)
+                self.instance = { document = {} }
+                return "opened"
+            end,
+        }
+        ZenSpec.replace("apps/reader/readerui", ReaderUI)
+        ZenSpec.unload("modules/reader/patches/reader_themes")
+        require("modules/reader/patches/reader_themes")()
+        local waveform
+        local UIManager = require("ui/uimanager")
+        UIManager.forceRePaint = function()
+            assert.is_not_nil(ReaderUI.instance.document)
+            assert.are.equal("full", dirty_calls[#dirty_calls][3])
+            waveform = Screen.waveform_flashnight
+        end
+
+        for _i, dark_mode in ipairs({ false, true }) do
+            Screen.night_mode = dark_mode
+            G_reader_settings:saveSetting("night_mode", dark_mode)
+            assert.are.equal("opened", ReaderUI:doShowReader("themed.epub"))
+            assert.are.equal(dark_mode and 2 or 8, waveform)
+            assert.are.equal(8, Screen.waveform_flashnight)
+            assert.are.equal(dark_mode, Screen.night_mode)
+        end
+
+        waveform = nil
+        plugin.config.features.reader_themes = false
+        ReaderUI:doShowReader("disabled.epub")
+        assert.is_nil(waveform)
+        plugin.config.features.reader_themes = true
+        plugin.config.reader_themes.dark_mode = "default"
+        ReaderUI:doShowReader("default.epub")
+        assert.is_nil(waveform)
+
+        plugin.config.reader_themes.dark_mode = "dark_graphite"
+        Screen.waveform_full = nil
+        ReaderUI:doShowReader("generic-screen.epub")
+        assert.are.equal(8, waveform)
+
+        Screen.waveform_full = 2
+        UIManager.forceRePaint = function() error("paint failed", 0) end
+        assert.has_error(function() ReaderUI:doShowReader("themed.epub") end, "paint failed")
+        assert.are.equal(8, Screen.waveform_flashnight)
+    end)
+
     it("wraps CRE stylesheets only while the feature is enabled", function()
         local received_css
         local CreDocument = {

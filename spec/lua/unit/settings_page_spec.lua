@@ -5,6 +5,7 @@ describe("Zen settings page", function()
     local shown_widgets
     local deferred_apply_flushes
     local translation_refreshes
+    local saved_reader_settings
 
     local dependency_names = {
         "gettext",
@@ -27,6 +28,7 @@ describe("Zen settings page", function()
         "common/ui/zen_settings_titlebar",
         "apps/filemanager/filemanager",
         "apps/reader/readerui",
+        "common/reader_themes",
     }
 
     local Menu = {}
@@ -78,6 +80,7 @@ describe("Zen settings page", function()
         shown_widgets = {}
         deferred_apply_flushes = 0
         translation_refreshes = 0
+        saved_reader_settings = G_reader_settings
         for _i, name in ipairs(dependency_names) do
             saved_modules[name] = package.loaded[name] or false
         end
@@ -154,12 +157,14 @@ describe("Zen settings page", function()
             end,
         })
         ZenSpec.unload("common/ui/truncated_text_message")
+        ZenSpec.unload("common/reader_themes")
         ZenSpec.unload("modules/settings/zen_settings_page")
         PageModule = require("modules/settings/zen_settings_page")
         Page = PageModule.Page
     end)
 
     after_each(function()
+        _G.G_reader_settings = saved_reader_settings
         _G.__ZEN_UI_SETTINGS_PAGE = nil
         ZenSpec.unload("modules/settings/zen_settings_page")
         for _i, name in ipairs(dependency_names) do
@@ -616,6 +621,69 @@ describe("Zen settings page", function()
         make_page({}):onCloseWidget()
         assert.are.equal(4, refreshes)
         assert.are.equal(4, full_refreshes)
+    end)
+
+    it("flashes the themed reader after settings have closed", function()
+        _G.G_reader_settings = ZenSpec.memorySettings({ night_mode = true })
+        local UIManager = require("ui/uimanager")
+        local Screen = require("device").screen
+        Screen.night_mode = true
+        Screen.waveform_full = 2
+        Screen.waveform_flashnight = 8
+        local reader = { document = {}, show_parent = {} }
+        ZenSpec.replace("apps/reader/readerui", { instance = reader })
+        local plugin = {
+            config = {
+                features = { reader_themes = true },
+                reader_themes = { dark_mode = "dark_graphite", light_mode = "light_tan" },
+            },
+        }
+        local callback
+        UIManager.nextTick = function(_self, action) callback = action end
+        UIManager.setDirty = function() end
+        local flashes = 0
+        UIManager.forceRePaint = function()
+            flashes = flashes + 1
+            assert.are.equal(Screen.night_mode and 2 or 8, Screen.waveform_flashnight)
+            local top = UIManager._window_stack[#UIManager._window_stack].widget
+            assert.is_true(top == reader or top == reader.show_parent)
+        end
+
+        local function close_settings(top)
+            local settings = make_page({})
+            settings.plugin = plugin
+            UIManager._window_stack = { { widget = reader }, { widget = settings } }
+            local before_close = flashes
+            local night_mode = Screen.night_mode
+            settings:onCloseWidget()
+            assert.are.equal(before_close, flashes)
+            UIManager._window_stack = { { widget = top } }
+            callback()
+            assert.are.equal(8, Screen.waveform_flashnight)
+            assert.are.equal(night_mode, Screen.night_mode)
+        end
+
+        close_settings(reader)
+        assert.are.equal(1, flashes)
+        close_settings(reader.show_parent)
+        assert.are.equal(2, flashes)
+        close_settings(require("apps/filemanager/filemanager").instance)
+        assert.are.equal(2, flashes)
+        plugin.config.features.reader_themes = false
+        close_settings(reader)
+        assert.are.equal(2, flashes)
+        plugin.config.features.reader_themes = true
+        plugin.config.reader_themes.dark_mode = "default"
+        close_settings(reader)
+        assert.are.equal(2, flashes)
+
+        Screen.night_mode = false
+        G_reader_settings:saveSetting("night_mode", false)
+        close_settings(reader)
+        assert.are.equal(3, flashes)
+        ZenSpec.replace("apps/reader/readerui", { instance = nil })
+        close_settings(reader)
+        assert.are.equal(3, flashes)
     end)
 
     it("restores the last page for six seconds after closing", function()

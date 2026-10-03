@@ -750,6 +750,10 @@ function ZenSettingsPage:onCloseWidget()
                 local ReaderUI = package.loaded["apps/reader/readerui"]
                 local reader = ReaderUI and ReaderUI.instance
                 if reader and (top == reader or top == reader.show_parent) then
+                    local ReaderThemes = require("common/reader_themes")
+                    if reader.document and ReaderThemes.isActive(self.plugin) then
+                        return ReaderThemes.refreshFull("all")
+                    end
                     UIManager:setDirty(reader, "ui")
                 end
             end

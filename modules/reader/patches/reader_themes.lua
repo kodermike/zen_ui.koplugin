@@ -86,8 +86,7 @@ local function apply_reader_themes()
         local reader = ReaderUI.instance
         if reader and reader.document and ReaderThemes.isActive(plugin) then
             -- The themed background replaces a visually busy library page.
-            UIManager:setDirty(nil, "full")
-            UIManager:forceRePaint()
+            ReaderThemes.refreshFull()
         end
         return result
     end
