@@ -308,6 +308,61 @@ describe("reader footer patches", function()
         assert.are.equal(0, refreshes)
     end)
 
+    it("keeps forced footer refreshes behind overlays and clears a hidden footer", function()
+        saved_modules = {}
+        for _i, name in ipairs({
+            "apps/reader/modules/readerfooter", "apps/reader/readerui", "device", "ffi/blitbuffer",
+            "ui/bidi", "ui/geometry", "ui/uimanager", "ui/widget/container/leftcontainer", "ui/widget/textwidget",
+        }) do
+            saved_modules[name] = package.loaded[name] or false
+        end
+        local repaint, repaint_full, received
+        local ReaderFooter = {
+            textGeneratorMap = {
+                battery = function() return "" end,
+                page_progress = function() return "" end,
+                dynamic_filler = function() return "" end,
+            },
+            shouldBeRepainted = function() return repaint, repaint_full end,
+            _updateFooterText = function(_, force_repaint, full_repaint)
+                received = { force_repaint, full_repaint }
+            end,
+        }
+        ZenSpec.replace("apps/reader/modules/readerfooter", ReaderFooter)
+        ZenSpec.replace("apps/reader/readerui", {})
+        ZenSpec.replace("device", { screen = {} })
+        for _i, name in ipairs({
+            "ffi/blitbuffer", "ui/bidi", "ui/geometry", "ui/uimanager",
+            "ui/widget/container/leftcontainer", "ui/widget/textwidget",
+        }) do
+            ZenSpec.replace(name, {})
+        end
+        ZenSpec.replace("ui/uimanager", { scheduleIn = function() end })
+        _G.__ZEN_UI_PLUGIN = { config = { features = {} } }
+        apply_patch("modules/reader/patches/reader_footer")
+        local footer = setmetatable({
+            settings = { progress_margin_width = 10 },
+            view = { footer_visible = true },
+        }, { __index = ReaderFooter })
+
+        repaint = false -- PageBrowser covers the footer.
+        footer:_updateFooterText(true)
+        assert.is_false(received[1])
+        repaint, repaint_full = true, true -- A smaller overlay needs the full stack repainted.
+        footer:_updateFooterText(true)
+        assert.is_true(received[1])
+        assert.is_true(received[2])
+        repaint_full = nil -- Reader is visible again.
+        footer:_updateFooterText(true)
+        assert.is_true(received[1])
+        assert.is_nil(received[2])
+        repaint = false
+        footer.view.footer_visible = false
+        footer:_updateFooterText(true, true)
+        assert.is_true(received[1])
+        assert.is_true(received[2])
+    end)
+
     it("opts into book margins without changing saved footer spacing and restores it when disabled", function()
         saved_modules = {}
         for _i, name in ipairs({

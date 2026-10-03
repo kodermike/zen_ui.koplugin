@@ -443,7 +443,12 @@ local function apply_reader_footer()
     end
 
     local update_footer_text = ReaderFooter._updateFooterText
-    ReaderFooter._updateFooterText = function(self, ...)
+    ReaderFooter._updateFooterText = function(self, force_repaint, full_repaint)
+        if force_repaint and self.view.footer_visible then
+            local repaint, repaint_full = self:shouldBeRepainted()
+            force_repaint = repaint
+            full_repaint = full_repaint or repaint_full
+        end
         local margin = book_margin_width(self)
         if margin and self.horizontal_margin ~= Screen:scaleBySize(margin)
                 or not margin and self._zen_horizontal_margin then
@@ -452,7 +457,7 @@ local function apply_reader_footer()
         end
         local width = self.settings.progress_margin_width
         self.settings.progress_margin_width = margin or width
-        local result = update_footer_text(self, ...)
+        local result = update_footer_text(self, force_repaint, full_repaint)
         self.settings.progress_margin_width = width
         return result
     end

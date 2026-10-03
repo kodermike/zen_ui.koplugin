@@ -383,6 +383,7 @@ return {
      },
       ["4.0.1"] = {
         "Add option to align Reader Status Bars with book margins",
-        "Fix Pocketbook Wi-Fi toggling on"
+        "Fix Pocketbook Wi-Fi toggling on",
+        "Fix Android reader bottom status bar painting over the page browser"
       }
 }
