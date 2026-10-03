@@ -20,8 +20,11 @@ local function apply_reader_themes()
     local orig_setDirty = UIManager.setDirty
     UIManager.setDirty = function(self, widget, refresh_type, ...)
         local reader = ReaderUI.instance
+        -- Colorsoft needs the same non-flashing refresh even without a theme.
         if refresh_type == "partial" and reader and (widget == reader or widget == reader.dialog)
-                and ReaderThemes.isActive(plugin) then
+                and (ReaderThemes.isActive(plugin) or (Device.screen.night_mode
+                    and Device.isKindle and Device:isKindle()
+                    and Device.hasColorScreen and Device:hasColorScreen())) then
             reader_refresh_depth = reader_refresh_depth + 1
             local result = orig_setDirty(self, widget, refresh_type, ...)
             reader_refresh_depth = reader_refresh_depth - 1

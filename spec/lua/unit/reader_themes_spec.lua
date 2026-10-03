@@ -26,6 +26,8 @@ describe("reader themes", function()
             forceRePaint = function() force_repaints = force_repaints + 1 end,
         })
         ZenSpec.replace("device", {
+            isKindle = function() return false end,
+            hasColorScreen = function() return false end,
             screen = {
                 night_mode = false,
                 toggleNightMode = function(self) self.night_mode = not self.night_mode end,
@@ -292,6 +294,37 @@ describe("reader themes", function()
         require("ui/uimanager"):setDirty(ReaderUI.instance, "partial")
         assert.are.equal("partial", dirty_calls[1][3])
         assert.are.equal("partial", require("ui/uimanager")._refresh_stack[1].mode)
+
+        local Device = require("device")
+        local UIManager = require("ui/uimanager")
+        Device.isKindle = function() return true end
+        Device.hasColorScreen = function() return true end
+        Device.screen.night_mode = true
+        ReaderUI.instance.dialog = {}
+        for _i, widget in ipairs({ ReaderUI.instance, ReaderUI.instance.dialog, {} }) do
+            UIManager._refresh_stack = {}
+            UIManager:setDirty(widget, "partial")
+            local is_reader = widget == ReaderUI.instance or widget == ReaderUI.instance.dialog
+            assert.are.equal(is_reader and "ui" or "partial", UIManager._refresh_stack[1].mode)
+        end
+        UIManager._refresh_stack = {}
+        promote_partial = true
+        UIManager:setDirty(ReaderUI.instance, "partial")
+        assert.are.equal("full", UIManager._refresh_stack[1].mode)
+        promote_partial = false
+        for _i, device_state in ipairs({
+            { kindle = true, color = true, night = false },
+            { kindle = false, color = true, night = true },
+            { kindle = true, color = false, night = true },
+        }) do
+            Device.isKindle = function() return device_state.kindle end
+            Device.hasColorScreen = function() return device_state.color end
+            Device.screen.night_mode = device_state.night
+            UIManager._refresh_stack = {}
+            UIManager:setDirty(ReaderUI.instance, "partial")
+            assert.are.equal("partial", UIManager._refresh_stack[1].mode)
+        end
+        Device.screen.night_mode = false
         dirty_calls = {}
         plugin.config.features.reader_themes = true
         ReaderUI.instance = nil
