@@ -129,13 +129,6 @@ local AUTO_DISABLE = {
         folder_key = "shortcutstoolbar",
     },
     {
-        sentinel = "page_scrubber_bridge",
-        label = "Page Scrubber",
-        fallback_key = "page_scrubber",
-        folder_key = "page_scrubber",
-        expected_folder_key = "page_scrubber",
-    },
-    {
         sentinel = "neo_i18n",
         label = "Neo QuickSettings",
         fallback_key = "neo_quicksetting",
@@ -163,7 +156,6 @@ local AUTO_DISABLE_PATCHES = {
     "2-automatic-book-series.lua",
     "2-ui-font.lua",
     "2-custom-navbar.lua",
-    "2-page-scrubber.lua",
     "2-browser-double-tap.lua",
     "2-browser-hide-underline.lua",
     "2-browser-up-folder.lua",
