@@ -383,7 +383,10 @@ return {
      },
       ["4.0.1"] = {
         "Add option to align Reader Status Bars with book margins",
+        "Improve dark mode ghosting on color e-ink",
         "Fix Pocketbook Wi-Fi toggling on",
+        "Fix stale navbar after disabling wallpaper",
+        "Fix KLC flashing when wallpaper enabled",
         "Fix Android reader bottom status bar painting over the page browser"
       }
 }
