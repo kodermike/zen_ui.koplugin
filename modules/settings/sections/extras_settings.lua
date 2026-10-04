@@ -62,7 +62,7 @@ function M.build(ctx)
         }, icons.settings_layout)
 
         local opds_cover_pref = IconItem.decorate({
-            text = _("Prefer Large Covers"),
+            text = _("Prefer large covers"),
             enabled_func = function()
                 return config.opds.display_mode == "mosaic"
             end,
