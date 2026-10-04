@@ -75,6 +75,7 @@ function M.build(ctx)
                 if touchmenu_instance then touchmenu_instance:updateItems() end
             end,
         })
+        opds_cover_pref.checkmark_callback = opds_cover_pref.callback
         local opds_item = {
             text = _("Zen OPDS"),
             help_text = _("Enable ZenOS enhancements to the OPDS browser: cover art, list view, hold menu, and navigation improvements."),
